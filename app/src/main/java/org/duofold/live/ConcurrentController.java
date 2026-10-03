@@ -30,6 +30,11 @@ final class ConcurrentController {
   else endpointPower.arm(event+route);
  }
 
+ synchronized Bundle incomingHoldInfo(){
+  Bundle b=new Bundle();b.putLong("session",started);b.putBoolean("active",owned!=null&&cameraSession);
+  b.putBoolean("closing",primaryInner);b.putInt("task",cameraSession&&fixedRoute!=null?fixedRoute.selectedTask():-1);
+  b.putString("physical",fixedSecondary);return b;
+ }
  private int destinationWidth,destinationHeight;private String endpointObservation="";
  private boolean endpointReturnWaiting;private long endpointReturnDeadline;private String endpointTarget="";
  private boolean routeCheckpoint;private String routeObservation="";

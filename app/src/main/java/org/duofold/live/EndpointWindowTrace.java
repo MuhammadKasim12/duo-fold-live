@@ -24,7 +24,7 @@ final class EndpointWindowTrace {
    if(epoch==generation)log("Window watch ended without READY; task="+task);
   });
  }
- private String dump()throws Exception{
+ static String dump()throws Exception{
   java.lang.Process process=new ProcessBuilder("dumpsys","window","windows").redirectErrorStream(true).start();
   StringBuilder out=new StringBuilder();
   Thread reader=new Thread(()->{try(BufferedReader in=new BufferedReader(new InputStreamReader(process.getInputStream(),StandardCharsets.UTF_8))){String line;while((line=in.readLine())!=null)synchronized(out){if(out.length()<1000000)out.append(line).append('\n');}}catch(IOException ignored){}},"Duo-window-dump-reader");reader.setDaemon(true);reader.start();

@@ -68,6 +68,7 @@ class MainActivity:ComponentActivity(){
     var debug by remember{mutableStateOf(prefs.getBoolean("debug_mode",false))}
     var dual by remember{mutableStateOf(prefs.getBoolean("dual",false))}
     var jitterProtection by remember{mutableStateOf(prefs.getBoolean("closed_hinge_jitter_protection",true))}
+    var incomingHold by remember{mutableStateOf(prefs.getBoolean("incoming_app_hold",true))}
     var closingAppReturn by remember{mutableStateOf(prefs.getBoolean("closing_app_return",false))}
     var closingPower by remember{mutableStateOf(prefs.getBoolean("closing_direct_power",false))}
     var powerOverride by remember{mutableStateOf(prefs.getBoolean("handoff_power_override",false))}
@@ -337,6 +338,8 @@ class MainActivity:ComponentActivity(){
         Toggle("Hold displays ON at handoff (experimental)",powerOverride){powerOverride=it;booleanSetting("handoff_power_override",it)}
         Text("Requires both screenshot handoff options above. Requests Samsung ON overrides near full opening/closing, then releases them after two seconds. May be rejected or delay the switch; compare ON versus OFF and copy the short report.",style=MaterialTheme.typography.bodySmall)
         Text("Requires Dual-screen screenshot handoff ON. Diagnostic: commits the outgoing screenshot, then wakes the incoming panel while keeping the outgoing screen on. Incoming content is uncovered live content, with incoming glass temporarily omitted. Final native-layout switch may still flash. Maximum hold: 30 seconds. Turn this off to restore the original screenshot path.",style=MaterialTheme.typography.bodySmall)
+        Toggle("Incoming app screenshot hold (experimental)",incomingHold){incomingHold=it;booleanSetting("incoming_app_hold",it)}
+        Text("Briefly holds the incoming app image through the final display transfer. Releases when the app is drawn, with a 1.8-second safety timeout.")
         Toggle("Closing app-first return (experimental)",closingAppReturn){closingAppReturn=it;booleanSetting("closing_app_return",it)}
         Text("Screenshot window-first tests only. Returns the selected app to the primary screen at 15° while closing, before Android releases dual mode. Tests whether leaving Home focused contributes to fold sleep. May interrupt the live cover preview near closure. OFF by default.",style=MaterialTheme.typography.bodySmall)
         Toggle("Closing cover power pulse (experimental)",closingPower){closingPower=it;booleanSetting("closing_direct_power",it)}

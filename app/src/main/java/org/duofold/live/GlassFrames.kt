@@ -85,6 +85,26 @@ internal object GlassFrames {
    val f=captured;val message=note;main.post{done(f,message)}
   }
  }
+ fun incoming(task:Int,physical:String,done:(GlassFrame?,String)->Unit){
+  val valid=surfaces.values.filter{it.isValid}.take(4)
+  if(valid.isEmpty()){done(null,"No exclusion surface");return}
+  settingsExecutor.execute{
+   val p=Parcel.obtain();val r=Parcel.obtain();var frame:GlassFrame?=null;var note="Capture unavailable"
+   try{p.writeInterfaceToken(GlassCapture.TOKEN);p.writeInt(valid.size);valid.forEach{p.writeTypedObject(it,0)};p.writeInt(1);p.writeInt(task);p.writeString(physical)
+    LiveAngles.captureBinder().transact(5,p,r,0);r.readException();val b=r.readBundle(Bitmap::class.java.classLoader)
+    val bitmap=b?.getParcelable("bitmap",Bitmap::class.java)
+    if(b?.getBoolean("ok")==true&&bitmap!=null)frame=GlassFrame(bitmap,b.getInt("width"),b.getInt("height"),b.getLong("stamp"),physicalId=b.getString("physicalId")?:"",displayId=1)
+    note=b?.getString("error")?:"Exact app capture complete"
+   }catch(e:Exception){note=e.message?:note}finally{p.recycle();r.recycle()}
+   val f=frame;val message=note;main.post{done(f,message)}
+  }
+ }
+ fun incomingReady(task:Int,physical:String,width:Int,height:Int,done:(Boolean,String)->Unit){settingsExecutor.execute{
+  val p=Parcel.obtain();val r=Parcel.obtain();var ready=false;var note="Unavailable"
+  try{p.writeInterfaceToken(GlassCapture.TOKEN);p.writeInt(task);p.writeString(physical);p.writeInt(width);p.writeInt(height);LiveAngles.captureBinder().transact(4,p,r,0);r.readException();val b=r.readBundle();ready=b?.getBoolean("ok")==true;note=b?.getString("error")?:note}
+  catch(e:Exception){note=e.message?:note}finally{p.recycle();r.recycle()}
+  val ok=ready;val message=note;main.post{done(ok,message)}
+ }}
  fun foldSetting(action:String,original:String?,done:(Bundle)->Unit){settingsExecutor.execute{
   val p=Parcel.obtain();val r=Parcel.obtain();val response=try{
    p.writeInterfaceToken(GlassCapture.TOKEN);p.writeString(action);if(action=="restore")p.writeString(original)
