@@ -11,14 +11,14 @@ final class EndpointWindowTrace {
  private volatile int generation;
  private synchronized void log(String s){events.addLast(SystemClock.elapsedRealtime()+": "+s);while(events.size()>24)events.removeFirst();}
  synchronized String report(){return "App window after remap (sampled readiness, not first-frame/optical timing):\n"+String.join("\n",events);}
- void start(int task,long remap){final int epoch=++generation;if(task<0){log("No exact fullscreen task selected; readiness not measured");return;}
-  worker.execute(()->{if(epoch!=generation)return;long deadline=remap+2000,lastEnd=remap;String previous="";log("WATCH task="+task+"; remap observed="+remap);
+ void start(int task,long remap,long endpoint){final int epoch=++generation;if(task<0){log("No exact fullscreen task selected; readiness not measured");return;}
+  worker.execute(()->{if(epoch!=generation)return;long deadline=remap+2000,lastEnd=remap;String previous="";log("WATCH task="+task+"; remap observed="+remap+"; endpoint="+endpoint);
    while(epoch==generation&&SystemClock.elapsedRealtime()<deadline){
     long began=SystemClock.elapsedRealtime();String state;
     try{state=EndpointWindowState.summarize(dump(),task);}catch(Exception e){state="UNAVAILABLE: "+e.getClass().getSimpleName();}
     long ended=SystemClock.elapsedRealtime();if(epoch!=generation)return;
     if(!state.equals(previous)){log("task="+task+" "+state+"; dump interval="+began+".."+ended+"; previous sample ended="+lastEnd);previous=state;}
-    if(state.startsWith("READY")){log("First READY observation finished +"+(ended-remap)+" ms after observed remap; actual readiness may precede sample");return;}
+    if(state.startsWith("READY")){log("First READY observation finished +"+(ended-remap)+" ms after observed remap; endpoint="+endpoint+(endpoint>0?"; READY dump finished +"+(ended-endpoint)+" ms after endpoint":"; endpoint not yet observed")+"; actual readiness may precede sample");return;}
     lastEnd=ended;try{Thread.sleep(150);}catch(InterruptedException e){Thread.currentThread().interrupt();return;}
    }
    if(epoch==generation)log("Window watch ended without READY; task="+task);
