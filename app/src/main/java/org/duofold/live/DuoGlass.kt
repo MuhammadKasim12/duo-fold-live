@@ -305,12 +305,12 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
   if(rate!=appliedRate && holder.surface.isValid)runCatching{holder.surface.setFrameRate(rate,Surface.FRAME_RATE_COMPATIBILITY_DEFAULT,Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS);appliedRate=rate}
  }
  init{setZOrderOnTop(true);holder.setFormat(PixelFormat.TRANSLUCENT);holder.addCallback(this);importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-  try{classic=context.getSharedPreferences("standalone",0).getString("animation_style","duo")=="classic";program=RuntimeShader(if(classic)ClassicGlassShader.source else DuoGlassShader.source)}catch(e:Exception){RecoveryLog.add("Glass shader compilation failed: ${e.message}")}
+  try{classic=ScreenshotRenderPolicy.classic(context.getSharedPreferences("standalone",0).getString("animation_style","duo"),context.getSharedPreferences("standalone",0).getString("animation_mode","windowed"),context.getSharedPreferences("standalone",0).getBoolean("dual",false));program=RuntimeShader(if(classic)ClassicGlassShader.source else DuoGlassShader.source)}catch(e:Exception){RecoveryLog.add("Glass shader compilation failed: ${e.message}")}
  }
  fun configure(next:GlassFrame?,amount:Float,intensity:Float,inner:Boolean,rotation:Int,frozen:Boolean=false,angle:Float=Float.NaN){this.hingeAngle=angle;this.frozen=frozen;frame=next;this.amount=amount;this.intensity=intensity;this.inner=inner;this.rotation=rotation
   smoothingMs=FrameSmoothing.sanitize(context.getSharedPreferences("standalone",0).getFloat("smoothing_ms",30f))
   openThreshold=context.getSharedPreferences("standalone",0).getFloat("open_threshold",172f)
-  val selected=context.getSharedPreferences("standalone",0).getString("animation_style","duo")=="classic"
+  val selected=ScreenshotRenderPolicy.classic(context.getSharedPreferences("standalone",0).getString("animation_style","duo"),context.getSharedPreferences("standalone",0).getString("animation_mode","windowed"),context.getSharedPreferences("standalone",0).getBoolean("dual",false))
   if(selected!=classic){classic=selected;bitmap=null;program=runCatching{RuntimeShader(if(classic)ClassicGlassShader.source else DuoGlassShader.source)}.getOrElse{RecoveryLog.add("Glass shader compilation failed: ${it.message}");null}}
   requestDraw()}
  override fun surfaceCreated(h:SurfaceHolder){
@@ -346,7 +346,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      paintedEffect=false;fallback("")
      endpoint=!preview && inner && LiveAngles.fresh() && LiveAngles.effectAllowed && targetAngle.isFinite() && targetAngle>=FoldThreshold.sanitize(openThreshold)
      if(endpoint){
-      val current=Point();context.getSystemService(DisplayManager::class.java).getDisplay(0)?.getRealSize(current)
+      val current=Point();display?.getRealSize(current)
       val content=frame
       if(content!=null && GlassFramePolicy.usable(content.stamp,SystemClock.elapsedRealtime(),content.width,content.height,current.x,current.y))rendered=content else endpoint=false
      }
@@ -355,8 +355,8 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     paintedEffect=true
     val f=frame
     val size=Point()
-    if(!preview && !frozen)context.getSystemService(DisplayManager::class.java).getDisplay(0)?.getRealSize(size)
-    val fresh=f!=null && (preview || frozen || (GlassFramePolicy.usable(f.stamp,SystemClock.elapsedRealtime(),f.width,f.height,size.x,size.y)))
+    if(!preview && !frozen)display?.getRealSize(size)
+    val fresh=f!=null && (preview || frozen || ((f.displayId<0||f.displayId==display?.displayId)&&GlassFramePolicy.usable(f.stamp,SystemClock.elapsedRealtime(),f.width,f.height,size.x,size.y)))
     val shader=program
     if(fresh && shader!=null && f!=null){
      fallback("")

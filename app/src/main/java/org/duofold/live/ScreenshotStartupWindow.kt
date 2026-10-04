@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.*
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
@@ -26,17 +27,30 @@ internal class ScreenshotStartupWindow(context:Context,display:Display){
  private val life=OverlayOwner()
  private val view=ComposeView(ctx)
  private var physical by mutableStateOf("")
+ private var incoming by mutableStateOf(false)
+ private var inner by mutableStateOf(false)
+ private var rootRegistered=false
  private var composedStamp=0L
  private var pendingStamp=0L
  var committedStamp=0L;private set
  var draws=0;private set
+ var strength=0f;private set
+ val rendererRoute:String get()=if(incoming)"live incoming D$displayId" else if(composedStamp>0)"frozen outgoing D$displayId" else "idle"
  val attached:Boolean get()=dialog.isShowing&&view.isAttachedToWindow
  private fun identity():String=runCatching{Display::class.java.getMethod("getUniqueId").invoke(displays.getDisplay(displayId)).toString()}.getOrDefault("")
  fun refresh(){
   val next=identity()
   if(next!=physical){physical=next;committedStamp=0;pendingStamp=0;view.alpha=0f}
   val frame=HandoffFrames.frame
-  view.alpha=if(frame!=null&&ScreenshotStartupPolicy.ownsFrame(frame.physicalId,next))1f else 0f
+  val d=displays.getDisplay(displayId)
+  inner=d?.mode?.let{minOf(it.physicalWidth,it.physicalHeight).toFloat()/maxOf(it.physicalWidth,it.physicalHeight)>.7f}?:false
+  incoming=ScreenshotRenderPolicy.incoming(frame?.physicalId,next,LiveAngles.dualActive)
+  view.alpha=if((frame!=null&&ScreenshotStartupPolicy.ownsFrame(frame.physicalId,next))||incoming)1f else 0f
+  if(!rootRegistered&&view.isAttachedToWindow)runCatching{
+   val root=View::class.java.getDeclaredMethod("getViewRootImpl").invoke(view)
+   val sc=root.javaClass.getMethod("getSurfaceControl").invoke(root) as android.view.SurfaceControl
+   if(sc.isValid){GlassFrames.surface(view,sc);rootRegistered=true}
+  }
   view.invalidate()
  }
  init{
@@ -60,11 +74,17 @@ internal class ScreenshotStartupWindow(context:Context,display:Display){
   view.setContent{
    val frame=HandoffFrames.frame?.takeIf{ScreenshotStartupPolicy.ownsFrame(it.physicalId,physical)}
    SideEffect{composedStamp=frame?.stamp ?: 0L}
-   CompositionLocalProvider(LocalHinge provides null){
+   CompositionLocalProvider(LocalConfiguration provides ctx.resources.configuration,LocalHinge provides null){
     Box(Modifier.fillMaxSize()){
      if(frame!=null){
       Image(frame.bitmap.asImageBitmap(),null,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)
 
+     }
+     if(frame!=null||incoming){
+      DuoLiveShade(object:StandaloneFoldHost{
+       override fun onMovement(){}
+       override fun onFrame(active:Boolean,strength:Float){this@ScreenshotStartupWindow.strength=strength}
+      },ctx.getSharedPreferences("standalone",0).getFloat("intensity",1f),innerPanel=inner,frozenFrame=frame)
      }
     }
    }
@@ -80,5 +100,5 @@ internal class ScreenshotStartupWindow(context:Context,display:Display){
   dialog.setContentView(view)
  }
  fun show(){dialog.show();dialog.window?.setLayout(-1,-1);life.registry.currentState=Lifecycle.State.RESUMED;refresh()}
- fun close(){life.registry.currentState=Lifecycle.State.DESTROYED;view.disposeComposition();runCatching{dialog.dismiss()}}
+ fun close(){GlassFrames.surface(view,null);rootRegistered=false;life.registry.currentState=Lifecycle.State.DESTROYED;view.disposeComposition();runCatching{dialog.dismiss()}}
 }

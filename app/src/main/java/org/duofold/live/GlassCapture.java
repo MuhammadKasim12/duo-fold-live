@@ -48,7 +48,7 @@ final class GlassCapture extends Binder {
     result.putBoolean("ok",state.equals("READY; HAS_DRAWN"));result.putString("error",state);
    }else if(code==1 || code==3 || code==5){
     long captureStarted=SystemClock.elapsedRealtime();
-    int n=data.readInt();if(n<1||n>4)throw new IllegalArgumentException("No valid overlay exclusion surfaces");
+    int n=data.readInt();if(n<1||n>8)throw new IllegalArgumentException("No valid overlay exclusion surfaces");
     excluded=new SurfaceControl[n];for(int i=0;i<n;i++)excluded[i]=data.readTypedObject(SurfaceControl.CREATOR);
     int displayId=(code==1||code==5)&&data.dataAvail()>=4?data.readInt():0;
     int exactTask=code==5?data.readInt():-1;

@@ -11,9 +11,11 @@ internal object GlassFrames {
  private val main=Handler(Looper.getMainLooper())
  private val executor=Executors.newSingleThreadExecutor()
  private val settingsExecutor=Executors.newSingleThreadExecutor()
+ private var screenshotMode=false
+ private fun targetCaptureDisplay()=ScreenshotRenderPolicy.captureDisplay(LiveAngles.continuityNative,screenshotMode,LiveAngles.dualActive)
  private var targetFps=120
  private var measuredStart=0L;private var measuredFrames=0;private var measuredFps=0f
- fun configure(context:android.content.Context){targetFps=RenderQuality.fps(context.getSharedPreferences("standalone",0).getInt("content_fps",120))}
+ fun configure(context:android.content.Context){screenshotMode=context.getSharedPreferences("standalone",0).getBoolean("dual",false)&&context.getSharedPreferences("standalone",0).getBoolean("screenshot_camera_startup",false);targetFps=RenderQuality.fps(context.getSharedPreferences("standalone",0).getInt("content_fps",120))}
  private fun levels(bitmap:Bitmap):List<Bitmap>{val out=ArrayList<Bitmap>();var level=bitmap;repeat(7){level=Bitmap.createScaledBitmap(level,maxOf(1,level.width/2),maxOf(1,level.height/2),true);out.add(level)};return out}
  private var suspended=false
  fun suspendCapture(){suspended=true;generation++;frame=null;main.removeCallbacks(tick)}
@@ -34,9 +36,9 @@ internal object GlassFrames {
  private val tick=object:Runnable{override fun run(){
   if(clients==0 || suspended)return
   if(pending){main.postDelayed(this,retryDelay(50));return}
-  val valid=surfaces.values.filter{it.isValid}.take(4)
+  val valid=surfaces.values.filter{it.isValid}.take(8)
   if(valid.isEmpty()){frame=null;main.postDelayed(this,retryDelay(100));return}
-  val started=SystemClock.elapsedRealtimeNanos();val gen=generation;val captureDisplay=if(LiveAngles.continuityNative)1 else 0;pending=true
+  val started=SystemClock.elapsedRealtimeNanos();val gen=generation;val captureDisplay=targetCaptureDisplay();pending=true
   executor.execute{
    var result:Bundle?=null;var error="Glass frame unavailable"
    val p=Parcel.obtain();val r=Parcel.obtain()
@@ -46,9 +48,9 @@ internal object GlassFrames {
    val response=result;val message=error
    val capturedBitmap=response?.getParcelable("bitmap",Bitmap::class.java)
    val pyramid=if(response?.getBoolean("ok")==true&&capturedBitmap!=null)runCatching{levels(capturedBitmap)}.getOrDefault(emptyList()) else emptyList()
-   main.post{pending=false;if(gen==generation && clients>0 && !suspended && captureDisplay==(if(LiveAngles.continuityNative)1 else 0)){
+   main.post{pending=false;if(gen==generation && clients>0 && !suspended && captureDisplay==targetCaptureDisplay()){
     val bitmap=capturedBitmap
-    if(response?.getBoolean("ok")==true && bitmap!=null){frame=GlassFrame(bitmap,response.getInt("width"),response.getInt("height"),response.getLong("stamp"),pyramid);val now=SystemClock.elapsedRealtime();if(measuredStart==0L)measuredStart=now;measuredFrames++;if(now-measuredStart>=1000){measuredFps=measuredFrames*1000f/(now-measuredStart);measuredFrames=0;measuredStart=now};status="Content target $targetFps FPS · measured ${"%.1f".format(measuredFps)} captures/s · ${response.getString("backend") ?: "layer capture"}"}
+    if(response?.getBoolean("ok")==true && bitmap!=null){frame=GlassFrame(bitmap,response.getInt("width"),response.getInt("height"),response.getLong("stamp"),pyramid,displayId=captureDisplay);val now=SystemClock.elapsedRealtime();if(measuredStart==0L)measuredStart=now;measuredFrames++;if(now-measuredStart>=1000){measuredFps=measuredFrames*1000f/(now-measuredStart);measuredFrames=0;measuredStart=now};status="Content target $targetFps FPS · measured ${"%.1f".format(measuredFps)} captures/s · D$captureDisplay · ${response.getString("backend") ?: "layer capture"}"}
     else{frame=null;status="Glass unavailable; debug-style fallback: $message"}
     main.postDelayed(this,if(frame==null)retryDelay(600L) else RenderQuality.delay(targetFps,SystemClock.elapsedRealtimeNanos()-started))
    }else if(clients>0 && !suspended)main.post(this)}
@@ -56,7 +58,7 @@ internal object GlassFrames {
  }}
  fun freeze(labelled:Boolean=false,done:(GlassFrame?,String)->Unit){
   val requestedAt=SystemClock.elapsedRealtime()
-  val valid=surfaces.values.filter{it.isValid}.take(4)
+  val valid=surfaces.values.filter{it.isValid}.take(8)
   if(valid.isEmpty()){done(null,"Waiting for overlay exclusion surface");return}
   executor.execute{
    val p=Parcel.obtain();val r=Parcel.obtain();var captured:GlassFrame?=null;var note="Outgoing capture unavailable"
@@ -86,7 +88,7 @@ internal object GlassFrames {
   }
  }
  fun incoming(task:Int,physical:String,done:(GlassFrame?,String)->Unit){
-  val valid=surfaces.values.filter{it.isValid}.take(4)
+  val valid=surfaces.values.filter{it.isValid}.take(8)
   if(valid.isEmpty()){done(null,"No exclusion surface");return}
   settingsExecutor.execute{
    val p=Parcel.obtain();val r=Parcel.obtain();var frame:GlassFrame?=null;var note="Capture unavailable"
