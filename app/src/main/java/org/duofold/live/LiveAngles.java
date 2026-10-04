@@ -178,6 +178,7 @@ public final class LiveAngles {
    android.view.Display currentDisplay=context.getSystemService(android.hardware.display.DisplayManager.class).getDisplay(0);
    android.view.Display.Mode currentMode=currentDisplay.getMode();
    boolean innerNow=Math.min(currentMode.getPhysicalWidth(),currentMode.getPhysicalHeight())/(float)Math.max(currentMode.getPhysicalWidth(),currentMode.getPhysicalHeight())>.7f;
+   IncomingAnimationFrame.update(context,b.getBundle("incomingHold"),fresh(),effectAllowed);
    IncomingHold.update(context,b.getBundle("incomingHold"),angle,fresh(),effectAllowed);
    HandoffFrames.update(innerNow,dualActive,angle,fresh(),context.getSharedPreferences("standalone",0).getFloat("open_threshold",172f),context.getSharedPreferences("standalone",0).getBoolean("enabled",false) && context.getSharedPreferences("standalone",0).getBoolean("dual",false) && context.getSystemService(PowerManager.class).isInteractive() && !context.getSystemService(android.app.KeyguardManager.class).isKeyguardLocked(),context.getSharedPreferences("standalone",0).getBoolean("screenshot_camera_startup",false), false);
    if(SystemClock.elapsedRealtime()>=statusFormatAt){statusFormatAt=SystemClock.elapsedRealtime()+250;status=(fresh()?String.format(Locale.US,"LIVE %.0f° (closed ≤%.0f°)",b.getFloat("rawAngle"),context.getSharedPreferences("standalone",0).getFloat("closed_threshold",2f)):"Waiting for fresh wallpaper angles")+" · "+received+" replies · "+b.getInt("unique")+" distinct · UID "+b.getInt("uid");}

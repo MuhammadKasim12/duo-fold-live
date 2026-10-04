@@ -21,6 +21,7 @@ internal object ClassicGlassShader {
  uniform float2 sampleScale;
  uniform float2 sampleOffset;
  uniform float progress;
+ uniform float opaqueContent;
  uniform float inner;
  uniform float fallback;
  uniform float horizontal;
@@ -131,7 +132,7 @@ internal object ClassicGlassShader {
   }
   float effect=motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35);
   color*=half(1.0-min(1.0,effect*2.0*intensity));
-  float alpha=smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5)?0.015:0.035,progress);
+  float alpha=opaqueContent>0.5?1.0:smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5)?0.015:0.035,progress);
   if(inner>0.5 && fallback<0.5 && axis>=0.5)alpha*=seamMask;
   return half4(color*half(alpha),half(alpha));
  }

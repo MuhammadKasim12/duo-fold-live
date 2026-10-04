@@ -35,7 +35,7 @@ internal class ScreenshotStartupWindow(context:Context,display:Display){
  var committedStamp=0L;private set
  var draws=0;private set
  var strength=0f;private set
- val rendererRoute:String get()=if(incoming)"live incoming D$displayId" else if(composedStamp>0)"frozen outgoing D$displayId" else "idle"
+ val rendererRoute:String get()=if(incoming)"isolated incoming D$displayId" else if(composedStamp>0)"frozen outgoing D$displayId" else "idle"
  val attached:Boolean get()=dialog.isShowing&&view.isAttachedToWindow
  private fun identity():String=runCatching{Display::class.java.getMethod("getUniqueId").invoke(displays.getDisplay(displayId)).toString()}.getOrDefault("")
  fun refresh(){
@@ -80,11 +80,12 @@ internal class ScreenshotStartupWindow(context:Context,display:Display){
       Image(frame.bitmap.asImageBitmap(),null,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)
 
      }
-     if(frame!=null||incoming){
+     val input=frame ?: IncomingAnimationFrame.frame?.takeIf{incoming&&it.physicalId==physical}
+     if(input!=null){
       DuoLiveShade(object:StandaloneFoldHost{
        override fun onMovement(){}
        override fun onFrame(active:Boolean,strength:Float){this@ScreenshotStartupWindow.strength=strength}
-      },ctx.getSharedPreferences("standalone",0).getFloat("intensity",1f),innerPanel=inner,frozenFrame=frame)
+      },ctx.getSharedPreferences("standalone",0).getFloat("intensity",1f),innerPanel=inner,frozenFrame=input,opaqueContent=incoming)
      }
     }
    }

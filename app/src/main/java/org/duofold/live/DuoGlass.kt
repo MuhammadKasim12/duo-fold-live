@@ -33,6 +33,7 @@ internal object DuoGlassShader {
  uniform float2 sampleScale;
  uniform float2 sampleOffset;
  uniform float progress;
+ uniform float opaqueContent;
  uniform float foldRadians;
  uniform float inner;
  uniform float fallback;
@@ -186,18 +187,18 @@ internal object DuoGlassShader {
   }
   float effect=motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35);
   color*=half(1.0-min(1.0,effect*2.0*intensity));
-  float alpha=smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5)?0.015:0.035,progress);
+  float alpha=opaqueContent>0.5?1.0:smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5)?0.015:0.035,progress);
   if(inner>0.5 && fallback<0.5 && axis>=0.5)alpha*=seamMask;
   return half4(color*half(alpha),half(alpha));
  }
  """.trimIndent()
 }
-@Composable internal fun DuoGlassSurface(angle:Float,amount:Float,intensity:Float,inner:Boolean,rotation:Int,frozenFrame:GlassFrame?=null,reflectedCover:Boolean=false){
+@Composable internal fun DuoGlassSurface(angle:Float,amount:Float,intensity:Float,inner:Boolean,rotation:Int,frozenFrame:GlassFrame?=null,reflectedCover:Boolean=false,opaqueContent:Boolean=false){
  val frame=frozenFrame ?: GlassFrames.frame
  val running=frozenFrame==null && amount>.003f && LiveAngles.fresh()
  val context=androidx.compose.ui.platform.LocalContext.current
  DisposableEffect(running){GlassFrames.configure(context);if(running)GlassFrames.acquire();onDispose{if(running)GlassFrames.release()}}
- AndroidView(factory={FrostSurface(it,reflectedCover=reflectedCover)},modifier=Modifier.fillMaxSize(),update={it.configure(frame,amount,intensity,inner,rotation,frozenFrame!=null,angle)})
+ AndroidView(factory={FrostSurface(it,reflectedCover=reflectedCover)},modifier=Modifier.fillMaxSize(),update={it.configure(frame,amount,intensity,inner,rotation,frozenFrame!=null,angle,opaqueContent)})
 }
 internal class FrostSurface(context:Context,private val preview:Boolean=false,private val reflectedCover:Boolean=false):SurfaceView(context),SurfaceHolder.Callback {
  private var hingeAngle=Float.NaN
@@ -230,6 +231,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private val angleListener=LiveAngles.Listener { value,_ ->
   if(value.isFinite() && value!=targetAngle){targetAngle=value;requestDraw()}
  }
+ private var opaqueContent=false
  private var frozen=false;private var frame:GlassFrame?=null;private var amount=0f;private var intensity=1f;private var inner=false;private var rotation=0
  private val basePaint=Paint(Paint.FILTER_BITMAP_FLAG)
  private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
@@ -307,7 +309,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  init{setZOrderOnTop(true);holder.setFormat(PixelFormat.TRANSLUCENT);holder.addCallback(this);importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
   try{classic=ScreenshotRenderPolicy.classic(context.getSharedPreferences("standalone",0).getString("animation_style","duo"),context.getSharedPreferences("standalone",0).getString("animation_mode","windowed"),context.getSharedPreferences("standalone",0).getBoolean("dual",false));program=RuntimeShader(if(classic)ClassicGlassShader.source else DuoGlassShader.source)}catch(e:Exception){RecoveryLog.add("Glass shader compilation failed: ${e.message}")}
  }
- fun configure(next:GlassFrame?,amount:Float,intensity:Float,inner:Boolean,rotation:Int,frozen:Boolean=false,angle:Float=Float.NaN){this.hingeAngle=angle;this.frozen=frozen;frame=next;this.amount=amount;this.intensity=intensity;this.inner=inner;this.rotation=rotation
+ fun configure(next:GlassFrame?,amount:Float,intensity:Float,inner:Boolean,rotation:Int,frozen:Boolean=false,angle:Float=Float.NaN,opaqueContent:Boolean=false){this.opaqueContent=opaqueContent;this.hingeAngle=angle;this.frozen=frozen;frame=next;this.amount=amount;this.intensity=intensity;this.inner=inner;this.rotation=rotation
   smoothingMs=FrameSmoothing.sanitize(context.getSharedPreferences("standalone",0).getFloat("smoothing_ms",30f))
   openThreshold=context.getSharedPreferences("standalone",0).getFloat("open_threshold",172f)
   val selected=ScreenshotRenderPolicy.classic(context.getSharedPreferences("standalone",0).getString("animation_style","duo"),context.getSharedPreferences("standalone",0).getString("animation_mode","windowed"),context.getSharedPreferences("standalone",0).getBoolean("dual",false))
@@ -389,6 +391,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      shader.setFloatUniform("windowReveal",if(quality.getBoolean("window_reveal_v2",true))1f else 0f)
      shader.setFloatUniform("reflectedCover",if(reflectedCover)1f else 0f)
      shader.setFloatUniform("seamOffset",RenderQuality.seam(quality.getFloat("seam_offset",.07f)))
+     shader.setFloatUniform("opaqueContent",if(opaqueContent)1f else 0f)
      shader.setFloatUniform("texSize",f.bitmap.width.toFloat(),f.bitmap.height.toFloat())
      shader.setFloatUniform("origin",if(fallback)width-ew else 0f,if(fallback)(height-eh)/2f else 0f)
      shader.setFloatUniform("sampleScale",if(projectedCover)width/ew else 1f,if(projectedCover)height/eh else 1f)

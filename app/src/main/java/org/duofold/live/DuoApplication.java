@@ -37,6 +37,10 @@ public final class DuoApplication extends Application {
   if(!prefs.getBoolean("preview_default_203",false))prefs.edit().putBoolean("cover_preview",true).putBoolean("preview_default_203",true).apply();
   // Alpha.24 mistakenly stored the transport as an animation style. Preserve its route.
   if("screenshot".equals(prefs.getString("animation_mode","")))prefs.edit().putString("animation_mode",AnimationModePolicy.DEFAULT).apply();
+  // Owner-requested default on install/upgrade, once. Subsequent mode choices persist.
+  if(!prefs.getBoolean("live_screen_default_353_27",false))prefs.edit()
+   .putBoolean("dual",false).putBoolean("cover_preview",true)
+   .putBoolean("live_screen_default_353_27",true).commit();
   new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> org.duofold.live.wallpaperlayer.WallpaperRestore.resume(this));
  }
 }
