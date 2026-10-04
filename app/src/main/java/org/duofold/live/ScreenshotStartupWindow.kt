@@ -35,7 +35,7 @@ internal class ScreenshotStartupWindow(context:Context,display:Display){
  var committedStamp=0L;private set
  var draws=0;private set
  var strength=0f;private set
- val rendererRoute:String get()=if(incoming)"isolated incoming D$displayId" else if(composedStamp>0)"frozen outgoing D$displayId" else "idle"
+ val rendererRoute:String get()=if(incoming)"window-buffer incoming D$displayId" else if(composedStamp>0)"frozen outgoing D$displayId" else "idle"
  val attached:Boolean get()=dialog.isShowing&&view.isAttachedToWindow
  private fun identity():String=runCatching{Display::class.java.getMethod("getUniqueId").invoke(displays.getDisplay(displayId)).toString()}.getOrDefault("")
  fun refresh(){

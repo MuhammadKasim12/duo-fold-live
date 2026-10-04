@@ -198,6 +198,10 @@ internal object DuoGlassShader {
  val running=frozenFrame==null && amount>.003f && LiveAngles.fresh()
  val context=androidx.compose.ui.platform.LocalContext.current
  DisposableEffect(running){GlassFrames.configure(context);if(running)GlassFrames.acquire();onDispose{if(running)GlassFrames.release()}}
+ if(opaqueContent && frozenFrame!=null){
+  AndroidView(factory={IncomingGlassView(it)},modifier=Modifier.fillMaxSize(),update={it.configure(frozenFrame,amount,intensity,inner,rotation,angle)})
+  return
+ }
  AndroidView(factory={FrostSurface(it,reflectedCover=reflectedCover)},modifier=Modifier.fillMaxSize(),update={it.configure(frame,amount,intensity,inner,rotation,frozenFrame!=null,angle,opaqueContent)})
 }
 internal class FrostSurface(context:Context,private val preview:Boolean=false,private val reflectedCover:Boolean=false):SurfaceView(context),SurfaceHolder.Callback {
@@ -329,16 +333,19 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  }
  override fun surfaceChanged(h:SurfaceHolder,format:Int,w:Int,height:Int){readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(!preview){GlassFrames.surface(this,surfaceControl);if(!reflectedCover)GlassFrames.requestFreshCapture();if(!reflectedCover && context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true))PreviewTransition.markAnimation(surfaceControl)};preferFastRefresh();requestDraw()}
  override fun surfaceDestroyed(h:SurfaceHolder){removeCallbacks(clearGuard);paintedEffect=false;fallback("");readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
- private fun drawFrame(){
-  if(!holder.surface.isValid || width<=0 || height<=0)return
+ /** Reuse the exact shader painter in a normal window View, without attaching this SurfaceView. */
+ fun drawEmbedded(canvas:Canvas){drawFrame(canvas)}
+ private fun drawFrame(windowCanvas:Canvas?=null){
+  if((windowCanvas==null && !holder.surface.isValid) || width<=0 || height<=0)return
   runCatching{
    val started=SystemClock.elapsedRealtimeNanos()
-   val canvas=holder.lockHardwareCanvas()
+   val canvas=windowCanvas ?: holder.lockHardwareCanvas()
+   val windowSave=if(windowCanvas!=null)canvas.saveLayer(0f,0f,width.toFloat(),height.toFloat(),null) else -1
    var rendered:GlassFrame?=null
    var endpoint=false
    try{
     canvas.drawColor(Color.TRANSPARENT,PorterDuff.Mode.CLEAR)
-    canvas.scale(canvas.width.toFloat()/width,canvas.height.toFloat()/height)
+    if(windowCanvas==null)canvas.scale(canvas.width.toFloat()/width,canvas.height.toFloat()/height)
     if(reflectedCover){
      canvas.translate(width.toFloat(),0f);canvas.scale(-1f,1f)
      frame?.let{cover->if(PreviewExpansionPolicy.fresh(cover.stamp,SystemClock.elapsedRealtime()))canvas.drawBitmap(cover.bitmap,null,RectF(0f,0f,width.toFloat(),height.toFloat()),basePaint)}
@@ -418,9 +425,35 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
    }finally{
     // Only successful glass rendering or a deliberate fully-open clear qualifies.
     // Attach before posting this buffer. A fallback draw never sends readiness.
-    try{if(rendered!=null || endpoint)trackReadyFrame(rendered,endpoint)}finally{holder.unlockCanvasAndPost(canvas)}
+    if(windowCanvas==null){
+     try{if(rendered!=null || endpoint)trackReadyFrame(rendered,endpoint)}finally{holder.unlockCanvasAndPost(canvas)}
+    }else canvas.restoreToCount(windowSave)
     if(!preview)FrameTelemetry.record(inner,SystemClock.elapsedRealtimeNanos(),SystemClock.elapsedRealtimeNanos()-started,appliedRate)
    }
   }.onFailure{readinessGeneration++;readinessPending=false;RecoveryLog.add("Glass draw error: ${it.javaClass.simpleName}: ${it.message}")}
  }
+}
+
+/** The incoming effect is recorded into the overlay window's buffer. No child surface,
+ * separate compositor alpha, or SurfaceView hole can expose a duplicate app layer.
+ * The detached painter only shares shader code; it is never added to a window. */
+internal class IncomingGlassView(context:Context):View(context){
+ private val painter=FrostSurface(context)
+ private var stamp=0L
+ private var loggedStamp=0L
+ private val freshness=object:Runnable{override fun run(){invalidate();postDelayed(this,100)}}
+ init{importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS}
+ fun configure(frame:GlassFrame,amount:Float,intensity:Float,inner:Boolean,rotation:Int,angle:Float){
+  stamp=frame.stamp
+  painter.configure(frame,amount,intensity,inner,rotation,true,angle,true)
+  postInvalidateOnAnimation()
+ }
+ override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){super.onSizeChanged(w,h,oldw,oldh);painter.layout(0,0,w,h)}
+ override fun onDraw(canvas:Canvas){
+  super.onDraw(canvas)
+  painter.drawEmbedded(canvas)
+  if(stamp!=loggedStamp){loggedStamp=stamp;RecoveryLog.add("Incoming animation drawn in window buffer; D${display?.displayId}; size=${width}x$height; capture=$stamp; hardware=${canvas.isHardwareAccelerated}")}
+ }
+ override fun onAttachedToWindow(){super.onAttachedToWindow();post(freshness)}
+ override fun onDetachedFromWindow(){removeCallbacks(freshness);super.onDetachedFromWindow()}
 }
