@@ -33,8 +33,9 @@ final class ConcurrentController {
  synchronized Bundle incomingHoldInfo(){
   Bundle b=new Bundle();b.putLong("session",started);b.putBoolean("active",owned!=null&&cameraSession);
   b.putBoolean("closing",primaryInner);b.putInt("task",cameraSession&&fixedRoute!=null?fixedRoute.selectedTask():-1);
-  b.putString("physical",fixedSecondary);return b;
+  b.putString("physical",fixedSecondary);b.putInt("width",destinationWidth);b.putInt("height",destinationHeight);return b;
  }
+ private long readinessLostAt;
  private int destinationWidth,destinationHeight;private String endpointObservation="";
  private boolean endpointReturnWaiting;private long endpointReturnDeadline;private String endpointTarget="";
  private boolean routeCheckpoint;private String routeObservation="";
@@ -105,7 +106,7 @@ final class ConcurrentController {
   Object info=Class.forName("android.hardware.devicestate.IDeviceStateManager").getMethod("getDeviceStateInfo").invoke(service);
   Object current=info.getClass().getField("currentState").get(info),base=info.getClass().getField("baseState").get(info);
   if(!current.getClass().getMethod("getIdentifier").invoke(current).equals(base.getClass().getMethod("getIdentifier").invoke(base)))throw new IllegalStateException("Existing display override; stop other test apps first");
-  if(cameraSession){closingAppReturnAttempted=false;taskRequested=false;taskVerified=false;routeCheckpoint=false;routeObservation="";panelsReadySince=0;routePollAt=0;fixedPrimary=physicalPrimary();fixedSecondary=physicalId(1);captureDestinationSize();capturedTasks=false;log("REQUEST after committed outgoing screenshot; retain physical primary="+fixedPrimary+"; source="+(inner?"inner":"cover"));samplePanels(Float.NaN,true,false,true);}
+  if(cameraSession){readinessLostAt=0;closingAppReturnAttempted=false;taskRequested=false;taskVerified=false;routeCheckpoint=false;routeObservation="";panelsReadySince=0;routePollAt=0;fixedPrimary=physicalPrimary();fixedSecondary=physicalId(1);captureDestinationSize();capturedTasks=false;log("REQUEST after committed outgoing screenshot; retain physical primary="+fixedPrimary+"; source="+(inner?"inner":"cover"));samplePanels(Float.NaN,true,false,true);}
   if(cameraSession&&powerOverrideEnabled){if(powerOverride==null)powerOverride=new HandoffPowerOverride();powerOverrideArmed=false;powerCancellationSent=false;powerOverride.newSession();}
   setConcurrent(inner,now); // Captured outgoing panel becomes the secondary Presentation.
  }
@@ -232,7 +233,8 @@ final class ConcurrentController {
     samplePanels(angle,windowPrepared,secondaryReady,false);
     if(!fixedPrimary.equals(physicalPrimary()))throw new IllegalStateException("Fixed primary changed during task route");
     boolean ready=windowPrepared&&secondaryReady&&panelsReady();
-    if(!ready){panelsReadySince=0;taskVerified=false;if(now-started>2500)throw new IllegalStateException("Fixed panels or screenshot lost readiness");status="Waiting for fixed panels and committed outgoing screenshot";return;}
+    if(!ready){panelsReadySince=0;taskVerified=false;if(readinessLostAt==0)readinessLostAt=now;if(now-readinessLostAt>2500)throw new IllegalStateException("Fixed panels or screenshot lost readiness for 2500 ms");status="Waiting for fixed panels and committed outgoing screenshot";return;}
+    readinessLostAt=0;
     if(panelsReadySince==0)panelsReadySince=now;
     if(now-panelsReadySince<120){status="Checking stable fixed-panel readiness";return;}
     if(!fixedRoute.selected()){status="Home/system screen not routed — test inside a fullscreen app";}
