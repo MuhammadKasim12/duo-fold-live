@@ -114,9 +114,12 @@ class MainActivity:ComponentActivity(){
     LaunchedEffect(Unit){while(true){enabled=prefs.getBoolean("enabled",false);status=LiveAngles.status+"\n"+LiveAngles.handoffStatus;if(!supportBanner && SupportPrompts.inAppDue(this@MainActivity)){supportBanner=true;SupportPrompts.seenInApp(this@MainActivity)};delay(600)}}
     fun restart(){startBackground();StandaloneService.instance?.restart()}
     fun selectMode(value:String){
-     val shot=value=="screenshot"
-     mode=value;animationStyle="duo";dual=shot;liveMirror=!shot;debug=false
-     val edit=prefs.edit().putString("animation_mode",value).putBoolean("dual",shot).putBoolean("cover_preview",!shot).putString("animation_style","duo").putBoolean("debug_mode",false)
+     mode=value;animationStyle="duo";debug=false
+     prefs.edit().putString("animation_mode",value).putString("animation_style","duo").putBoolean("debug_mode",false).apply();restart()
+    }
+    fun selectFoldingMode(shot:Boolean){
+     dual=shot;liveMirror=!shot
+     val edit=prefs.edit().putBoolean("dual",shot).putBoolean("cover_preview",!shot)
      if(shot){screenshotStartup=true;closingAppReturn=true;powerOverride=false;incomingHold=false;endpointFade=true;jitterProtection=true
       edit.putBoolean("screenshot_camera_startup",true).putBoolean("closing_app_return",true).putBoolean("handoff_power_override",false).putBoolean("incoming_app_hold",false).putBoolean("screenshot_endpoint_fade",true).putBoolean("closed_hinge_jitter_protection",true)
      }
@@ -162,11 +165,24 @@ class MainActivity:ComponentActivity(){
        }
       }
       SettingsCard("Folding animation styles","Choose how your Fold moves between screens."){
-       listOf("screenshot" to "Frozen outgoing screen and live incoming app, with a black fade at full opening and closing.","windowed" to "Inspired by iPhone Duo with even more windowed glass. Default.","duo_classic" to "Native inner-screen glass with a black reveal. No mirrored cover or frosted preview.","fold_only" to "Windowed Glass when closing. Normal behavior when opening.","unfold_only" to "Windowed Glass when opening. Normal behavior when closing.").forEach{(id,description)->
+       listOf("windowed" to "Inspired by iPhone Duo with even more windowed glass. Default.","duo_classic" to "Native inner-screen glass with a black reveal. No mirrored cover or frosted preview.","fold_only" to "Windowed Glass when closing. Normal behavior when opening.","unfold_only" to "Windowed Glass when opening. Normal behavior when closing.").forEach{(id,description)->
         Surface(onClick={selectMode(id)},shape=RoundedCornerShape(20.dp),color=if(mode==id)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,modifier=Modifier.fillMaxWidth()){
          Row(Modifier.padding(14.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){
           RadioButton(selected=mode==id,onClick={selectMode(id)})
           Column(Modifier.weight(1f).padding(start=8.dp)){Text(AnimationModePolicy.label(id),style=MaterialTheme.typography.titleMedium);Text(description,style=MaterialTheme.typography.bodySmall)}
+         }
+        }
+       }
+      }
+      SettingsCard("Folding Mode","Choose how content moves between screens. Your animation style stays selected."){
+       listOf(false to "Live Screen",true to "Screenshot Mode").forEach{(shot,label)->
+        Surface(onClick={selectFoldingMode(shot)},shape=RoundedCornerShape(20.dp),color=if(dual==shot)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,modifier=Modifier.fillMaxWidth()){
+         Row(Modifier.padding(14.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){
+          RadioButton(selected=dual==shot,onClick={selectFoldingMode(shot)})
+          Column(Modifier.weight(1f).padding(start=8.dp)){
+           Text(label,style=MaterialTheme.typography.titleMedium)
+           Text(if(shot)"Closer to the iPhone Duo approach: a frozen outgoing screen with live content on the incoming screen. A black transition at the end masks Samsung’s display-switch limitation." else "A custom live-screen experience built for Z Fold 8, unique to Duo Fold Live. A black transition midway through the fold masks Samsung’s display-switch limitation.",style=MaterialTheme.typography.bodySmall)
+          }
          }
         }
        }
@@ -348,7 +364,7 @@ class MainActivity:ComponentActivity(){
         Text("Requires both screenshot handoff options above. Requests Samsung ON overrides near full opening/closing, then releases them after two seconds. May be rejected or delay the switch; compare ON versus OFF and copy the short report.",style=MaterialTheme.typography.bodySmall)
         Text("Requires Dual-screen screenshot handoff ON. Diagnostic: commits the outgoing screenshot, then wakes the incoming panel while keeping the outgoing screen on. Incoming content is uncovered live content, with incoming glass temporarily omitted. Final native-layout switch may still flash. Maximum hold: 30 seconds. Turn this off to restore the original screenshot path.",style=MaterialTheme.typography.bodySmall)
         Toggle("Screenshot endpoint black fade",endpointFade){endpointFade=it;booleanSetting("screenshot_endpoint_fade",it)}
-        Text("Masks the final screen transfer, then fades into the ready app. Takes priority over incoming screenshot hold. Selecting Screenshot restores its recommended developer defaults.",style=MaterialTheme.typography.bodySmall)
+        Text("Masks the final screen transfer, then fades into the ready app. Takes priority over incoming screenshot hold. Selecting Screenshot Mode restores its recommended developer defaults.",style=MaterialTheme.typography.bodySmall)
         Toggle("Incoming app screenshot hold (experimental)",incomingHold){incomingHold=it;booleanSetting("incoming_app_hold",it)}
         Text("Briefly holds the incoming app image through the final display transfer. Releases when the app is drawn, with a 1.8-second timeout from handoff and a separate 10-second preparation limit.")
         Toggle("Closing app-first return (experimental)",closingAppReturn){closingAppReturn=it;booleanSetting("closing_app_return",it)}
