@@ -41,6 +41,9 @@ public final class DuoApplication extends Application {
   if(!prefs.getBoolean("live_screen_default_353_27",false))prefs.edit()
    .putBoolean("dual",false).putBoolean("cover_preview",true)
    .putBoolean("live_screen_default_353_27",true).commit();
+  // Endpoint cover-up experiments are parked; clear legacy values as well as gating execution.
+  if(prefs.getBoolean("incoming_app_hold",true)||prefs.getBoolean("screenshot_endpoint_fade",false))
+   prefs.edit().putBoolean("incoming_app_hold",false).putBoolean("screenshot_endpoint_fade",false).commit();
   new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> org.duofold.live.wallpaperlayer.WallpaperRestore.resume(this));
  }
 }

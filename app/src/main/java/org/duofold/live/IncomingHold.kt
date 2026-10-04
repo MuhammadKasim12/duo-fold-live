@@ -13,6 +13,9 @@ import android.widget.ImageView
 
 /** Independent from the main overlay rebuild: follows one physical panel through D1 -> D0. */
 internal object IncomingHold {
+ // Parked in alpha.29 at the owner's request. No preference or UI can enable
+ // the endpoint screenshot/black-mask experiments while this gate is false.
+ private val endpointExperimentsEnabled=false
  private val main=Handler(Looper.getMainLooper())
  private val events=ArrayDeque<String>()
  private val windows=ArrayList<HoldWindow>()
@@ -40,13 +43,17 @@ internal object IncomingHold {
  private var checkAt=0L
  private var lastNote=""
  private fun log(s:String){events.addLast("${SystemClock.elapsedRealtime()}: $s");while(events.size>30)events.removeFirst();RecoveryLog.add("Incoming hold: $s")}
- @JvmStatic fun report()="Incoming endpoint transition (commit/readiness are software evidence):\n"+events.joinToString("\n")
+ @JvmStatic fun report()=if(!endpointExperimentsEnabled)"Incoming endpoint transition: disabled internally (black fade and screenshot hold)" else "Incoming endpoint transition (commit/readiness are software evidence):\n"+events.joinToString("\n")
  @JvmStatic fun clear(reason:String){
   generation++;main.removeCallbacks(tick);windows.forEach{it.close()};windows.clear();frame=null;pendingReady=false;readyCount=0;lease=null;captureRequested=false;maskActive=false;revealAt=0
   if(engaged)log("RELEASE $reason; session=$session")
   engaged=false
  }
  @JvmStatic fun update(ctx:Context,info:Bundle?,angle:Float,fresh:Boolean,allowed:Boolean){
+  if(!endpointExperimentsEnabled){
+   if(engaged||windows.isNotEmpty())clear("endpoint experiments disabled internally")
+   return
+  }
   val now=SystemClock.elapsedRealtime();lastUpdate=now;context=ctx.applicationContext
   val prefs=ctx.getSharedPreferences("standalone",0)
   if(!allowed||!fresh||!prefs.getBoolean("enabled",false)||!prefs.getBoolean("dual",false)||!prefs.getBoolean("screenshot_camera_startup",false)||(!prefs.getBoolean("incoming_app_hold",true)&&!prefs.getBoolean("screenshot_endpoint_fade",false))||ctx.getSystemService(KeyguardManager::class.java).isKeyguardLocked||!ctx.getSystemService(PowerManager::class.java).isInteractive){clear("disabled, stale, or locked");return}

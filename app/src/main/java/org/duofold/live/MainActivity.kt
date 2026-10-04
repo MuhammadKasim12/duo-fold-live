@@ -68,8 +68,6 @@ class MainActivity:ComponentActivity(){
     var debug by remember{mutableStateOf(prefs.getBoolean("debug_mode",false))}
     var dual by remember{mutableStateOf(prefs.getBoolean("dual",false))}
     var jitterProtection by remember{mutableStateOf(prefs.getBoolean("closed_hinge_jitter_protection",true))}
-    var endpointFade by remember{mutableStateOf(prefs.getBoolean("screenshot_endpoint_fade",false))}
-    var incomingHold by remember{mutableStateOf(prefs.getBoolean("incoming_app_hold",true))}
     var closingAppReturn by remember{mutableStateOf(prefs.getBoolean("closing_app_return",false))}
     var closingPower by remember{mutableStateOf(prefs.getBoolean("closing_direct_power",false))}
     var powerOverride by remember{mutableStateOf(prefs.getBoolean("handoff_power_override",false))}
@@ -120,8 +118,8 @@ class MainActivity:ComponentActivity(){
     fun selectFoldingMode(shot:Boolean){
      dual=shot;liveMirror=!shot
      val edit=prefs.edit().putBoolean("dual",shot).putBoolean("cover_preview",!shot)
-     if(shot){screenshotStartup=true;closingAppReturn=true;powerOverride=false;incomingHold=false;endpointFade=true;jitterProtection=true
-      edit.putBoolean("screenshot_camera_startup",true).putBoolean("closing_app_return",true).putBoolean("handoff_power_override",false).putBoolean("incoming_app_hold",false).putBoolean("screenshot_endpoint_fade",true).putBoolean("closed_hinge_jitter_protection",true)
+     if(shot){screenshotStartup=true;closingAppReturn=true;powerOverride=false;jitterProtection=true
+      edit.putBoolean("screenshot_camera_startup",true).putBoolean("closing_app_return",true).putBoolean("handoff_power_override",false).putBoolean("incoming_app_hold",false).putBoolean("screenshot_endpoint_fade",false).putBoolean("closed_hinge_jitter_protection",true)
      }
      edit.apply();restart()
     }
@@ -181,7 +179,7 @@ class MainActivity:ComponentActivity(){
           RadioButton(selected=dual==shot,onClick={selectFoldingMode(shot)})
           Column(Modifier.weight(1f).padding(start=8.dp)){
            Text(label,style=MaterialTheme.typography.titleMedium)
-           Text(if(shot)"Closer to the iPhone Duo approach: a frozen outgoing screen with live content on the incoming screen. A black transition at the end masks Samsung’s display-switch limitation." else "A custom live-screen experience built for Z Fold 8, unique to Duo Fold Live. A black transition midway through the fold masks Samsung’s display-switch limitation.",style=MaterialTheme.typography.bodySmall)
+           Text(if(shot)"Closer to the iPhone Duo approach: a frozen outgoing screen with live content on the incoming screen. Samsung’s final display switch may briefly go black." else "A custom live-screen experience built for Z Fold 8, unique to Duo Fold Live. A black transition midway through the fold masks Samsung’s display-switch limitation.",style=MaterialTheme.typography.bodySmall)
           }
          }
         }
@@ -362,11 +360,7 @@ class MainActivity:ComponentActivity(){
         Toggle("Screenshot window-first startup (experimental)",screenshotStartup){screenshotStartup=it;booleanSetting("screenshot_camera_startup",it)}
         Toggle("Hold displays ON at handoff (experimental)",powerOverride){powerOverride=it;booleanSetting("handoff_power_override",it)}
         Text("Requires both screenshot handoff options above. Requests Samsung ON overrides near full opening/closing, then releases them after two seconds. May be rejected or delay the switch; compare ON versus OFF and copy the short report.",style=MaterialTheme.typography.bodySmall)
-        Text("Requires Dual-screen screenshot handoff ON. Diagnostic: commits the outgoing screenshot, then wakes the incoming panel while keeping the outgoing screen on. Incoming content is uncovered live content, with incoming glass temporarily omitted. Final native-layout switch may still flash. Maximum hold: 30 seconds. Turn this off to restore the original screenshot path.",style=MaterialTheme.typography.bodySmall)
-        Toggle("Screenshot endpoint black fade",endpointFade){endpointFade=it;booleanSetting("screenshot_endpoint_fade",it)}
-        Text("Masks the final screen transfer, then fades into the ready app. Takes priority over incoming screenshot hold. Selecting Screenshot Mode restores its recommended developer defaults.",style=MaterialTheme.typography.bodySmall)
-        Toggle("Incoming app screenshot hold (experimental)",incomingHold){incomingHold=it;booleanSetting("incoming_app_hold",it)}
-        Text("Briefly holds the incoming app image through the final display transfer. Releases when the app is drawn, with a 1.8-second timeout from handoff and a separate 10-second preparation limit.")
+        Text("Requires Dual-screen screenshot handoff ON. Diagnostic: commits the outgoing screenshot, then wakes the incoming panel while keeping the outgoing screen on. The selected animation runs over incoming app content. Final native-layout switch may still flash. Maximum hold: 30 seconds. Turn this off to restore the original screenshot path.",style=MaterialTheme.typography.bodySmall)
         Toggle("Closing app-first return (experimental)",closingAppReturn){closingAppReturn=it;booleanSetting("closing_app_return",it)}
         Text("Screenshot window-first tests only. Returns the selected app to the primary screen at 15° while closing, before Android releases dual mode. Tests whether leaving Home focused contributes to fold sleep. May interrupt the live cover preview near closure. OFF by default.",style=MaterialTheme.typography.bodySmall)
         Toggle("Closing cover power pulse (experimental)",closingPower){closingPower=it;booleanSetting("closing_direct_power",it)}
