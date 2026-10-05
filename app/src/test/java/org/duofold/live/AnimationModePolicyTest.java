@@ -2,6 +2,27 @@ package org.duofold.live;
 import org.junit.Test;
 import static org.junit.Assert.*;
 public class AnimationModePolicyTest {
+ @Test public void migrationPreservesDirectionAndClassic(){
+  assertEquals("fold_only",AnimationModePolicy.initialBehavior(null,"fold_only"));
+  assertEquals("unfold_only",AnimationModePolicy.initialBehavior(null,"unfold_only"));
+  assertEquals("windowed",AnimationModePolicy.style("fold_only"));
+  assertEquals("duo_classic",AnimationModePolicy.style("duo_classic"));
+  assertEquals("both",AnimationModePolicy.initialBehavior(null,"duo_classic"));
+  assertEquals("both",AnimationModePolicy.initialBehavior("both","fold_only"));
+ }
+ @Test public void behaviorWorksIndependentlyForEachStyle(){
+  for(String style:new String[]{"windowed","duo_classic"}){
+   assertEquals(style,AnimationModePolicy.style(style));
+   for(String behavior:new String[]{"both","fold_only","unfold_only"}){
+    AnimationModePolicy policy=new AnimationModePolicy();
+    policy.update(behavior,0,true);
+    assertEquals(!"fold_only".equals(behavior),policy.update(behavior,60,true));
+    policy.update(behavior,172,true);
+    assertEquals(!"unfold_only".equals(behavior),policy.update(behavior,120,true));
+   }
+  }
+ }
+
  @Test public void transportIsNotAnAnimationStyle(){assertEquals("windowed",AnimationModePolicy.sanitize("screenshot"));assertEquals("Windowed Glass",AnimationModePolicy.label("screenshot"));}
  @Test public void defaultNeverChangesExistingDirectionBehavior(){AnimationModePolicy p=new AnimationModePolicy();for(float a:new float[]{0,60,98,179,130,94,0,Float.NaN})assertTrue(p.update("windowed",a,true));assertTrue(AnimationModePolicy.mirrors("windowed"));assertEquals("windowed",AnimationModePolicy.sanitize(null));}
  @Test public void classicEnablesWindowedGlassPreviewRoute(){AnimationModePolicy p=new AnimationModePolicy();assertTrue(p.update("duo_classic",110,true));assertTrue(AnimationModePolicy.mirrors("duo_classic"));}

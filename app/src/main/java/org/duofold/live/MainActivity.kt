@@ -62,6 +62,7 @@ class MainActivity:ComponentActivity(){
     val scope=rememberCoroutineScope()
     var enabled by remember{mutableStateOf(prefs.getBoolean("enabled",false))}
     var mode by remember{mutableStateOf(AnimationModePolicy.sanitize(prefs.getString("animation_mode",AnimationModePolicy.DEFAULT)))}
+    var behavior by remember{mutableStateOf(AnimationModePolicy.behavior(prefs.getString("animation_behavior",AnimationModePolicy.BOTH)))}
     var legacy by remember{mutableStateOf(false)}
     var supportBanner by remember{mutableStateOf(false)}
     var developer by remember{mutableStateOf(false)}
@@ -122,6 +123,9 @@ class MainActivity:ComponentActivity(){
      mode=value;animationStyle="duo";debug=false
      prefs.edit().putString("animation_mode",value).putString("animation_style","duo").putBoolean("debug_mode",false).apply();restart()
     }
+    fun selectBehavior(value:String){
+     behavior=value;prefs.edit().putString("animation_behavior",value).apply();restart()
+    }
     fun selectFoldingMode(shot:Boolean){
      if(shot && !ScreenshotModeAccess.unlocked(prefs)){screenshotNotice=true;return}
      dual=shot;liveMirror=!shot
@@ -171,12 +175,22 @@ class MainActivity:ComponentActivity(){
         TextButton(onClick={supportBanner=false;SupportPrompts.stop(this@MainActivity)}){Text("Don’t ask again")}
        }
       }
-      SettingsCard("Folding animation styles","Choose how your Fold moves between screens."){
-       listOf("windowed" to "Inspired by iPhone Duo with even more windowed glass. Default.","duo_classic" to "Gentler cover stretch, an inward fold toward the hinge, and stronger blur and glass. Includes the live cover preview and mirrored inner-display preview.","fold_only" to "Windowed Glass when closing. Normal behavior when opening.","unfold_only" to "Windowed Glass when opening. Normal behavior when closing.").forEach{(id,description)->
+      SettingsCard("Folding Animation Style","Choose how your Fold moves between screens."){
+       listOf("windowed" to "Inspired by iPhone Duo with even more windowed glass. Default.","duo_classic" to "Gentler cover stretch, an inward fold toward the hinge, and stronger blur and glass. Includes the live cover preview and mirrored inner-display preview.").forEach{(id,description)->
         Surface(onClick={selectMode(id)},shape=RoundedCornerShape(20.dp),color=if(mode==id)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,modifier=Modifier.fillMaxWidth()){
          Row(Modifier.padding(14.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){
           RadioButton(selected=mode==id,onClick={selectMode(id)})
           Column(Modifier.weight(1f).padding(start=8.dp)){Text(AnimationModePolicy.label(id),style=MaterialTheme.typography.titleMedium);Text(description,style=MaterialTheme.typography.bodySmall)}
+         }
+        }
+       }
+      }
+      SettingsCard("Animation Behavior","Choose when your selected animation is used."){
+       listOf(AnimationModePolicy.BOTH,"fold_only","unfold_only").forEach{id->
+        Surface(onClick={selectBehavior(id)},shape=RoundedCornerShape(20.dp),color=if(behavior==id)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,modifier=Modifier.fillMaxWidth()){
+         Row(Modifier.padding(14.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){
+          RadioButton(selected=behavior==id,onClick={selectBehavior(id)})
+          Text(AnimationModePolicy.behaviorLabel(id),modifier=Modifier.weight(1f).padding(start=8.dp),style=MaterialTheme.typography.titleMedium)
          }
         }
        }

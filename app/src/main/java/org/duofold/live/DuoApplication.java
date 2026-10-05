@@ -43,6 +43,10 @@ public final class DuoApplication extends Application {
    .putBoolean("live_screen_default_353_27",true).commit();
   // Screenshot mode stays unavailable until explicitly unlocked with the 10s gesture.
   ScreenshotModeAccess.enforce(prefs);
+  // Split legacy direction-only styles into independent appearance and behavior.
+  String oldMode=prefs.getString("animation_mode",AnimationModePolicy.DEFAULT);
+  prefs.edit().putString("animation_behavior",AnimationModePolicy.initialBehavior(prefs.getString("animation_behavior",null),oldMode))
+   .putString("animation_mode",AnimationModePolicy.style(oldMode)).commit();
   // Endpoint cover-up experiments are parked; clear legacy values as well as gating execution.
   if(prefs.getBoolean("incoming_app_hold",true)||prefs.getBoolean("screenshot_endpoint_fade",false))
    prefs.edit().putBoolean("incoming_app_hold",false).putBoolean("screenshot_endpoint_fade",false).commit();

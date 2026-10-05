@@ -2,6 +2,11 @@ package org.duofold.live;
 /** Additive mode gate. Windowed Glass always takes the established rendering path. */
 final class AnimationModePolicy {
  static final String DEFAULT="windowed";
+ static final String BOTH="both";
+ static String style(String value){return "duo_classic".equals(value)?value:DEFAULT;}
+ static String behavior(String value){return "fold_only".equals(value)||"unfold_only".equals(value)?value:BOTH;}
+ static String initialBehavior(String saved,String oldMode){return behavior(saved==null?oldMode:saved);}
+ static String behaviorLabel(String value){switch(behavior(value)){case "fold_only":return "Fold-Only";case "unfold_only":return "Unfold-Only";default:return "Fold & Unfold";}}
  private float anchor=Float.NaN;
  private int direction;
  static String sanitize(String value){return "duo_classic".equals(value)||"fold_only".equals(value)||"unfold_only".equals(value)?value:DEFAULT;}

@@ -56,8 +56,9 @@ public class AngleReader extends Binder {
    boolean closingPower=data.dataAvail()>=4&&data.readInt()!=0;
    concurrent.closingAppReturnEnabled(data.dataAvail()>=4&&data.readInt()!=0);
    boolean jitterProtection=data.dataAvail()<4||data.readInt()!=0;
+   String behavior=AnimationModePolicy.initialBehavior(data.dataAvail()>0?data.readString():null,mode);
    float effectiveAngle=closedHingeGate.filter(angle,closedThreshold,jitterProtection,last>0&&heartbeat-last<750);
-   boolean effectAllowed=animationMode.update(mode,effectiveAngle,last>0&&heartbeat-last<750);
+   boolean effectAllowed=animationMode.update(behavior,effectiveAngle,last>0&&heartbeat-last<750);
    boolean mirrorMode=AnimationModePolicy.mirrors(mode);
    appEnabled=appEnabled&&effectAllowed;
    if(rotation==null)rotation=new FoldRotationHold(caller/100000,recoveryApk);
