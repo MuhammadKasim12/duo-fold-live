@@ -128,7 +128,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
                 }
             }
             // The glass SurfaceView supplies its own frame-bound completion.
-            val glass=AnimationModePolicy.mirrors(settings().getString("animation_mode",AnimationModePolicy.DEFAULT)) && !settings().getBoolean("debug_mode",false)
+            val glass=!settings().getBoolean("debug_mode",false)
             if(compose.alpha>0f && (!inner || !glass))HandoffFadeFrames.drawn(inner)
         }
         compose.post(object:Runnable{override fun run(){

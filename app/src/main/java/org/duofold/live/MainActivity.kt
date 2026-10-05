@@ -10,6 +10,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -66,6 +69,10 @@ class MainActivity:ComponentActivity(){
     var animationStyle by remember{mutableStateOf(prefs.getString("animation_style","duo") ?: "duo")}
     var liveMirror by remember{mutableStateOf(prefs.getBoolean("cover_preview",true))}
     var debug by remember{mutableStateOf(prefs.getBoolean("debug_mode",false))}
+    var screenshotUnlocked by remember{mutableStateOf(ScreenshotModeAccess.unlocked(prefs))}
+    var screenshotNotice by remember{mutableStateOf(false)}
+    val baseViewConfiguration=LocalViewConfiguration.current
+    val screenshotViewConfiguration=remember(baseViewConfiguration){object:ViewConfiguration by baseViewConfiguration{override val longPressTimeoutMillis=ScreenshotModeAccess.HOLD_MS}}
     var dual by remember{mutableStateOf(prefs.getBoolean("dual",false))}
     var jitterProtection by remember{mutableStateOf(prefs.getBoolean("closed_hinge_jitter_protection",true))}
     var closingAppReturn by remember{mutableStateOf(prefs.getBoolean("closing_app_return",false))}
@@ -116,6 +123,7 @@ class MainActivity:ComponentActivity(){
      prefs.edit().putString("animation_mode",value).putString("animation_style","duo").putBoolean("debug_mode",false).apply();restart()
     }
     fun selectFoldingMode(shot:Boolean){
+     if(shot && !ScreenshotModeAccess.unlocked(prefs)){screenshotNotice=true;return}
      dual=shot;liveMirror=!shot
      val edit=prefs.edit().putBoolean("dual",shot).putBoolean("cover_preview",!shot)
      if(shot){screenshotStartup=true;closingAppReturn=true;powerOverride=false;jitterProtection=true
@@ -128,6 +136,7 @@ class MainActivity:ComponentActivity(){
      photoStatus="Preparing image…"
      runCatching{withContext(Dispatchers.IO){WallpaperFiles.savePhoto(this@MainActivity,uri)}}.onSuccess{photo=it;photoStatus="Photo saved as your selection. Not applied to Home yet."}.onFailure{photoStatus="Could not read image: ${it.message}"}
     }}
+    if(screenshotNotice)AlertDialog(onDismissRequest={screenshotNotice=false},title={Text("Coming soon")},text={Text("Screenshot Mode is in the final stages of active development.")},confirmButton={TextButton(onClick={screenshotNotice=false}){Text("OK")}})
     Surface(Modifier.fillMaxSize()){
      Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
       Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xff1d3048),Color(0xff172128))),RoundedCornerShape(28.dp)).padding(24.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
@@ -163,7 +172,7 @@ class MainActivity:ComponentActivity(){
        }
       }
       SettingsCard("Folding animation styles","Choose how your Fold moves between screens."){
-       listOf("windowed" to "Inspired by iPhone Duo with even more windowed glass. Default.","duo_classic" to "Native inner-screen glass with a black reveal. No mirrored cover or frosted preview.","fold_only" to "Windowed Glass when closing. Normal behavior when opening.","unfold_only" to "Windowed Glass when opening. Normal behavior when closing.").forEach{(id,description)->
+       listOf("windowed" to "Inspired by iPhone Duo with even more windowed glass. Default.","duo_classic" to "Gentler cover stretch, an inward fold toward the hinge, and stronger blur and glass. No mirrored cover preview.","fold_only" to "Windowed Glass when closing. Normal behavior when opening.","unfold_only" to "Windowed Glass when opening. Normal behavior when closing.").forEach{(id,description)->
         Surface(onClick={selectMode(id)},shape=RoundedCornerShape(20.dp),color=if(mode==id)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,modifier=Modifier.fillMaxWidth()){
          Row(Modifier.padding(14.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){
           RadioButton(selected=mode==id,onClick={selectMode(id)})
@@ -174,19 +183,25 @@ class MainActivity:ComponentActivity(){
       }
       SettingsCard("Folding Mode","Choose how content moves between screens. Your animation style stays selected."){
        listOf(false to "Live Screen",true to "Screenshot Mode").forEach{(shot,label)->
-        Surface(onClick={selectFoldingMode(shot)},shape=RoundedCornerShape(20.dp),color=if(dual==shot)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,modifier=Modifier.fillMaxWidth()){
+        CompositionLocalProvider(LocalViewConfiguration provides screenshotViewConfiguration){
+        Surface(modifier=Modifier.fillMaxWidth().combinedClickable(onClick={selectFoldingMode(shot)},onLongClick=if(shot){{
+         prefs.edit().putBoolean(ScreenshotModeAccess.KEY,true).apply();screenshotUnlocked=true
+         selectFoldingMode(true)
+         android.widget.Toast.makeText(this@MainActivity,"Screenshot Mode enabled for testing",android.widget.Toast.LENGTH_SHORT).show()
+        }}else null),shape=RoundedCornerShape(20.dp),color=if(dual==shot)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant){
          Row(Modifier.padding(14.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){
-          RadioButton(selected=dual==shot,onClick={selectFoldingMode(shot)})
+          RadioButton(selected=dual==shot,onClick=null)
           Column(Modifier.weight(1f).padding(start=8.dp)){
            Text(label,style=MaterialTheme.typography.titleMedium)
-           Text(if(shot)"Closer to the iPhone Duo approach: a frozen outgoing screen with live content on the incoming screen. Samsung’s final display switch may briefly go black." else "A custom live-screen experience built for Z Fold 8, unique to Duo Fold Live. A black transition midway through the fold masks Samsung’s display-switch limitation.",style=MaterialTheme.typography.bodySmall)
+           Text(if(shot && !screenshotUnlocked)"Coming soon · In active development" else if(shot)"Experimental testing mode. Closer to the iPhone Duo approach: a frozen outgoing screen with live content on the incoming screen. Samsung’s final display switch may briefly go black." else "A custom live-screen experience built for Z Fold 8, unique to Duo Fold Live. A black transition midway through the fold masks Samsung’s display-switch limitation.",style=MaterialTheme.typography.bodySmall)
           }
          }
         }
        }
       }
+      }
       ShizukuHelp()
-      SettingsCard("Fine-tune your animation","Your saved glass and fade settings apply to each style."){
+      SettingsCard("Fine-tune your animation","Duo Classic uses its own stronger glass and blur preset. Other styles use your saved glass settings."){
 
        InfoLabel("Motion smoothness · ${smoothing.roundToInt()} ms","Higher values smooth hinge motion but add delay. This does not increase FPS. Default: 30 ms.")
        Slider(value=smoothing,onValueChange={smoothing=it},valueRange=12f..120f,onValueChangeFinished={prefs.edit().putFloat("smoothing_ms",smoothing).apply();restart()})
@@ -355,7 +370,7 @@ class MainActivity:ComponentActivity(){
         HorizontalDivider()
         Toggle("Cover preview on inner screen (experimental)",liveMirror){liveMirror=it;booleanSetting("cover_preview",it)}
         Text("For use with Dual-screen screenshot handoff OFF. Mirrors cover content without its animation. A frosted second copy is already visible on the left. At handoff, the same layout briefly holds, then fades into the inner content without a bright expansion. Screen-switch angles stay unchanged.",style=MaterialTheme.typography.bodySmall)
-        Toggle("Dual-screen screenshot handoff",dual){dual=it;booleanSetting("dual",it)}
+        Toggle("Dual-screen screenshot handoff",dual){selectFoldingMode(it)}
         Text(if(dual)"Active path: dual-screen screenshot handoff" else "Active path: normal handoff. The next two switches are inactive while dual-screen handoff is OFF.",style=MaterialTheme.typography.bodySmall)
         Toggle("Screenshot window-first startup (experimental)",screenshotStartup){screenshotStartup=it;booleanSetting("screenshot_camera_startup",it)}
         Toggle("Hold displays ON at handoff (experimental)",powerOverride){powerOverride=it;booleanSetting("handoff_power_override",it)}

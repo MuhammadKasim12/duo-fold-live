@@ -1,6 +1,6 @@
 package org.duofold.live
 
-/** Preserved 1.4.3 glass shader. */
+/** Classic projection with a bounded cover stretch and inward inner-panel fold. */
 internal object ClassicGlassShader {
  val source="""
  uniform shader content;
@@ -21,6 +21,7 @@ internal object ClassicGlassShader {
  uniform float2 sampleScale;
  uniform float2 sampleOffset;
  uniform float progress;
+ uniform float classicPreset;
  uniform float opaqueContent;
  uniform float inner;
  uniform float fallback;
@@ -62,6 +63,9 @@ internal object ClassicGlassShader {
   return x-stretch;
  }
 
+ // Zero slope at both ends avoids the old late stretch surge.
+ float classicCoverScale(float p){return 1.0+0.28*smoothstep(0.0,1.0,p);}
+ float classicInnerWidth(float p){return mix(1.0,0.16,smoothstep(0.0,1.0,p));}
  half4 main(float2 p) {
   float2 uv=(p-origin)/extent;
   if(any(lessThan(uv,float2(0))) || any(greaterThan(uv,float2(1)))) return half4(0);
@@ -99,6 +103,17 @@ internal object ClassicGlassShader {
    }
    float correctedV2=mix(limited,1.0-limited,reverse);
    if(horizontal>0.5)sourceUV.y=correctedV2;else sourceUV.x=correctedV2;
+  }
+  // Destination-to-source mapping: expanding source distance compresses the
+  // visible inner image TOWARD the hinge; opening traverses the same curve backward.
+  // Keep the cover bounded instead of the near-singular 90-degree stretch.
+  if(classicPreset>0.5){
+   float h=inner>0.5 ? (fallback>0.5 ? 1.0 : 0.5) : 0.0;
+   float mappedAxis=inner>0.5
+    ? h+(axis-h)/classicInnerWidth(progress)
+    : axis/classicCoverScale(progress);
+   float correctedClassic=mix(mappedAxis,1.0-mappedAxis,reverse);
+   if(horizontal>0.5)sourceUV.y=correctedClassic;else sourceUV.x=correctedClassic;
   }
   float seamMask=0.0;
   if(inner>0.5 && fallback<0.5 && seamOffset>0.0){

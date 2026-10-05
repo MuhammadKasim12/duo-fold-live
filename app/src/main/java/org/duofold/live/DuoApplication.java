@@ -41,6 +41,8 @@ public final class DuoApplication extends Application {
   if(!prefs.getBoolean("live_screen_default_353_27",false))prefs.edit()
    .putBoolean("dual",false).putBoolean("cover_preview",true)
    .putBoolean("live_screen_default_353_27",true).commit();
+  // Screenshot mode stays unavailable until explicitly unlocked with the 10s gesture.
+  ScreenshotModeAccess.enforce(prefs);
   // Endpoint cover-up experiments are parked; clear legacy values as well as gating execution.
   if(prefs.getBoolean("incoming_app_hold",true)||prefs.getBoolean("screenshot_endpoint_fade",false))
    prefs.edit().putBoolean("incoming_app_hold",false).putBoolean("screenshot_endpoint_fade",false).commit();
