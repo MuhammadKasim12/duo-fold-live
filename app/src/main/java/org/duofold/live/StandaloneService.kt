@@ -182,6 +182,8 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
         closeScreenshotWindow();dismissSecondary();hide();strength=0f;generation++;pending=false;image=null
     }
     private val sourceGuard=object:Runnable {override fun run(){
+        // SCREEN_ON may arrive before keyguard unlock; retry independently of broadcasts.
+        if(settings().getBoolean("enabled",false))resumeIfUsable()
         diagnosticState("poll")
         val fresh=LiveAngles.fresh()
         if(!fresh && (active || sourceWasFresh)){hide();note("Effect paused — waiting for fresh angles; panel session retained")}
