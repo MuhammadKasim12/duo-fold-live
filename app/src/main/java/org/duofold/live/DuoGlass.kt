@@ -392,10 +392,11 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      if(classic)shader.setFloatUniform("classicPreset",if(classicPreset)1f else 0f)
      val aaMode=if(quality.getBoolean("antialias_enabled",true))RenderQuality.aaMode(quality.getInt("antialias_method_v2",0)) else 0
      shader.setFloatUniform("aaStrength",if(quality.getBoolean("antialias_enabled",true))RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)) else 0f)
-     shader.setFloatUniform("blurStrength",if(classicPreset)1.5f else RenderQuality.blur(quality.getFloat("blur_strength",.3f)))
+     shader.setFloatUniform("blurStrength",if(classicPreset)1.875f else RenderQuality.blur(quality.getFloat("blur_strength",.3f)))
      shader.setFloatUniform("earlyStretch",quality.getFloat(if(inner)"inner_early_stretch" else "early_stretch",if(inner).9f else 2.7f).let{if(it.isFinite())it.coerceIn(0f,3f) else if(inner).9f else 2.7f})
      shader.setFloatUniform("endStretch",if(quality.getBoolean(if(inner)"inner_enhanced_end_stretch" else "enhanced_end_stretch",true))quality.getFloat(if(inner)"inner_end_stretch" else "end_stretch",if(inner).6f else 1.25f).let{if(it.isFinite())it.coerceIn(if(inner)0f else .8f,1.5f) else if(inner).6f else 1.25f} else .8f)
-     shader.setFloatUniform("verticalCompression",quality.getFloat(if(inner)"inner_vertical_compression" else "cover_vertical_compression",if(inner).4f else .9f).let{if(it.isFinite())it.coerceIn(0f,2f) else if(inner).4f else .9f})
+     val verticalCompression=quality.getFloat(if(inner)"inner_vertical_compression" else "cover_vertical_compression",if(inner).4f else .9f).let{if(it.isFinite())it.coerceIn(0f,2f) else if(inner).4f else .9f}
+     shader.setFloatUniform("verticalCompression",if(classicPreset && inner)(verticalCompression*1.375f).coerceAtMost(2f) else verticalCompression)
      shader.setFloatUniform("startupEasing",if(quality.getBoolean(if(inner)"inner_startup_easing" else "startup_easing",true))1f else 0f)
      shader.setFloatUniform("windowReveal",if(quality.getBoolean("window_reveal_v2",true))1f else 0f)
      shader.setFloatUniform("reflectedCover",if(reflectedCover)1f else 0f)
@@ -405,7 +406,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      shader.setFloatUniform("origin",if(fallback)width-ew else 0f,if(fallback)(height-eh)/2f else 0f)
      shader.setFloatUniform("sampleScale",if(projectedCover)width/ew else 1f,if(projectedCover)height/eh else 1f)
      shader.setFloatUniform("sampleOffset",if(fit!=null)-fit[1]/ew else 0f,if(fit!=null)-fit[2]/eh else 0f)
-     shader.setFloatUniform("extent",if(projectedCover)width.toFloat() else ew,if(projectedCover)height.toFloat() else eh);shader.setFloatUniform("progress",amount.coerceIn(0f,1f));shader.setFloatUniform("intensity",if(classicPreset)maxOf(1.8f,intensity) else intensity)
+     shader.setFloatUniform("extent",if(projectedCover)width.toFloat() else ew,if(projectedCover)height.toFloat() else eh);shader.setFloatUniform("progress",amount.coerceIn(0f,1f));shader.setFloatUniform("intensity",if(classicPreset)maxOf(1.8f,intensity)*.7f else intensity)
      // Inner progress already includes the user's fully-open threshold (default 172°).
      val radians=if(inner) amount.coerceIn(0f,1f)*(Math.PI.toFloat()/2f) else
       Math.PI.toFloat()-(if(hingeAngle.isFinite())hingeAngle.coerceIn(0f,180f) else amount*110f)*(Math.PI.toFloat()/180f)
