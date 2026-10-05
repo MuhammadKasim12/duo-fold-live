@@ -5,7 +5,7 @@ final class AnimationModePolicy {
  private float anchor=Float.NaN;
  private int direction;
  static String sanitize(String value){return "duo_classic".equals(value)||"fold_only".equals(value)||"unfold_only".equals(value)?value:DEFAULT;}
- static boolean mirrors(String mode){return !"duo_classic".equals(sanitize(mode));}
+ static boolean mirrors(String mode){return true;}
  static String label(String mode){switch(sanitize(mode)){case "duo_classic":return "Duo Classic";case "fold_only":return "Fold-Only";case "unfold_only":return "Unfold-Only";default:return "Windowed Glass";}}
  boolean update(String mode,float angle,boolean fresh){
   mode=sanitize(mode);
