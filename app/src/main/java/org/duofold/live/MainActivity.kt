@@ -65,6 +65,7 @@ class MainActivity:ComponentActivity(){
     var behavior by remember{mutableStateOf(AnimationModePolicy.behavior(prefs.getString("animation_behavior",AnimationModePolicy.BOTH)))}
     var legacy by remember{mutableStateOf(false)}
     var supportBanner by remember{mutableStateOf(false)}
+    var supportNotifications by remember{mutableStateOf(SupportPrompts.notificationsEnabled(this@MainActivity))}
     var developer by remember{mutableStateOf(false)}
     val developerAnchor=remember{BringIntoViewRequester()}
     var animationStyle by remember{mutableStateOf(prefs.getString("animation_style","duo") ?: "duo")}
@@ -236,6 +237,16 @@ class MainActivity:ComponentActivity(){
        Button(onClick={startActivity(Intent(this@MainActivity,org.duofold.live.wallpaperlayer.WallpaperActivity::class.java))}){Text("Choose & manage custom wallpaper")}
        Text("One photo, separate crops. Your selection survives updates.",style=MaterialTheme.typography.bodySmall)
       }
+      SettingsCard("Notifications","Choose which routine notifications you see."){
+       Text("Hide the persistent running notification in Samsung’s notification settings. Duo Fold Live will continue running.",style=MaterialTheme.typography.bodySmall)
+       OutlinedButton(onClick={
+        FoldBackgroundService.createNotificationChannel(this@MainActivity)
+        try{startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName).putExtra(Settings.EXTRA_CHANNEL_ID,"fold_live"))}
+        catch(e:ActivityNotFoundException){startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName))}
+       }){Text("Running notification settings")}
+       Toggle("Support notifications",supportNotifications){supportNotifications=it;SupportPrompts.setNotificationsEnabled(this@MainActivity,it)}
+       Text("Optional support reminders in your notification panel. In-app reminders are managed separately.",style=MaterialTheme.typography.bodySmall)
+      }
       SettingsCard("Connection & setup","Shizuku and accessibility keep the effect running in the background."){
        TextButton(onClick={setup=!setup}){Text(if(setup)"Hide setup" else "Show setup")}
        if(setup){
@@ -402,7 +413,7 @@ class MainActivity:ComponentActivity(){
           Text(status,style=MaterialTheme.typography.bodySmall)
           Text(LiveAngles.rotationHold,style=MaterialTheme.typography.bodySmall)
           OutlinedButton(onClick={startActivity(Intent(this@MainActivity,org.duofold.live.wallpaperlayer.WallpaperActivity::class.java).putExtra("developer",true))}){Text("Wallpaper developer settings")}
-          OutlinedButton(onClick={val sent=SupportPrompts.notify(this@MainActivity);android.widget.Toast.makeText(this@MainActivity,if(sent)"Preview notification sent; reminder schedule unchanged" else "Allow notifications in Android app settings",android.widget.Toast.LENGTH_LONG).show()}){Text("Preview support notification")}
+          OutlinedButton(onClick={val sent=SupportPrompts.notify(this@MainActivity);android.widget.Toast.makeText(this@MainActivity,if(sent)"Preview notification sent; reminder schedule unchanged" else "Enable support notifications here and in Android settings",android.widget.Toast.LENGTH_LONG).show()}){Text("Preview support notification")}
          }
         }
 

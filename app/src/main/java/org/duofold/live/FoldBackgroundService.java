@@ -40,7 +40,12 @@ public class FoldBackgroundService extends Service {
   Shizuku.addBinderReceivedListenerSticky(binderReady);Shizuku.addBinderDeadListener(binderDead);Shizuku.addRequestPermissionResultListener(permissionResult);
   try{getContentResolver().registerContentObserver(android.provider.Settings.System.getUriFor("fold_lock_behavior"),false,foldSettingObserver);}catch(Exception e){RecoveryLog.add("Fold setting observer unavailable; periodic verification active");}
   IntentFilter filter=new IntentFilter();filter.addAction(Intent.ACTION_SCREEN_ON);filter.addAction(Intent.ACTION_SCREEN_OFF);filter.addAction(Intent.ACTION_USER_PRESENT);registerReceiver(screen,filter,Context.RECEIVER_NOT_EXPORTED);
-getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("fold_live","Fold animation running",NotificationManager.IMPORTANCE_LOW));}
+createNotificationChannel(this);}
+ public static void createNotificationChannel(Context context){
+  NotificationChannel channel=new NotificationChannel("fold_live","Fold animation running",NotificationManager.IMPORTANCE_LOW);
+  channel.setDescription("Routine running status. You can hide this category while Duo Fold Live keeps running.");
+  context.getSystemService(NotificationManager.class).createNotificationChannel(channel);
+ }
  private Notification notification(String message){
   PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class),PendingIntent.FLAG_IMMUTABLE);
   PendingIntent stop=PendingIntent.getService(this,1,new Intent(this,FoldBackgroundService.class).setAction("STOP"),PendingIntent.FLAG_IMMUTABLE);
