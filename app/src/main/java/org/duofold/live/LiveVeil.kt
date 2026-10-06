@@ -24,6 +24,9 @@ internal fun DuoLiveShade(host: StandaloneFoldHost, intensity: Float, innerPanel
     var visualAngle by remember { mutableFloatStateOf(Float.NaN) }
     var amount by remember { mutableFloatStateOf(0f) }
     val expanded=innerPanel ?: LocalConfiguration.current.isRegular()
+    val plainPrefs=LocalContext.current.getSharedPreferences("standalone",0)
+    val plain=plainPrefs.getString("animation_mode","")=="plain_fade"
+    val handoff=HandoffSettings.angle(plainPrefs.getFloat("handoff_angle",HandoffSettings.DEFAULT))
     val openThreshold=LocalContext.current.getSharedPreferences("standalone",0).getFloat("open_threshold",172f)
     val smoothingMs=FrameSmoothing.sanitize(LocalContext.current.getSharedPreferences("standalone",0).getFloat("smoothing_ms",30f))
     val rotation=LocalView.current.display?.rotation ?: Surface.ROTATION_0
@@ -45,6 +48,7 @@ internal fun DuoLiveShade(host: StandaloneFoldHost, intensity: Float, innerPanel
                 previous=now
                 visualAngle=FrameSmoothing.step(visualAngle,angle,dt,smoothingMs)
                 amount=if(latestExpanded && angle>=FoldThreshold.sanitize(openThreshold))0f
+                  else if(plain)PlainFadeCurve.alpha(visualAngle,latestExpanded,openThreshold,handoff)
                   else DuoShadeCurve.progress(visualAngle,latestExpanded,openThreshold)
             }
         }
@@ -53,6 +57,7 @@ internal fun DuoLiveShade(host: StandaloneFoldHost, intensity: Float, innerPanel
     val fadePrefs=LocalContext.current.getSharedPreferences("standalone",0)
     val debug=AnimationModePolicy.blackFade(fadePrefs.getString("animation_mode",AnimationModePolicy.DEFAULT),fadePrefs.getBoolean("debug_mode",false))
     if(!debug){DuoGlassSurface(visualAngle,amount,intensity,expanded,rotation,frozenFrame,reflectedCover,opaqueContent);return}
+    if(plain){Canvas(Modifier.fillMaxSize()){drawRect(Color.Black.copy(alpha=amount))};return}
     Canvas(Modifier.fillMaxSize()){
         val horizontal=rotation==Surface.ROTATION_90 || rotation==Surface.ROTATION_270
         val reversed=rotation==Surface.ROTATION_90 || rotation==Surface.ROTATION_180

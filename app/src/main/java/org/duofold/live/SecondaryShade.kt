@@ -25,7 +25,7 @@ import androidx.lifecycle.*
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
 /** The outgoing panel shows only its own pre-switch frame; incoming content stays native. */
-internal class SecondaryShade(private val service:AccessibilityService,display:Display,private val intensity:Float,private val preview:Boolean=false,private val nativeContent:Boolean=false,private val event:(String)->Unit):Presentation(service,display,android.R.style.Theme_Material_NoActionBar){
+internal class SecondaryShade(private val service:AccessibilityService,display:Display,private val intensity:Float,private val preview:Boolean=false,private val nativeContent:Boolean=false,private val blackOnly:Boolean=false,private val event:(String)->Unit):Presentation(service,display,android.R.style.Theme_Material_NoActionBar){
  private val life=OverlayOwner()
  private var compose:ComposeView?=null
  private var coverAspect=.63f
@@ -36,8 +36,8 @@ internal class SecondaryShade(private val service:AccessibilityService,display:D
  private var mirrorView:LivePanelSurface?=null
  var strength=0f;private set
  var draws=0;private set
- val layer:String get()=if(nativeContent) "Transparent native inner animation" else if(preview) "Live cover preview; ready=$mirrorReady; ${LiveAngles.mirrorStatus}" else "Frozen outgoing ${if(inner) "inner" else "cover"}; own frame=${HandoffFrames.forPanel(inner)!=null}"
- val ready:Boolean get()=isShowing && draws>0 && (if(nativeContent)true else if(preview)mirrorReady else HandoffFrames.forPanel(inner)!=null) && display.state==Display.STATE_ON
+ val layer:String get()=if(blackOnly) "Plain Fade opaque inner hold" else if(nativeContent) "Transparent native inner animation" else if(preview) "Live cover preview; ready=$mirrorReady; ${LiveAngles.mirrorStatus}" else "Frozen outgoing ${if(inner) "inner" else "cover"}; own frame=${HandoffFrames.forPanel(inner)!=null}"
+ val ready:Boolean get()=isShowing && draws>0 && (if(blackOnly||nativeContent)true else if(preview)mirrorReady else HandoffFrames.forPanel(inner)!=null) && display.state==Display.STATE_ON
  fun refresh(){compose?.invalidate()}
  override fun onCreate(saved:Bundle?){
   super.onCreate(saved);life.registry.currentState=Lifecycle.State.CREATED
@@ -52,7 +52,9 @@ internal class SecondaryShade(private val service:AccessibilityService,display:D
    CompositionLocalProvider(LocalConfiguration provides context.resources.configuration,LocalHinge provides null){
     val frozen=HandoffFrames.forPanel(inner)
     Box(Modifier.fillMaxSize().background(if(nativeContent)androidx.compose.ui.graphics.Color.Transparent else androidx.compose.ui.graphics.Color.Black)){
-     if(nativeContent){
+     if(blackOnly){
+      // Opaque black only: no wallpaper, frozen frame, or mirrored content.
+     }else if(nativeContent){
       DuoLiveShade(object:StandaloneFoldHost{
        override fun onMovement(){}
        override fun onFrame(active:Boolean,strength:Float){this@SecondaryShade.strength=strength}
@@ -83,7 +85,7 @@ internal class SecondaryShade(private val service:AccessibilityService,display:D
   }
   setContentView(view)
   window?.apply{
-   setBackgroundDrawable(ColorDrawable(if(nativeContent)Color.TRANSPARENT else Color.BLACK));if(nativeContent)setFormat(android.graphics.PixelFormat.TRANSLUCENT) else addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+   setBackgroundDrawable(ColorDrawable(if(nativeContent)Color.TRANSPARENT else Color.BLACK));if(nativeContent)setFormat(android.graphics.PixelFormat.TRANSLUCENT) else if(!blackOnly)addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
    addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN)
    attributes=attributes.apply{setFitInsetsTypes(0);layoutInDisplayCutoutMode=WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;title=if(nativeContent)"Duo native inner animation" else if(preview)"Duo live cover preview" else "Duo outgoing frozen panel"}
   }
