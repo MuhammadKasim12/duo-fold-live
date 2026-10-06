@@ -2,6 +2,7 @@ package org.duofold.live;
 import org.junit.Test;
 import static org.junit.Assert.*;
 public class AnimationModePolicyTest {
+ @Test public void plainFadeUsesBlackWithoutAnyMirrors(){assertEquals("Plain Fade",AnimationModePolicy.label("plain_fade"));assertTrue(AnimationModePolicy.blackFade("plain_fade",false));assertFalse(AnimationModePolicy.mirrors("plain_fade"));assertFalse(AnimationModePolicy.blackFade("windowed",false));assertFalse(AnimationModePolicy.blackFade("duo_classic",false));assertTrue(AnimationModePolicy.blackFade("windowed",true));}
  @Test public void migrationPreservesDirectionAndClassic(){
   assertEquals("fold_only",AnimationModePolicy.initialBehavior(null,"fold_only"));
   assertEquals("unfold_only",AnimationModePolicy.initialBehavior(null,"unfold_only"));
@@ -11,7 +12,7 @@ public class AnimationModePolicyTest {
   assertEquals("both",AnimationModePolicy.initialBehavior("both","fold_only"));
  }
  @Test public void behaviorWorksIndependentlyForEachStyle(){
-  for(String style:new String[]{"windowed","duo_classic"}){
+  for(String style:new String[]{"windowed","duo_classic","plain_fade"}){
    assertEquals(style,AnimationModePolicy.style(style));
    for(String behavior:new String[]{"both","fold_only","unfold_only"}){
     AnimationModePolicy policy=new AnimationModePolicy();

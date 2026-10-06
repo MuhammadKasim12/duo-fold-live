@@ -177,7 +177,7 @@ class MainActivity:ComponentActivity(){
        }
       }
       SettingsCard("Folding Animation Style","Choose how your Fold moves between screens."){
-       listOf("windowed" to "Inspired by iPhone Duo with even more windowed glass. Default.","duo_classic" to "Gentler cover stretch, an inward fold toward the hinge, and stronger blur and glass. Includes the live cover preview and mirrored inner-display preview.").forEach{(id,description)->
+       listOf("windowed" to "Inspired by iPhone Duo with even more windowed glass. Default.","duo_classic" to "Gentler cover stretch, an inward fold toward the hinge, and stronger blur and glass. Includes the live cover preview and mirrored inner-display preview.","plain_fade" to "Simple black shading as you fold and unfold. No cover previews on the inner display.").forEach{(id,description)->
         Surface(onClick={selectMode(id)},shape=RoundedCornerShape(20.dp),color=if(mode==id)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,modifier=Modifier.fillMaxWidth()){
          Row(Modifier.padding(14.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){
           RadioButton(selected=mode==id,onClick={selectMode(id)})

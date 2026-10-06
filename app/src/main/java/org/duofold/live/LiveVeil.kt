@@ -50,7 +50,8 @@ internal fun DuoLiveShade(host: StandaloneFoldHost, intensity: Float, innerPanel
         }
     }}
     SideEffect { host.onFrame(amount>.003f,amount) }
-    val debug=LocalContext.current.getSharedPreferences("standalone",0).getBoolean("debug_mode",false)
+    val fadePrefs=LocalContext.current.getSharedPreferences("standalone",0)
+    val debug=AnimationModePolicy.blackFade(fadePrefs.getString("animation_mode",AnimationModePolicy.DEFAULT),fadePrefs.getBoolean("debug_mode",false))
     if(!debug){DuoGlassSurface(visualAngle,amount,intensity,expanded,rotation,frozenFrame,reflectedCover,opaqueContent);return}
     Canvas(Modifier.fillMaxSize()){
         val horizontal=rotation==Surface.ROTATION_90 || rotation==Surface.ROTATION_270
