@@ -57,8 +57,8 @@ internal fun DuoLiveShade(host: StandaloneFoldHost, intensity: Float, innerPanel
     val fadePrefs=LocalContext.current.getSharedPreferences("standalone",0)
     val debug=AnimationModePolicy.blackFade(fadePrefs.getString("animation_mode",AnimationModePolicy.DEFAULT),fadePrefs.getBoolean("debug_mode",false))
     if(!debug){DuoGlassSurface(visualAngle,amount,intensity,expanded,rotation,frozenFrame,reflectedCover,opaqueContent);return}
-    if(plain){Canvas(Modifier.fillMaxSize()){drawRect(Color.Black.copy(alpha=amount))};return}
     Canvas(Modifier.fillMaxSize()){
+        if(plain)drawRect(Color.Black.copy(alpha=amount))
         val horizontal=rotation==Surface.ROTATION_90 || rotation==Surface.ROTATION_270
         val reversed=rotation==Surface.ROTATION_90 || rotation==Surface.ROTATION_180
         val extent=if(horizontal)size.height else size.width
@@ -69,7 +69,7 @@ internal fun DuoLiveShade(host: StandaloneFoldHost, intensity: Float, innerPanel
             val coord=fraction*extent
             val edge=if(expanded){if(reversed)(coord-hingeAt)/(extent-hingeAt) else (hingeAt-coord)/hingeAt}
                      else if(reversed)1f-fraction else fraction
-            fraction to Color.Black.copy(alpha=DuoShadeCurve.alpha(amount,edge,intensity))
+            fraction to Color.Black.copy(alpha=if(plain)PlainFadeCurve.wipeAlpha(amount,edge,intensity) else DuoShadeCurve.alpha(amount,edge,intensity))
         }.toTypedArray()
         drawRect(Brush.linearGradient(*stops,start=Offset.Zero,end=if(horizontal)Offset(0f,extent) else Offset(extent,0f)))
     }
