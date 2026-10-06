@@ -408,6 +408,7 @@ class MainActivity:ComponentActivity(){
         Text("Cover preview is on by default; screenshot handoff is off. Debug changes the shading only.",style=MaterialTheme.typography.bodySmall)
         Text(GlassFrames.status,style=MaterialTheme.typography.bodySmall)
         Text(HandoffFrames.status,style=MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick={startActivity(Intent(this@MainActivity,WallpaperTestActivity::class.java))}){Text("Photo wallpaper hinge test")}
         OutlinedButton(onClick={startActivity(Intent(this@MainActivity,FoldProbeActivity::class.java))}){Text("Sensor & display diagnostics")}
           Text(FoldAwakeDefault.status,style=MaterialTheme.typography.bodySmall)
           Text(status,style=MaterialTheme.typography.bodySmall)
