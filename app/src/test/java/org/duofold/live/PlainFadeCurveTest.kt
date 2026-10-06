@@ -2,25 +2,31 @@ package org.duofold.live
 import org.junit.Assert.*
 import org.junit.Test
 class PlainFadeCurveTest {
- @Test fun directionalWipeStartsEarlyAndPreservesDimming(){
-  for(inner in listOf(false,true)){
-   val angle=if(inner)167f else 5f
-   val dim=PlainFadeCurve.alpha(angle,inner,172f,85f)
-   val leading=PlainFadeCurve.wipeAlpha(dim,1f)
-   val trailing=PlainFadeCurve.wipeAlpha(dim,0f)
-   assertTrue(leading>.8f)
-   assertEquals(0f,trailing,0f)
-   assertTrue(leading>DuoShadeCurve.alpha(DuoShadeCurve.progress(angle,inner,172f),1f))
-   assertTrue(dim+(1f-dim)*leading>dim)
+ @Test fun movingBoundaryTraversesEntireRegion(){
+  val t=PlainFadeTuning()
+  for(p in listOf(.05f,.25f,.5f,.75f,.95f)){
+   assertEquals(p,PlainFadeCurve.front(p,t),.0001f)
+   assertEquals(1f,PlainFadeCurve.wipe(p,p-.045f,t),.0001f)
+   assertEquals(0f,PlainFadeCurve.wipe(p,p+.045f,t),.0001f)
   }
-  assertEquals(0f,PlainFadeCurve.wipeAlpha(0f,1f),0f)
+  assertEquals(0f,PlainFadeCurve.wipe(0f,0f,t),0f)
+  assertEquals(1f,PlainFadeCurve.wipe(1f,1f,t),0f)
+  assertEquals(0f,PlainFadeCurve.wipe(.5f,1.1f,t),0f)
  }
- @Test fun endpointsAndEarlyOnset(){
-  assertEquals(0f,PlainFadeCurve.alpha(0f,false,172f,85f),0f)
-  assertEquals(0f,PlainFadeCurve.alpha(172f,true,172f,85f),0f)
-  assertTrue(PlainFadeCurve.alpha(5f,false,172f,85f)>.2f)
-  assertTrue(PlainFadeCurve.alpha(167f,true,172f,85f)>.2f)
-  for(a in 0..85)assertEquals(1f,PlainFadeCurve.alpha(a.toFloat(),true,172f,85f),0f)
-  assertEquals(1f,PlainFadeCurve.alpha(85f,false,172f,85f),0f)
+ @Test fun controlsAreIndependent(){
+  val t=PlainFadeTuning(start=.1f,end=.9f,begin=.2f,finish=.8f,opacity=.4f,brightEnd=.7f)
+  assertEquals(.1f,PlainFadeCurve.front(.1f,t),.0001f)
+  assertEquals(.9f,PlainFadeCurve.front(.9f,t),.0001f)
+  assertEquals(.4f,PlainFadeCurve.wipe(.9f,.5f,t),.0001f)
+  assertEquals(.3f,PlainFadeCurve.dim(1f,t),.0001f)
+  assertTrue(PlainFadeCurve.front(.25f,PlainFadeTuning(easing=.5f))>.25f)
+ }
+ @Test fun defaultDimmingAndHandoffPreserved(){
+  val t=PlainFadeTuning()
+  assertEquals(.5f,PlainFadeCurve.dim(.25f,t),.0001f)
+  for(inner in listOf(false,true)){
+   assertEquals(1f,PlainFadeCurve.progress(85f,inner,172f,85f),0f)
+   assertEquals(0f,PlainFadeCurve.progress(if(inner)172f else 0f,inner,172f,85f),0f)
+  }
  }
 }

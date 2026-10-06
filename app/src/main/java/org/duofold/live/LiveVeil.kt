@@ -26,6 +26,7 @@ internal fun DuoLiveShade(host: StandaloneFoldHost, intensity: Float, innerPanel
     val expanded=innerPanel ?: LocalConfiguration.current.isRegular()
     val plainPrefs=LocalContext.current.getSharedPreferences("standalone",0)
     val plain=plainPrefs.getString("animation_mode","")=="plain_fade"
+    val tuning=remember(expanded){PlainFadeSettings.read(plainPrefs,expanded)}
     val handoff=HandoffSettings.angle(plainPrefs.getFloat("handoff_angle",HandoffSettings.DEFAULT))
     val openThreshold=LocalContext.current.getSharedPreferences("standalone",0).getFloat("open_threshold",172f)
     val smoothingMs=FrameSmoothing.sanitize(LocalContext.current.getSharedPreferences("standalone",0).getFloat("smoothing_ms",30f))
@@ -48,7 +49,7 @@ internal fun DuoLiveShade(host: StandaloneFoldHost, intensity: Float, innerPanel
                 previous=now
                 visualAngle=FrameSmoothing.step(visualAngle,angle,dt,smoothingMs)
                 amount=if(latestExpanded && angle>=FoldThreshold.sanitize(openThreshold))0f
-                  else if(plain)PlainFadeCurve.alpha(visualAngle,latestExpanded,openThreshold,handoff)
+                  else if(plain)PlainFadeCurve.progress(visualAngle,latestExpanded,openThreshold,handoff)
                   else DuoShadeCurve.progress(visualAngle,latestExpanded,openThreshold)
             }
         }
@@ -58,18 +59,19 @@ internal fun DuoLiveShade(host: StandaloneFoldHost, intensity: Float, innerPanel
     val debug=AnimationModePolicy.blackFade(fadePrefs.getString("animation_mode",AnimationModePolicy.DEFAULT),fadePrefs.getBoolean("debug_mode",false))
     if(!debug){DuoGlassSurface(visualAngle,amount,intensity,expanded,rotation,frozenFrame,reflectedCover,opaqueContent);return}
     Canvas(Modifier.fillMaxSize()){
-        if(plain)drawRect(Color.Black.copy(alpha=amount))
+        if(plain)drawRect(Color.Black.copy(alpha=PlainFadeCurve.dim(amount,tuning)))
         val horizontal=rotation==Surface.ROTATION_90 || rotation==Surface.ROTATION_270
         val reversed=rotation==Surface.ROTATION_90 || rotation==Surface.ROTATION_180
         val extent=if(horizontal)size.height else size.width
         val center=hinge?.takeIf { it.vertical != horizontal }?.let { (it.startPx+it.endPx)/2f } ?: extent/2f
         val hingeAt=center.coerceIn(1f,(extent-1f).coerceAtLeast(1f))
-        val stops=(0..64).map { i ->
-            val fraction=i/64f
+        val segments=if(plain)256 else 64
+        val stops=(0..segments).map { i ->
+            val fraction=i/segments.toFloat()
             val coord=fraction*extent
             val edge=if(expanded){if(reversed)(coord-hingeAt)/(extent-hingeAt) else (hingeAt-coord)/hingeAt}
                      else if(reversed)1f-fraction else fraction
-            fraction to Color.Black.copy(alpha=if(plain)PlainFadeCurve.wipeAlpha(amount,edge,intensity) else DuoShadeCurve.alpha(amount,edge,intensity))
+            fraction to Color.Black.copy(alpha=if(plain)PlainFadeCurve.wipe(amount,1f-edge,tuning) else DuoShadeCurve.alpha(amount,edge,intensity))
         }.toTypedArray()
         drawRect(Brush.linearGradient(*stops,start=Offset.Zero,end=if(horizontal)Offset(0f,extent) else Offset(extent,0f)))
     }

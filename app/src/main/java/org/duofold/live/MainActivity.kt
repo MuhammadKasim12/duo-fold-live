@@ -216,6 +216,7 @@ class MainActivity:ComponentActivity(){
       }
       }
       ShizukuHelp()
+      if(mode=="plain_fade")PlainFadeControls(prefs){restart()}
       SettingsCard("Fine-tune your animation","Duo Classic uses its own stronger glass and blur preset. Other styles use your saved glass settings."){
 
        InfoLabel("Motion smoothness · ${smoothing.roundToInt()} ms","Higher values smooth hinge motion but add delay. This does not increase FPS. Default: 30 ms.")
