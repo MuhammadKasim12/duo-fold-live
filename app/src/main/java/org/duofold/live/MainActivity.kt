@@ -177,11 +177,11 @@ class MainActivity:ComponentActivity(){
        }
       }
       SettingsCard("Folding Animation Style","Choose how your Fold moves between screens."){
-       listOf("windowed" to "Inspired by iPhone Duo with even more windowed glass. Default.","duo_classic" to "Gentler cover stretch, an inward fold toward the hinge, and stronger blur and glass. Includes the live cover preview and mirrored inner-display preview.","plain_fade" to "Simple black shading as you fold and unfold. No cover previews on the inner display.").forEach{(id,description)->
+       listOf("windowed" to "Inspired by iPhone Duo with even more windowed glass. Default.","duo_classic" to "1-for-1 recreation of the iPhone Duo animation, with a gentler stretch and stronger blur.","plain_fade" to "").forEach{(id,description)->
         Surface(onClick={selectMode(id)},shape=RoundedCornerShape(20.dp),color=if(mode==id)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,modifier=Modifier.fillMaxWidth()){
          Row(Modifier.padding(14.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){
           RadioButton(selected=mode==id,onClick={selectMode(id)})
-          Column(Modifier.weight(1f).padding(start=8.dp)){Text(AnimationModePolicy.label(id),style=MaterialTheme.typography.titleMedium);Text(description,style=MaterialTheme.typography.bodySmall)}
+          Column(Modifier.weight(1f).padding(start=8.dp)){Text(AnimationModePolicy.label(id),style=MaterialTheme.typography.titleMedium);if(description.isNotEmpty())Text(description,style=MaterialTheme.typography.bodySmall)}
          }
         }
        }
