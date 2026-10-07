@@ -22,10 +22,7 @@ class PhotoWallpaperService:WallpaperService(){
    super.onCreate(holder)
    LiveAngles.add(angles)
    val source=File(filesDir,"photo.jpg").takeIf{it.exists()}?:WallpaperFiles.photoFile(this@PhotoWallpaperService)
-   val opts=BitmapFactory.Options().apply{inJustDecodeBounds=true}
-   BitmapFactory.decodeFile(source.path,opts)
-   opts.inSampleSize=maxOf(1,(maxOf(opts.outWidth,opts.outHeight)+2047)/2048);opts.inJustDecodeBounds=false
-   photo=BitmapFactory.decodeFile(source.path,opts)
+   photo=runCatching{WallpaperPhoto.decode(this@PhotoWallpaperService,android.net.Uri.fromFile(source))}.getOrNull()
    RecoveryLog.add("Photo wallpaper engine created; preview=$isPreview")
   }
   override fun onSurfaceChanged(holder:SurfaceHolder,format:Int,width:Int,height:Int){super.onSurfaceChanged(holder,format,width,height);draw()}
