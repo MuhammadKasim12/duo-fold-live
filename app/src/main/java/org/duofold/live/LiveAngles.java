@@ -163,6 +163,7 @@ public final class LiveAngles {
    long stamp=b.getLong("last");int received=b.getInt("count");
    ratePolls++;
    if(received>rateReceived){rateReplies+=received-rateReceived;if(Float.compare(angle,b.getFloat("angle"))!=0)rateChanges++;}
+   ClosureDiagnostics.angle(b.getFloat("rawAngle"),b.getFloat("angle"),stamp);
    rateReceived=received;
    long rateNow=SystemClock.elapsedRealtime();
    if(rateStarted==0){rateStarted=rateNow;ratePolls=rateReplies=rateChanges=0;}

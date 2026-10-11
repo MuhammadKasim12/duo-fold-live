@@ -10,12 +10,13 @@ public class FoldBackgroundService extends Service {
  private boolean wanted(){FoldAwakeDefault.persist(this);return true;}
  private LiveAngles angles;
  private FoldAwakeGuard awakeGuard;
+ private ClosureDiagnostics closureDiagnostics;
  private long asleepSince=-1,nextReaderAttempt;
  private String lastNotice="";
  private boolean lastReachable=false;
  private final rikka.shizuku.Shizuku.OnBinderReceivedListener binderReady=()->main.post(()->{RecoveryLog.add("Shizuku Binder received");resetHelpers("Shizuku connection refreshed");kick();});
  private final rikka.shizuku.Shizuku.OnBinderDeadListener binderDead=()->main.post(()->{RecoveryLog.add("Shizuku Binder death notification");resetHelpers("Shizuku disconnected");kick();});
- private final BroadcastReceiver screen=new BroadcastReceiver(){public void onReceive(Context c,Intent i){RecoveryLog.add("Background received "+i.getAction());if(Intent.ACTION_SCREEN_OFF.equals(i.getAction()))clearEffect();else nextReaderAttempt=0;FoldAwakeDefault.reconnect();kick();}};
+ private final BroadcastReceiver screen=new BroadcastReceiver(){public void onReceive(Context c,Intent i){ClosureDiagnostics.screen(i.getAction());RecoveryLog.add("Background received "+i.getAction());if(Intent.ACTION_SCREEN_OFF.equals(i.getAction()))clearEffect();else nextReaderAttempt=0;FoldAwakeDefault.reconnect();kick();}};
  private final android.database.ContentObserver foldSettingObserver=new android.database.ContentObserver(main){
   @Override public void onChange(boolean selfChange){FoldAwakeDefault.reconnect();kick();}
  };
@@ -36,6 +37,7 @@ public class FoldBackgroundService extends Service {
  }
  public IBinder onBind(Intent i){return null;}
  public void onCreate(){super.onCreate();RecoveryLog.init(this);RecoveryLog.add("Background service created, PID "+android.os.Process.myPid());
+  closureDiagnostics=new ClosureDiagnostics(this,main);
   FoldAwakeDefault.persist(this);awakeGuard=new FoldAwakeGuard(this);awakeGuard.start();
   Shizuku.addBinderReceivedListenerSticky(binderReady);Shizuku.addBinderDeadListener(binderDead);Shizuku.addRequestPermissionResultListener(permissionResult);
   try{getContentResolver().registerContentObserver(android.provider.Settings.System.getUriFor("fold_lock_behavior"),false,foldSettingObserver);}catch(Exception e){RecoveryLog.add("Fold setting observer unavailable; periodic verification active");}
@@ -114,5 +116,5 @@ createNotificationChannel(this);}
   main.postDelayed(this,2000);
  }};
  public void onTaskRemoved(Intent intent){RecoveryLog.add("Settings task dismissed; background service remains running");super.onTaskRemoved(intent);}
- public void onDestroy(){if(awakeGuard!=null)awakeGuard.close();RecoveryLog.add("Background service destroyed");Shizuku.removeBinderReceivedListener(binderReady);Shizuku.removeBinderDeadListener(binderDead);Shizuku.removeRequestPermissionResultListener(permissionResult);getContentResolver().unregisterContentObserver(foldSettingObserver);try{unregisterReceiver(screen);}catch(Exception ignored){}running=false;main.removeCallbacksAndMessages(null);if(angles!=null){angles.stop();angles=null;}stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy();}
+ public void onDestroy(){if(closureDiagnostics!=null)closureDiagnostics.close();if(awakeGuard!=null)awakeGuard.close();RecoveryLog.add("Background service destroyed");Shizuku.removeBinderReceivedListener(binderReady);Shizuku.removeBinderDeadListener(binderDead);Shizuku.removeRequestPermissionResultListener(permissionResult);getContentResolver().unregisterContentObserver(foldSettingObserver);try{unregisterReceiver(screen);}catch(Exception ignored){}running=false;main.removeCallbacksAndMessages(null);if(angles!=null){angles.stop();angles=null;}stopForeground(STOP_FOREGROUND_REMOVE);super.onDestroy();}
 }
