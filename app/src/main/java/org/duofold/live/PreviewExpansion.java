@@ -130,12 +130,13 @@ final class PreviewExpansion extends Binder {
  }
  private void prepareSeam(Bitmap blurred,Object target,float fraction)throws Exception{
   if(fraction<=0){if(seam!=null)try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){t.setVisibility(seam,false).apply();}seamPixels=0;return;}
-  int w=number(target,"logicalWidth"),h=number(target,"logicalHeight");float fit=LiveMirrorLayout.fit(bw,bh,w,h)[0];
-  int strip=Math.min(bw,Math.max(1,(int)Math.ceil(w*fraction/fit)));int[] pixels=new int[strip*bh];
-  blurred.getPixels(pixels,0,strip,0,0,strip,bh);
-  for(int y=0;y<bh;y++)for(int x=0;x<strip;x++){float f=RenderQuality.seamBlend(x*fit/w,fraction);int at=y*strip+x;pixels[at]=(pixels[at]&0x00ffffff)|((int)(255*f)<<24);}
-  Bitmap soft=Bitmap.createBitmap(pixels,strip,bh,Bitmap.Config.ARGB_8888);Bitmap next=soft.copy(Bitmap.Config.HARDWARE,false);soft.recycle();HardwareBuffer nextBuffer=next.getHardwareBuffer();
-  if(seam==null)seam=new SurfaceControl.Builder().setName("Duo static center-edge blur").setBufferSize(strip,bh).setHidden(true).build();
+  int w=number(target,"logicalWidth"),h=number(target,"logicalHeight");float[] layout=LiveMirrorLayout.preview(bw,bh,w,h);float fit=layout[0];
+  int cropX=(int)layout[4],cropY=(int)layout[5],cropHeight=(int)(layout[7]-layout[5]);
+  int strip=Math.min((int)(layout[6]-layout[4]),Math.max(1,(int)Math.ceil(w*fraction/fit)));int[] pixels=new int[strip*cropHeight];
+  blurred.getPixels(pixels,0,strip,cropX,cropY,strip,cropHeight);
+  for(int y=0;y<cropHeight;y++)for(int x=0;x<strip;x++){float f=RenderQuality.seamBlend(x*fit/w,fraction);int at=y*strip+x;pixels[at]=(pixels[at]&0x00ffffff)|((int)(255*f)<<24);}
+  Bitmap soft=Bitmap.createBitmap(pixels,strip,cropHeight,Bitmap.Config.ARGB_8888);Bitmap next=soft.copy(Bitmap.Config.HARDWARE,false);soft.recycle();HardwareBuffer nextBuffer=next.getHardwareBuffer();
+  if(seam==null)seam=new SurfaceControl.Builder().setName("Duo static center-edge blur").setBufferSize(strip,cropHeight).setHidden(true).build();
   try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
    SurfaceControl.Transaction.class.getMethod("setSkipScreenshot",SurfaceControl.class,boolean.class).invoke(t,seam,true);
    t.setBuffer(seam,nextBuffer).setLayer(seam,Integer.MAX_VALUE-19).apply();
@@ -163,22 +164,23 @@ final class PreviewExpansion extends Binder {
    int stack=number(target,"layerStack"),panelState=number(target,"state");
    if(stack!=lastStack || panelState!=lastPanelState){lastStack=stack;lastPanelState=panelState;event("Inner stack="+stack+" state="+panelState);}
    int w=number(target,"logicalWidth"),h=number(target,"logicalHeight");
-   float fit=LiveMirrorLayout.fit(bw,bh,w,h)[0];
-   float leftWidth=Math.max(0f,w-bw*fit);
+   float[] layout=LiveMirrorLayout.preview(bw,bh,w,h);float fit=layout[0];
+   float leftWidth=bw>bh?w/2f:Math.max(0f,w-bw*fit);
+   Rect crop=new Rect((int)layout[4],(int)layout[5],(int)layout[6],(int)layout[7]);
    if(coverCommit!=null&&!coverCommit.maySubmit(SystemClock.elapsedRealtime())){event("Replacement not submitted: gate deadline expired during preparation; request="+coverCommit.requestedAt);coverCommit=null;start=0;ready=-1;handler.postDelayed(this,8);return;}
    try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
     SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,layer,number(target,"layerStack"));
-    SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,layer,fit,0f,0f,fit);
+    SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,layer,fit,0f,0f,layout[1]);
     SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,backdrop,number(target,"layerStack"));
-    SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,backdrop,leftWidth/bw,0f,0f,h/(float)bh);
+    SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,backdrop,bw>bh?fit:leftWidth/bw,0f,0f,bw>bh?layout[1]:h/(float)bh);
     // The left copy is visible BEFORE handoff. Never hide either layer merely because
     // Android reports a transient OFF state during the physical panel remap.
-    t.setPosition(backdrop,0,0).setAlpha(backdrop,alpha).setVisibility(backdrop,(start>0 || (frostedLeft && rightPreviewReady)) && leftWidth>0);
-    t.setPosition(layer,leftWidth,(h-bh*fit)/2f).setAlpha(layer,alpha).setVisibility(layer,start>0);
+    t.setCrop(backdrop,crop).setPosition(backdrop,bw>bh?layout[2]-leftWidth:0,bw>bh?layout[3]:0).setAlpha(backdrop,alpha).setVisibility(backdrop,(start>0 || (frostedLeft && rightPreviewReady)) && leftWidth>0);
+    t.setCrop(layer,crop).setPosition(layer,layout[2],layout[3]).setAlpha(layer,alpha).setVisibility(layer,start>0);
     if(seam!=null){
      SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,seam,stack);
-     SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,seam,fit,0f,0f,fit);
-     t.setPosition(seam,leftWidth,(h-bh*fit)/2f).setAlpha(seam,alpha*seamMotion).setVisibility(seam,seamPixels>0);
+     SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,seam,fit,0f,0f,layout[1]);
+     t.setPosition(seam,leftWidth,bw>bh?0:(h-bh*fit)/2f).setAlpha(seam,alpha*seamMotion).setVisibility(seam,seamPixels>0);
     }
     if(coverCommit!=null){final PreviewReleaseGate fence=coverCommit;coverCommit=null;
      final long submitted=SystemClock.elapsedRealtime();

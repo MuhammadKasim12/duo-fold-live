@@ -68,7 +68,7 @@ internal class SecondaryShade(private val service:AccessibilityService,display:D
       AndroidView(factory={LivePanelSurface(it){ok,note->mirrorReady=ok;PreviewTransition.previewReady(ok);if(ok && !leftStarted){leftStarted=true;event("Right preview committed; starting reflected left preview")};event(note)}.also{mirrorView=it}},modifier=Modifier.fillMaxSize())
       BoxWithConstraints(Modifier.fillMaxSize()){
        // Geometry must not depend on the shared frame: surface creation clears that frame.
-       val left=if(landscapeCoverAspect>0f)maxWidth-minOf(maxWidth/2,maxHeight*landscapeCoverAspect) else maxWidth-maxHeight*coverAspect
+       val left=if(landscapeCoverAspect>0f)maxWidth/2 else maxWidth-maxHeight*coverAspect
        if(!frostedReflection && leftStarted && left.value>0 && coverAspect<.7f){
         Box(Modifier.fillMaxHeight().width(left)){
          DuoLiveShade(object:StandaloneFoldHost{
