@@ -29,6 +29,7 @@ internal class SecondaryShade(private val service:AccessibilityService,display:D
  private val life=OverlayOwner()
  private var compose:ComposeView?=null
  private var coverAspect=.63f
+ private var landscapeCoverAspect=0f
  private val frostedReflection=service.getSharedPreferences("standalone",0).getBoolean("frosted_reflection",true)
  private var inner=false
  private var mirrorReady=false
@@ -42,6 +43,10 @@ internal class SecondaryShade(private val service:AccessibilityService,display:D
  override fun onCreate(saved:Bundle?){
   super.onCreate(saved);life.registry.currentState=Lifecycle.State.CREATED
   service.getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(0)?.mode?.let{coverAspect=it.physicalWidth.toFloat()/it.physicalHeight}
+  service.getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(0)?.let{source->
+   val size=android.graphics.Point();source.getRealSize(size)
+   if(size.x>size.y && size.y>0)landscapeCoverAspect=size.x.toFloat()/size.y
+  }
   val mode=display.mode
   inner=minOf(mode.physicalWidth,mode.physicalHeight).toFloat()/maxOf(mode.physicalWidth,mode.physicalHeight)>.7f
   val view=ComposeView(context);compose=view
@@ -63,7 +68,7 @@ internal class SecondaryShade(private val service:AccessibilityService,display:D
       AndroidView(factory={LivePanelSurface(it){ok,note->mirrorReady=ok;PreviewTransition.previewReady(ok);if(ok && !leftStarted){leftStarted=true;event("Right preview committed; starting reflected left preview")};event(note)}.also{mirrorView=it}},modifier=Modifier.fillMaxSize())
       BoxWithConstraints(Modifier.fillMaxSize()){
        // Geometry must not depend on the shared frame: surface creation clears that frame.
-       val left=maxWidth-maxHeight*coverAspect
+       val left=if(landscapeCoverAspect>0f)maxWidth-minOf(maxWidth/2,maxHeight*landscapeCoverAspect) else maxWidth-maxHeight*coverAspect
        if(!frostedReflection && leftStarted && left.value>0 && coverAspect<.7f){
         Box(Modifier.fillMaxHeight().width(left)){
          DuoLiveShade(object:StandaloneFoldHost{

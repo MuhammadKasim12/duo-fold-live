@@ -130,7 +130,7 @@ final class PreviewExpansion extends Binder {
  }
  private void prepareSeam(Bitmap blurred,Object target,float fraction)throws Exception{
   if(fraction<=0){if(seam!=null)try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){t.setVisibility(seam,false).apply();}seamPixels=0;return;}
-  int w=number(target,"logicalWidth"),h=number(target,"logicalHeight");float fit=Math.min(w/(float)bw,h/(float)bh);
+  int w=number(target,"logicalWidth"),h=number(target,"logicalHeight");float fit=LiveMirrorLayout.fit(bw,bh,w,h)[0];
   int strip=Math.min(bw,Math.max(1,(int)Math.ceil(w*fraction/fit)));int[] pixels=new int[strip*bh];
   blurred.getPixels(pixels,0,strip,0,0,strip,bh);
   for(int y=0;y<bh;y++)for(int x=0;x<strip;x++){float f=RenderQuality.seamBlend(x*fit/w,fraction);int at=y*strip+x;pixels[at]=(pixels[at]&0x00ffffff)|((int)(255*f)<<24);}
@@ -163,7 +163,7 @@ final class PreviewExpansion extends Binder {
    int stack=number(target,"layerStack"),panelState=number(target,"state");
    if(stack!=lastStack || panelState!=lastPanelState){lastStack=stack;lastPanelState=panelState;event("Inner stack="+stack+" state="+panelState);}
    int w=number(target,"logicalWidth"),h=number(target,"logicalHeight");
-   float fit=Math.min(w/(float)bw,h/(float)bh);
+   float fit=LiveMirrorLayout.fit(bw,bh,w,h)[0];
    float leftWidth=Math.max(0f,w-bw*fit);
    if(coverCommit!=null&&!coverCommit.maySubmit(SystemClock.elapsedRealtime())){event("Replacement not submitted: gate deadline expired during preparation; request="+coverCommit.requestedAt);coverCommit=null;start=0;ready=-1;handler.postDelayed(this,8);return;}
    try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
