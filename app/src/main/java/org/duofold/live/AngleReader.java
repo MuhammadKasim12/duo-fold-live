@@ -77,7 +77,8 @@ public class AngleReader extends Binder {
    handoff.closingPowerEnabled(closingPower&&!dual&&appEnabled&&live, effectiveAngle,last>0&&heartbeat-last<750,unlocked);
    boolean wasCoverHeld=handoff.active();
    if(!effectAllowed){handoff.release();concurrent.release();}else if(dual){handoff.release();concurrent.update(effectiveAngle,last>0&&heartbeat-last<2000,unlocked,primaryInner,secondaryReady,frozenSource,openThreshold,screenshotStartup,screenshotPrepared);}else{concurrent.release();if(bridgeReady)handoff.update(effectiveAngle,last>0&&heartbeat-last<750,unlocked,live&&appEnabled,openThreshold,probeRequest,handoffAngle);}
-   if(wasCoverHeld && !handoff.active() && expansion!=null)expansion.releaseReturned();
+   boolean timedCoverRelease=handoff.takeTimedCoverRelease();
+   if(((wasCoverHeld && !handoff.active()) || timedCoverRelease) && expansion!=null)expansion.releaseReturned();
    if(handoff.probeHolding()&&fade!=null)fade.update(false,effectiveAngle,false);
    if(expansion!=null&&handoff.probeHolding())expansion.enabled(false);
    previewAllowed=mirrorMode&&effectAllowed&&!handoff.probeNative()&&CoverPreviewPolicy.allowed(live,dual,primaryInner,unlocked,handoff.active());

@@ -34,7 +34,7 @@ internal class FoldAwakeGuard(private val context:Context){
    lowest=angle
    if(now-lastRenew>=1000){armed=now;lastRenew=now;until=FoldWakePolicy.holdUntil(sessionStarted,now);runCatching{lock?.acquire((until-now).coerceAtLeast(1))};status="Fold wake hold active; renewed during closing"}
   }
-  if(until>0 && angle<=2f)until=minOf(until,now+750)
+  if(until>0 && angle<=2f)until=minOf(until,now+2000)
   if(until>0 && angle>lowest+5f){release();peak=angle}
   if(until==0L && (angle<=2f || !power.isInteractive))peak=angle
   previous=angle

@@ -15,10 +15,43 @@ final class CoverHandoff {
  private float handoffAngle=HandoffSettings.DEFAULT;
  private final ClosingPowerPulse closingPower=new ClosingPowerPulse();
  synchronized void closingPowerEnabled(boolean enabled,float angle,boolean fresh,boolean unlocked){closingPower.update(enabled,angle,fresh,unlocked);}
+ // Alpha.7 diagnostic: defer only the normal closing endpoint, never opening or teardown.
+ private final ClosingReleaseDelay delay=new ClosingReleaseDelay();
+ private Handler delayHandler;
+ private Runnable delayTimer;
+ private boolean timedCoverReleased;
+ synchronized boolean takeTimedCoverRelease(){boolean value=timedCoverReleased;timedCoverReleased=false;return value;}
+ private void clearDelay(String reason){
+  if(delay.active())event("CLOSE_DELAY END reason="+reason+"; age="+(SystemClock.elapsedRealtime()-delay.started())+" ms");
+  delay.clear();
+  if(delayHandler!=null && delayTimer!=null)delayHandler.removeCallbacks(delayTimer);
+  delayTimer=null;
+ }
+ private boolean deferClosingRelease(float angle,boolean fresh,boolean interactive,boolean direct){
+  if(innerHeld || angle!=0 || !fresh || !interactive || !direct)return false;
+  long now=SystemClock.elapsedRealtime();
+  if(delay.active()){
+   if(delay.hold(owned,now))return true;
+   clearDelay("deadline reached during angle update");return false;
+  }
+  if(!delay.arm(owned,now))return false;
+  if(delayHandler==null){HandlerThread thread=new HandlerThread("Duo-closing-release");thread.start();delayHandler=new Handler(thread.getLooper());}
+  final Object expected=owned;
+  event("CLOSE_DELAY ARM; duration="+ClosingReleaseDelay.DURATION_MS+" ms; deadline="+delay.deadline()+"; power pulse suppressed for delayed endpoint");
+  status="Diagnostic closing hold: release after 1000 ms";
+  delayTimer=()->{synchronized(CoverHandoff.this){
+   if(!delay.active() || !delay.matches(expected) || owned!=expected)return;
+   event("CLOSE_DELAY TIMER; elapsed="+(SystemClock.elapsedRealtime()-delay.started())+" ms; owned=true");
+   releaseOwned();
+   if(owned==null)timedCoverReleased=true;
+  }};
+  delayHandler.postDelayed(delayTimer,ClosingReleaseDelay.DURATION_MS);
+  return true;
+ }
  private float observedAngle=Float.NaN;
  private final ArrayDeque<String> events=new ArrayDeque<>();
  private void event(String message){events.addLast(SystemClock.elapsedRealtime()+": angle="+observedAngle+" "+message);while(events.size()>48)events.removeFirst();}
- synchronized String trace(){return "Normal handoff request events (explicit cancel vs Android callback):\n"+String.join("\n",events)+"\n"+closingPower.report();}
+ synchronized String trace(){return "Closing release experiment: 1000 ms at normal closed endpoint; active="+delay.active()+"; deadline="+delay.deadline()+"\nNormal handoff request events (explicit cancel vs Android callback):\n"+String.join("\n",events)+"\n"+closingPower.report();}
  String status="Normal display control";
  private void init()throws Exception{
   if(manager!=null)return;
@@ -36,13 +69,17 @@ final class CoverHandoff {
  }
  synchronized void update(float angle,boolean fresh,boolean interactive,boolean direct,float openThreshold,long probeRequest,float handoffAngle){
   observedAngle=angle;this.handoffAngle=HandoffSettings.angle(handoffAngle);policy.handoff(this.handoffAngle);
+  if(delay.active() && (!fresh || !interactive || !direct || !Float.isFinite(angle))){
+   event("CLOSE_DELAY ABORT: fresh="+fresh+" interactive="+interactive+" direct="+direct);releaseOwned();return;
+  }
+  if(delay.active() && angle>0)clearDelay("reopening; normal handoff resumed");
   int test=probe.update(SystemClock.elapsedRealtime(),probeRequest,angle,fresh,interactive&&direct,owned!=null&&!innerHeld);
   nativeProbe.update(test==ContinuityProbePolicy.HOLD,angle,interactive);
   if(test==ContinuityProbePolicy.HOLD)return;
   if(test==ContinuityProbePolicy.FINISH){event("RELEASE reason=continuity test finished");releaseOwned();return;}
   if(owned!=null){
    int next=DirectHandoffPolicy.next(innerHeld,angle,fresh,interactive,direct,openThreshold,this.handoffAngle);
-   if(next==DirectHandoffPolicy.RELEASE){event("RELEASE decision: fresh="+fresh+" interactive="+interactive+" direct="+direct+" open="+openThreshold);if(!innerHeld&&angle==0&&fresh&&interactive&&direct)closingPower.arm();releaseOwned();return;}
+   if(next==DirectHandoffPolicy.RELEASE){if(deferClosingRelease(angle,fresh,interactive,direct))return;event("RELEASE decision: fresh="+fresh+" interactive="+interactive+" direct="+direct+" open="+openThreshold);releaseOwned();return;}
    if(next==DirectHandoffPolicy.INNER){changeState(true);policy.reset();return;}
    if(next==DirectHandoffPolicy.COVER){changeState(false);policy.cover=owned!=null;return;}
    if(innerHeld)return;
@@ -69,7 +106,7 @@ final class CoverHandoff {
     if(m.getName().equals("hashCode"))return System.identityHashCode(proxy);
     if(m.getName().equals("equals"))return proxy==args[0];
     if(m.getName().equals("toString"))return "DuoCoverHandoff";
-    if(m.getName().equals("onRequestCanceled")){synchronized(this){event("ANDROID CANCEL callback; current owned request="+(owned==next)+" request="+(toInner?"inner":"cover"));if(owned==next){owned=null;innerHeld=false;status="Concurrent handoff request canceled by system";}}}return null;
+    if(m.getName().equals("onRequestCanceled")){synchronized(this){event("ANDROID CANCEL callback; current owned request="+(owned==next)+" request="+(toInner?"inner":"cover"));if(owned==next){clearDelay("Android canceled owned request");owned=null;innerHeld=false;status="Concurrent handoff request canceled by system";}}}return null;
    });
    owned=next;innerHeld=toInner;request.invoke(manager,next,(Executor)Runnable::run,callback);
    status=toInner?"Direct concurrent handoff: inner primary; holding until fully open":"Cover held below handoff; switch at "+Math.round(handoffAngle)+"° or closed";
@@ -79,7 +116,7 @@ final class CoverHandoff {
  synchronized boolean active(){return owned!=null && !innerHeld;}
  synchronized void release(){closingPower.update(false,Float.NaN,false,false);probe.abort();nativeProbe.update(false,0,false);releaseOwned();}
  private void releaseOwned(){
-  policy.reset();if(owned==null)return;long identity=Binder.clearCallingIdentity();
+  clearDelay("explicit release");policy.reset();if(owned==null)return;long identity=Binder.clearCallingIdentity();
   try{event("EXPLICIT cancelStateRequest; held="+(innerHeld?"inner":"cover"));cancel.invoke(manager);event("EXPLICIT cancelStateRequest returned");owned=null;innerHeld=false;status="Normal display control restored";}catch(Exception e){status="Display release pending";}finally{Binder.restoreCallingIdentity(identity);}
  }
 }
