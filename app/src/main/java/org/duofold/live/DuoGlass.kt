@@ -268,7 +268,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
   if(!inner){
    if(display?.displayId!=0 || rendered==null || !CoverStartupTrace.needsCommit())return
    val gen=readinessGeneration;val episode=CoverStartupTrace.episode
-   val note="capture=${rendered.stamp}; size=${rendered.width}x${rendered.height}; angle=$targetAngle; visual=$renderedAngle; amount=$amount; smoothing=$smoothingMs"
+   val note="capture=${rendered.stamp}; size=${rendered.width}x${rendered.height}; view=${width}x${height}; angle=$targetAngle; visual=$renderedAngle; amount=$amount; smoothing=$smoothingMs"
    readinessPending=true
    try{SurfaceControl.Transaction().use { transaction ->
     transaction.addTransactionCommittedListener(context.mainExecutor){
@@ -432,7 +432,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      shader.setFloatUniform("horizontal",if(rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_270)1f else 0f)
      shader.setFloatUniform("reverse",if(rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_180)1f else 0f)
      paint.shader=shader;drawGlass(canvas,aaMode,RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)))
-     if(!preview && !frozen && f.width==size.x && f.height==size.y)rendered=f
+     if(!preview && !frozen && f.width==size.x && f.height==size.y && (inner || (width==size.x && height==size.y)))rendered=f
     }else{
      fallback(if(shader==null)"shader unavailable" else if(f==null)"capture missing" else "capture stale or wrong display size")
      // Honest, live black-fade fallback; never leave stale captured content visible.
