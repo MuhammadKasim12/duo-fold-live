@@ -3,17 +3,7 @@ import org.junit.Assert.*
 import org.junit.Test
 class LiveMirrorLayoutTest {
  @Test fun portraitCoverFitsInnerWithoutStretching(){val fit=LiveMirrorLayout.fit(1248,1972,2448,1848);assertEquals(1848f/1972,fit[0],.0001f);assertTrue(fit[1]>0);assertEquals(2448f,fit[1]+1248f*fit[0],.001f);assertEquals(0f,fit[2],.001f)}
- @Test fun landscapePreviewFillsRightHalfAtBothDestinationOrientations(){
-  for((w,h) in listOf(1848 to 2448,2448 to 1848)){
-   val p=LiveMirrorLayout.preview(1972,1248,w,h)
-   assertEquals(w/2f,p[2]+p[4]*p[0],.001f)
-   assertEquals(w.toFloat(),p[2]+p[6]*p[0],.001f)
-   assertEquals(0f,p[3]+p[5]*p[1],.001f)
-   assertEquals(h.toFloat(),p[3]+p[7]*p[1],.001f)
-   assertTrue(p[4]>=0 && p[6]<=1972 && p[5]>=0 && p[7]<=1248)
-   assertEquals(p[0],p[1],.003f)
-  }
- }
+ @Test fun landscapeRotationsPreserveContentAndPhysicalSide(){LandscapePreviewGeometryChecks.verify()}
  @Test fun portraitPreviewPreservesOriginalFit(){
   val old=LiveMirrorLayout.fit(1248,1972,2448,1848)
   val p=LiveMirrorLayout.preview(1248,1972,2448,1848)

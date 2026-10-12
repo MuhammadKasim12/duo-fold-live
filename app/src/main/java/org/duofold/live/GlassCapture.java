@@ -63,6 +63,7 @@ final class GlassCapture extends Binder {
      if(!EndpointWindowState.summarize(EndpointWindowTrace.dump(),exactTask,displayId).equals("READY; HAS_DRAWN"))throw new IllegalStateException("Exact incoming app not drawn");
     }
     int w=info.getClass().getField("logicalWidth").getInt(info),h=info.getClass().getField("logicalHeight").getInt(info);
+    int rotation=info.getClass().getField("rotation").getInt(info);
     if(info.getClass().getField("state").getInt(info)!=2)throw new IllegalStateException("Screen off — capture paused");
     if(captureApi==null)captureApi=DisplayCaptureApi.resolve(Class::forName,wa,Rect.class,SurfaceControl[].class);
     Class<?> builder=captureApi.builder;Object b=captureApi.constructor.newInstance();
@@ -89,10 +90,10 @@ final class GlassCapture extends Binder {
     if(hardware==null)throw new IllegalStateException("No readable frame");
     Bitmap bitmap=hardware.copy(Bitmap.Config.ARGB_8888,false);hardware.recycle();
     Object after=Class.forName("android.hardware.display.IDisplayManager").getMethod("getDisplayInfo",int.class).invoke(dm,displayId);
-    if(after==null || after.getClass().getField("state").getInt(after)!=2 || after.getClass().getField("logicalWidth").getInt(after)!=w || after.getClass().getField("logicalHeight").getInt(after)!=h ||
+    if(after==null || after.getClass().getField("state").getInt(after)!=2 || after.getClass().getField("logicalWidth").getInt(after)!=w || after.getClass().getField("logicalHeight").getInt(after)!=h || after.getClass().getField("rotation").getInt(after)!=rotation ||
        !java.util.Objects.equals(info.getClass().getField("uniqueId").get(info),after.getClass().getField("uniqueId").get(after))){bitmap.recycle();throw new IllegalStateException("Panel changed during capture; retry before handoff");}
     if(code==5&&!EndpointWindowState.summarize(EndpointWindowTrace.dump(),exactTask,displayId).equals("READY; HAS_DRAWN")){bitmap.recycle();throw new IllegalStateException("Exact app moved during capture");}
-    result.putString("physicalId",String.valueOf(info.getClass().getField("uniqueId").get(info)));result.putInt("displayId",displayId);result.putParcelable("bitmap",bitmap);result.putInt("width",w);result.putInt("height",h);result.putLong("stamp",captureStarted);result.putBoolean("ok",true);
+    result.putString("physicalId",String.valueOf(info.getClass().getField("uniqueId").get(info)));result.putInt("displayId",displayId);result.putParcelable("bitmap",bitmap);result.putInt("width",w);result.putInt("height",h);result.putInt("rotation",rotation);result.putLong("stamp",captureStarted);result.putBoolean("ok",true);
    }else throw new IllegalArgumentException("Unknown operation");
   }catch(Exception e){Throwable cause=e;while(cause.getCause()!=null)cause=cause.getCause();result.putString("error",cause.getClass().getSimpleName()+": "+cause.getMessage());}
   finally{if(buffer!=null)buffer.close();for(SurfaceControl sc:excluded)if(sc!=null)sc.release();Binder.restoreCallingIdentity(identity);}

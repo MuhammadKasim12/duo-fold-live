@@ -15,7 +15,7 @@ final class PreviewExpansion extends Binder {
  private Object dm,wm;private java.lang.reflect.Method displayInfo,keyguard;
  private SurfaceControl layer,backdrop,seam;private Bitmap seamHardware;private HardwareBuffer seamBuffer;private int seamPixels;private Bitmap hardware,cleanHardware;private HardwareBuffer buffer,cleanBuffer;
  private boolean frostedLeft,rightPreviewReady;
- private String innerId;private int bw,bh;
+ private String innerId;private int bw,bh,sourceRotation;private boolean landscape;private String lastGeometry="";
  private volatile boolean enabled=false;
  private volatile float seamMotion=0;
  void motion(float angle,float open){seamMotion=RenderQuality.motion(angle,open);}
@@ -62,8 +62,9 @@ final class PreviewExpansion extends Binder {
   if(code==1){
    Bitmap bitmap=data.readTypedObject(Bitmap.CREATOR);Bitmap clean=data.readTypedObject(Bitmap.CREATOR);long captured=data.readLong();float seamOffset=data.dataAvail()>=4?RenderQuality.seam(data.readFloat()):.07f;
    boolean frosted=data.dataAvail()>=4&&data.readInt()!=0;boolean rightReady=data.dataAvail()>=4&&data.readInt()!=0;
+   int rotation=data.dataAvail()>=4?data.readInt():0;
    if(bitmap==null || clean==null)throw new IllegalArgumentException("No prepared frame");
-   handler.post(()->{try{prepare(bitmap,clean,captured,seamOffset,frosted,rightReady);}catch(Exception e){clear("Expansion prepare failed: "+root(e));}finally{bitmap.recycle();clean.recycle();}});
+   handler.post(()->{try{prepare(bitmap,clean,captured,seamOffset,frosted,rightReady,rotation);}catch(Exception e){clear("Expansion prepare failed: "+root(e));}finally{bitmap.recycle();clean.recycle();}});
   }else if(code==2){boolean endpoint=data.dataAvail()>=4&&data.readInt()!=0;handler.post(()->{if(layer!=null){pendingReady=true;event(endpoint?"Fully-open clear frame committed":"Fresh inner glass frame committed");if(start>0 && ready<0){ready=SystemClock.elapsedRealtime()-start;status=endpoint?"Fully open; expansion fading":"Inner glass committed; expansion fading";}}});}
   else if(code==3){handler.post(()->{completed=false;clear("Expansion reset");});}
   else throw new IllegalArgumentException("Unknown bridge operation");
@@ -103,14 +104,15 @@ final class PreviewExpansion extends Binder {
  private boolean inner(Object info)throws Exception{
   int w=number(info,"logicalWidth"),h=number(info,"logicalHeight");return Math.min(w,h)/(float)Math.max(w,h)>.7f;
  }
- private void prepare(Bitmap bitmap,Bitmap clean,long captured,float seamOffset,boolean frosted,boolean rightReady)throws Exception{
+ private void prepare(Bitmap bitmap,Bitmap clean,long captured,float seamOffset,boolean frosted,boolean rightReady,int rotation)throws Exception{
   long now=SystemClock.elapsedRealtime();
   if(!enabled || !PreviewExpansionPolicy.fresh(captured,now) || start>0)return;
   init();Object primary=displayInfo.invoke(dm,0),secondary=displayInfo.invoke(dm,1);
   if(primary==null || secondary==null || inner(primary) || !inner(secondary) || (boolean)keyguard.invoke(wm))return;
   if(completed)return; // Wait for the app to reset after leaving this cover session.
+  sourceRotation=rotation;landscape=bitmap.getWidth()>bitmap.getHeight();
   innerId=id(secondary);stamp=captured;frostedLeft=frosted;rightPreviewReady=rightReady;
-  Bitmap scaledLeft=Bitmap.createScaledBitmap(frosted?bitmap:clean,bitmap.getWidth(),bitmap.getHeight(),true);android.graphics.Matrix flip=new android.graphics.Matrix();flip.setScale(-1f,1f);Bitmap reflected=Bitmap.createBitmap(scaledLeft,0,0,scaledLeft.getWidth(),scaledLeft.getHeight(),flip,true);Bitmap next=reflected.copy(Bitmap.Config.HARDWARE,false);if(reflected!=clean&&reflected!=bitmap)reflected.recycle();if(scaledLeft!=clean&&scaledLeft!=bitmap&&scaledLeft!=reflected)scaledLeft.recycle();HardwareBuffer nextBuffer=next.getHardwareBuffer();
+  Bitmap scaledLeft=Bitmap.createScaledBitmap(frosted?bitmap:clean,bitmap.getWidth(),bitmap.getHeight(),true);android.graphics.Matrix flip=new android.graphics.Matrix();flip.setScale(landscape?1f:-1f,1f);Bitmap reflected=Bitmap.createBitmap(scaledLeft,0,0,scaledLeft.getWidth(),scaledLeft.getHeight(),flip,true);Bitmap next=reflected.copy(Bitmap.Config.HARDWARE,false);if(reflected!=clean&&reflected!=bitmap)reflected.recycle();if(scaledLeft!=clean&&scaledLeft!=bitmap&&scaledLeft!=reflected)scaledLeft.recycle();HardwareBuffer nextBuffer=next.getHardwareBuffer();
   Bitmap nextClean=Bitmap.createScaledBitmap(clean,bitmap.getWidth(),bitmap.getHeight(),true).copy(Bitmap.Config.HARDWARE,false);HardwareBuffer nextCleanBuffer=nextClean.getHardwareBuffer();
   if(layer==null)layer=new SurfaceControl.Builder().setName("Duo clean right hold").setBufferSize(bitmap.getWidth(),bitmap.getHeight()).setOpaque(true).setHidden(true).build();
   if(backdrop==null)backdrop=new SurfaceControl.Builder().setName("Duo reflected left handoff copy").setBufferSize(bitmap.getWidth(),bitmap.getHeight()).setOpaque(true).setHidden(true).build();
@@ -130,6 +132,7 @@ final class PreviewExpansion extends Binder {
  }
  private void prepareSeam(Bitmap blurred,Object target,float fraction)throws Exception{
   if(fraction<=0){if(seam!=null)try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){t.setVisibility(seam,false).apply();}seamPixels=0;return;}
+  if(landscape){prepareLandscapeSeam(blurred,target,fraction);return;}
   int w=number(target,"logicalWidth"),h=number(target,"logicalHeight");float[] layout=LiveMirrorLayout.preview(bw,bh,w,h);float fit=layout[0];
   int cropX=(int)layout[4],cropY=(int)layout[5],cropHeight=(int)(layout[7]-layout[5]);
   int strip=Math.min((int)(layout[6]-layout[4]),Math.max(1,(int)Math.ceil(w*fraction/fit)));int[] pixels=new int[strip*cropHeight];
@@ -142,6 +145,24 @@ final class PreviewExpansion extends Binder {
    t.setBuffer(seam,nextBuffer).setLayer(seam,Integer.MAX_VALUE-19).apply();
   }
   if(seamBuffer!=null)seamBuffer.close();if(seamHardware!=null)seamHardware.recycle();seamHardware=next;seamBuffer=nextBuffer;seamPixels=strip;
+ }
+ private void prepareLandscapeSeam(Bitmap blurred,Object target,float fraction)throws Exception{
+  int dr=number(target,"rotation"),w=number(target,"logicalWidth"),h=number(target,"logicalHeight");
+  float nw=dr%2==0?w:h,nh=dr%2==0?h:w,cw=sourceRotation%2==0?bw:bh,ch=sourceRotation%2==0?bh:bw;
+  float scale=Math.min(nw/2f/cw,nh/ch);
+  int[] pixels=new int[bw*bh];blurred.getPixels(pixels,0,bw,0,0,bw,bh);
+  for(int y=0;y<bh;y++)for(int x=0;x<bw;x++){float nx=LandscapePreviewLayout.naturalX(x,y,bw,bh,sourceRotation);float blend=RenderQuality.seamBlend(nx*scale/nw,fraction);int at=y*bw+x;pixels[at]=(pixels[at]&0xffffff)|((int)(255*blend)<<24);}
+  Bitmap soft=Bitmap.createBitmap(pixels,bw,bh,Bitmap.Config.ARGB_8888),next=soft.copy(Bitmap.Config.HARDWARE,false);soft.recycle();HardwareBuffer nextBuffer=next.getHardwareBuffer();
+  if(seam==null)seam=new SurfaceControl.Builder().setName("Duo landscape hinge blur").setBufferSize(bw,bh).setHidden(true).build();
+  try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
+   SurfaceControl.Transaction.class.getMethod("setSkipScreenshot",SurfaceControl.class,boolean.class).invoke(t,seam,true);
+   t.setBuffer(seam,nextBuffer).setLayer(seam,Integer.MAX_VALUE-19).apply();
+  }
+  if(seamBuffer!=null)seamBuffer.close();if(seamHardware!=null)seamHardware.recycle();seamHardware=next;seamBuffer=nextBuffer;seamPixels=bw;
+ }
+ private void place(SurfaceControl.Transaction t,SurfaceControl sc,float[] m)throws Exception{
+  SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,sc,m[0],m[1],m[2],m[3]);
+  t.setCrop(sc,new Rect(0,0,bw,bh)).setPosition(sc,m[4],m[5]);
  }
  private final Runnable tick=new Runnable(){public void run(){
   try{
@@ -164,12 +185,22 @@ final class PreviewExpansion extends Binder {
    int stack=number(target,"layerStack"),panelState=number(target,"state");
    if(stack!=lastStack || panelState!=lastPanelState){lastStack=stack;lastPanelState=panelState;event("Inner stack="+stack+" state="+panelState);}
    int w=number(target,"logicalWidth"),h=number(target,"logicalHeight");
-   float[] layout=LiveMirrorLayout.preview(bw,bh,w,h);float fit=layout[0];
-   float leftWidth=bw>bh?w/2f:Math.max(0f,w-bw*fit);
+   float[] layout=landscape?new float[]{0,0,0,0,0,0,bw,bh}:LiveMirrorLayout.preview(bw,bh,w,h);float fit=layout[0];
+   float leftWidth=landscape?w/2f:Math.max(0f,w-bw*fit);
    Rect crop=new Rect((int)layout[4],(int)layout[5],(int)layout[6],(int)layout[7]);
    if(coverCommit!=null&&!coverCommit.maySubmit(SystemClock.elapsedRealtime())){event("Replacement not submitted: gate deadline expired during preparation; request="+coverCommit.requestedAt);coverCommit=null;start=0;ready=-1;handler.postDelayed(this,8);return;}
    try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
     SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,layer,number(target,"layerStack"));
+    if(landscape){
+     int dr=number(target,"rotation");
+     float[] clean=LandscapePreviewLayout.transform(bw,bh,sourceRotation,w,h,dr,false),reflection=LandscapePreviewLayout.transform(bw,bh,sourceRotation,w,h,dr,true);
+     String geometry="source="+bw+"x"+bh+" r="+sourceRotation+" destination="+w+"x"+h+" r="+dr+" clean="+java.util.Arrays.toString(clean);
+     if(!geometry.equals(lastGeometry)){lastGeometry=geometry;event("Landscape hinge layout "+geometry);}
+     place(t,layer,clean);t.setAlpha(layer,alpha).setVisibility(layer,start>0);
+     SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,backdrop,stack);
+     place(t,backdrop,reflection);t.setAlpha(backdrop,alpha).setVisibility(backdrop,start>0||(frostedLeft&&rightPreviewReady));
+     if(seam!=null){SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,seam,stack);place(t,seam,clean);t.setAlpha(seam,alpha*seamMotion).setVisibility(seam,seamPixels>0);}
+    }else{
     SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,layer,fit,0f,0f,layout[1]);
     SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,backdrop,number(target,"layerStack"));
     SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,backdrop,bw>bh?fit:leftWidth/bw,0f,0f,bw>bh?layout[1]:h/(float)bh);
@@ -181,6 +212,7 @@ final class PreviewExpansion extends Binder {
      SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,seam,stack);
      SurfaceControl.Transaction.class.getMethod("setMatrix",SurfaceControl.class,float.class,float.class,float.class,float.class).invoke(t,seam,fit,0f,0f,layout[1]);
      t.setPosition(seam,leftWidth,bw>bh?0:(h-bh*fit)/2f).setAlpha(seam,alpha*seamMotion).setVisibility(seam,seamPixels>0);
+    }
     }
     if(coverCommit!=null){final PreviewReleaseGate fence=coverCommit;coverCommit=null;
      final long submitted=SystemClock.elapsedRealtime();

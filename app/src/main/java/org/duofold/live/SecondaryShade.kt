@@ -12,6 +12,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
@@ -68,9 +70,15 @@ internal class SecondaryShade(private val service:AccessibilityService,display:D
       AndroidView(factory={LivePanelSurface(it){ok,note->mirrorReady=ok;PreviewTransition.previewReady(ok);if(ok && !leftStarted){leftStarted=true;event("Right preview committed; starting reflected left preview")};event(note)}.also{mirrorView=it}},modifier=Modifier.fillMaxSize())
       BoxWithConstraints(Modifier.fillMaxSize()){
        // Geometry must not depend on the shared frame: surface creation clears that frame.
-       val left=if(landscapeCoverAspect>0f)maxWidth/2 else maxWidth-maxHeight*coverAspect
+       val rotated=landscapeCoverAspect>0f
+       val dr=display.rotation
+       val horizontalHinge=rotated && dr%2==1
+       val left=if(rotated){if(horizontalHinge)maxWidth else maxWidth/2} else maxWidth-maxHeight*coverAspect
+       val regionHeight=if(horizontalHinge)maxHeight/2 else maxHeight
+       val regionX=if(rotated && dr==2)maxWidth/2 else androidx.compose.ui.unit.Dp(0f)
+       val regionY=if(horizontalHinge && dr==1)maxHeight/2 else androidx.compose.ui.unit.Dp(0f)
        if(!frostedReflection && leftStarted && left.value>0 && coverAspect<.7f){
-        Box(Modifier.fillMaxHeight().width(left)){
+        Box(Modifier.offset(regionX,regionY).width(left).height(regionHeight)){
          DuoLiveShade(object:StandaloneFoldHost{
           override fun onMovement(){}
           override fun onFrame(active:Boolean,strength:Float){}
