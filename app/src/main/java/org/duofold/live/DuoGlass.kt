@@ -212,7 +212,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private var angleListening=false
  private var paintedEffect=false
  private var fallbackReason=""
- private fun fallback(reason:String){if(reason!=fallbackReason){if(reason.isNotEmpty() || fallbackReason.isNotEmpty())RecoveryLog.add("Glass fallback ${if(inner) "inner" else "cover"}: ${reason.ifEmpty{"cleared"}}; angle=$targetAngle; amount=$amount");fallbackReason=reason}}
+ private fun fallback(reason:String){if(reason!=fallbackReason){if(!inner)CoverStartupTrace.event("FALLBACK ${reason.ifEmpty{"cleared"}}; angle=$targetAngle; amount=$amount");if(reason.isNotEmpty() || fallbackReason.isNotEmpty())RecoveryLog.add("Glass fallback ${if(inner) "inner" else "cover"}: ${reason.ifEmpty{"cleared"}}; angle=$targetAngle; amount=$amount");fallbackReason=reason}}
  private val clearGuard=object:Runnable{override fun run(){
   if(!holder.surface.isValid)return
   if(paintedEffect && (!LiveAngles.fresh() || !LiveAngles.effectAllowed || (!inner && targetAngle<=0f))){
@@ -264,7 +264,20 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private var lastReadyEndpoint=-1L
  /** Tie readiness to this SurfaceView's next buffer, not its parent UI draw. */
  private fun trackReadyFrame(rendered:GlassFrame?,endpoint:Boolean){
-  if(preview || frozen || !inner || readinessPending)return
+  if(preview || frozen || readinessPending)return
+  if(!inner){
+   if(display?.displayId!=0 || rendered==null || !CoverStartupTrace.needsCommit())return
+   val gen=readinessGeneration;val episode=CoverStartupTrace.episode
+   val note="capture=${rendered.stamp}; size=${rendered.width}x${rendered.height}; angle=$targetAngle; visual=$renderedAngle; amount=$amount; smoothing=$smoothingMs"
+   readinessPending=true
+   try{SurfaceControl.Transaction().use { transaction ->
+    transaction.addTransactionCommittedListener(context.mainExecutor){
+     if(gen==readinessGeneration && holder.surface.isValid){readinessPending=false;CoverStartupTrace.commit(episode,note)}
+    }
+    applyTransactionToFrame(transaction)
+   }}catch(e:Exception){readinessPending=false;CoverStartupTrace.event("COMMIT unavailable: ${e.javaClass.simpleName}")}
+   return
+  }
   val now=SystemClock.elapsedRealtime()
   if(endpoint){if(now-lastReadyEndpoint<50)return}
   else if(rendered==null || rendered.stamp==lastReadyCapture)return
@@ -313,7 +326,11 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  init{setZOrderOnTop(true);holder.setFormat(PixelFormat.TRANSLUCENT);holder.addCallback(this);importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
   try{classic=ScreenshotRenderPolicy.classic(context.getSharedPreferences("standalone",0).getString("animation_style","duo"),context.getSharedPreferences("standalone",0).getString("animation_mode","windowed"),context.getSharedPreferences("standalone",0).getBoolean("dual",false));program=RuntimeShader(if(classic)ClassicGlassShader.source else DuoGlassShader.source)}catch(e:Exception){RecoveryLog.add("Glass shader compilation failed: ${e.message}")}
  }
- fun configure(next:GlassFrame?,amount:Float,intensity:Float,inner:Boolean,rotation:Int,frozen:Boolean=false,angle:Float=Float.NaN,opaqueContent:Boolean=false){this.opaqueContent=opaqueContent;this.hingeAngle=angle;this.frozen=frozen;frame=next;this.amount=amount;this.intensity=intensity;this.inner=inner;this.rotation=rotation
+ fun configure(next:GlassFrame?,amount:Float,intensity:Float,inner:Boolean,rotation:Int,frozen:Boolean=false,angle:Float=Float.NaN,opaqueContent:Boolean=false){if(this.inner!=inner){
+   readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1
+   bitmap=null
+  }
+  this.opaqueContent=opaqueContent;this.hingeAngle=angle;this.frozen=frozen;frame=next;this.amount=amount;this.intensity=intensity;this.inner=inner;this.rotation=rotation
   smoothingMs=FrameSmoothing.sanitize(context.getSharedPreferences("standalone",0).getFloat("smoothing_ms",FrameSmoothing.DEFAULT_MS))
   openThreshold=context.getSharedPreferences("standalone",0).getFloat("open_threshold",172f)
   val selected=ScreenshotRenderPolicy.classic(context.getSharedPreferences("standalone",0).getString("animation_style","duo"),context.getSharedPreferences("standalone",0).getString("animation_mode","windowed"),context.getSharedPreferences("standalone",0).getBoolean("dual",false))
@@ -365,7 +382,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     val f=frame
     val size=Point()
     if(!preview && !frozen)display?.getRealSize(size)
-    val fresh=f!=null && (preview || frozen || ((f.displayId<0||f.displayId==display?.displayId)&&GlassFramePolicy.usable(f.stamp,SystemClock.elapsedRealtime(),f.width,f.height,size.x,size.y)))
+    val fresh=f!=null && (preview || frozen || ((f.displayId<0||f.displayId==display?.displayId)&&f.rotation==rotation&&GlassFramePolicy.usable(f.stamp,SystemClock.elapsedRealtime(),f.width,f.height,size.x,size.y)))
     val shader=program
     if(fresh && shader!=null && f!=null){
      fallback("")
