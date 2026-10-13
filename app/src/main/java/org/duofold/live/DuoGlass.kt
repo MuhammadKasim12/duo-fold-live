@@ -374,9 +374,9 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
    try{
     canvas.drawColor(Color.TRANSPARENT,PorterDuff.Mode.CLEAR)
     if(windowCanvas==null)canvas.scale(canvas.width.toFloat()/width,canvas.height.toFloat()/height)
-    if(diagnosticMode!=0 && windowCanvas==null && !preview && !frozen && display?.displayId==1){
+    if(diagnosticMode!=0 && windowCanvas==null && !preview && !frozen && display?.displayId==IncomingAnimationFrame.captureDisplay){
      val captured=frame;val current=Point();display?.getRealSize(current)
-     if(captured!=null && captured.displayId==1 && captured.rotation==rotation && LiveAngles.fresh() && LiveAngles.effectAllowed && GlassFramePolicy.usable(captured.stamp,SystemClock.elapsedRealtime(),captured.width,captured.height,current.x,current.y)){
+     if(captured!=null && captured.displayId==display?.displayId && captured.rotation==rotation && LiveAngles.fresh() && LiveAngles.effectAllowed && GlassFramePolicy.usable(captured.stamp,SystemClock.elapsedRealtime(),captured.width,captured.height,current.x,current.y)){
       val seam=RenderQuality.seam(context.getSharedPreferences("standalone",0).getFloat("seam_offset",.07f))
       IncomingGhostDiagnostic.draw(canvas,captured,width,height,inner,rotation,seam,diagnosticMode)
      }

@@ -12,7 +12,7 @@ internal object GlassFrames {
  private val executor=Executors.newSingleThreadExecutor()
  private val settingsExecutor=Executors.newSingleThreadExecutor()
  private var screenshotMode=false
- private fun targetCaptureDisplay()=ScreenshotRenderPolicy.captureDisplay(LiveAngles.continuityNative,screenshotMode,LiveAngles.dualActive)
+ private fun targetCaptureDisplay()=if(screenshotMode&&LiveAngles.dualActive) IncomingAnimationFrame.captureDisplay else ScreenshotRenderPolicy.captureDisplay(LiveAngles.continuityNative,false,LiveAngles.dualActive)
  private var targetFps=120
  private var measuredStart=0L;private var measuredFrames=0;private var measuredFps=0f
  fun configure(context:android.content.Context){screenshotMode=context.getSharedPreferences("standalone",0).getBoolean("dual",false)&&context.getSharedPreferences("standalone",0).getBoolean("screenshot_camera_startup",false);targetFps=RenderQuality.fps(context.getSharedPreferences("standalone",0).getInt("content_fps",120))}
@@ -100,15 +100,15 @@ internal object GlassFrames {
    val f=captured;val message=note;main.post{done(f,message)}
   }
  }
- fun incoming(task:Int,physical:String,done:(GlassFrame?,String)->Unit){
+ fun incoming(task:Int,physical:String,targetDisplay:Int=1,done:(GlassFrame?,String)->Unit){
   val valid=surfaces.values.filter{it.isValid}.take(8)
   if(valid.isEmpty()){done(null,"No exclusion surface");return}
   settingsExecutor.execute{
    val p=Parcel.obtain();val r=Parcel.obtain();var frame:GlassFrame?=null;var note="Capture unavailable"
-   try{p.writeInterfaceToken(GlassCapture.TOKEN);p.writeInt(valid.size);valid.forEach{p.writeTypedObject(it,0)};p.writeInt(1);p.writeInt(task);p.writeString(physical)
+   try{p.writeInterfaceToken(GlassCapture.TOKEN);p.writeInt(valid.size);valid.forEach{p.writeTypedObject(it,0)};p.writeInt(targetDisplay);p.writeInt(task);p.writeString(physical)
     LiveAngles.captureBinder().transact(5,p,r,0);r.readException();val b=r.readBundle(Bitmap::class.java.classLoader)
     val bitmap=b?.getParcelable("bitmap",Bitmap::class.java)
-    if(b?.getBoolean("ok")==true&&bitmap!=null)frame=GlassFrame(bitmap,b.getInt("width"),b.getInt("height"),b.getLong("stamp"),physicalId=b.getString("physicalId")?:"",displayId=1,rotation=b.getInt("rotation"),exclusions=valid.joinToString(" | "))
+    if(b?.getBoolean("ok")==true&&bitmap!=null)frame=GlassFrame(bitmap,b.getInt("width"),b.getInt("height"),b.getLong("stamp"),physicalId=b.getString("physicalId")?:"",displayId=targetDisplay,rotation=b.getInt("rotation"),exclusions=valid.joinToString(" | "))
     note=b?.getString("error")?:"Exact app capture complete"
    }catch(e:Exception){note=e.message?:note}finally{p.recycle();r.recycle()}
    val f=frame;val message=note;main.post{done(f,message)}
