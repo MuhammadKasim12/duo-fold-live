@@ -258,12 +258,13 @@ class MainActivity:ComponentActivity(){
        Toggle("Support notifications",supportNotifications){supportNotifications=it;SupportPrompts.setNotificationsEnabled(this@MainActivity,it)}
        Text("Optional support reminders in your notification panel. In-app reminders are managed separately.",style=MaterialTheme.typography.bodySmall)
       }
-      SettingsCard("Connection & setup","Shizuku and accessibility keep the effect running in the background."){
+      SettingsCard("Connection & setup","Shizuku or existing root access and accessibility keep the effect running."){
        TextButton(onClick={setup=!setup}){Text(if(setup)"Hide setup" else "Show setup")}
        if(setup){
-        ShizukuPlusDownload()
+        RootAccessControls()
+        ShizukuOnly { ShizukuPlusDownload() }
         OutlinedButton(onClick={startActivity(Intent(this@MainActivity,SetupActivity::class.java).putExtra("repair",true))}){Text("Repair required wallpaper setup")}
-        Button(onClick={val result=ShizukuAccess.request(this@MainActivity,42); if(result.startsWith("Permission requested"))android.widget.Toast.makeText(this@MainActivity,result,android.widget.Toast.LENGTH_LONG).show() else ShizukuAccess.show(this@MainActivity,result)}){Text("Authorize Shizuku")}
+        ShizukuOnly { Button(onClick={val result=ShizukuAccess.request(this@MainActivity,42); if(result.startsWith("Permission requested"))android.widget.Toast.makeText(this@MainActivity,result,android.widget.Toast.LENGTH_LONG).show() else ShizukuAccess.show(this@MainActivity,result)}){Text("Authorize Shizuku")} }
         OutlinedButton(onClick={ShizukuAccess.show(this@MainActivity,ShizukuAccess.report(this@MainActivity))}){Text("Connection report")}
         OutlinedButton(onClick={startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")))}){Text("Allow overlays")}
         OutlinedButton(onClick={startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}){Text("Enable accessibility")}
@@ -368,7 +369,7 @@ class MainActivity:ComponentActivity(){
         TextButton(onClick={closedThreshold=2f;prefs.edit().putFloat("closed_threshold",2f).apply();restart()}){Text("Reset to 2°")}
         HorizontalDivider()
         Text("Auto-rotate recovery",style=MaterialTheme.typography.titleMedium)
-        Text("Turn animation off, then repair. Requires Shizuku. Enables auto-rotate on both screens.",style=MaterialTheme.typography.bodySmall)
+        Text("Turn animation off, then repair. Requires authorized Shizuku or root. Enables auto-rotate on both screens.",style=MaterialTheme.typography.bodySmall)
         OutlinedButton(enabled=!enabled && !repairingRotation,onClick={
          repairingRotation=true;rotationRepair="Releasing rotation overrides…"
          FoldSettingsClient.request(this@MainActivity,"rotation_repair",null){result->
@@ -380,7 +381,7 @@ class MainActivity:ComponentActivity(){
         if(rotationRepair.isNotEmpty())Text(rotationRepair,style=MaterialTheme.typography.bodySmall)
         HorizontalDivider()
         Text("Keep cover awake on close",style=MaterialTheme.typography.titleMedium)
-        Text("Always on, including when animation is off. Requires authorized Shizuku.",style=MaterialTheme.typography.bodySmall)
+        Text("Always on, including when animation is off. Requires authorized Shizuku or root.",style=MaterialTheme.typography.bodySmall)
         Text("Still locking? In Samsung Settings, search “Lock when folded” and turn it OFF. Return to Home and fold to test.",style=MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick={FoldAwakeDefault.reconnect();FoldAwakeDefault.tick(this@MainActivity);startBackground()}){Text("Recheck keep-awake now")}
         TextButton(modifier=Modifier.bringIntoViewRequester(developerAnchor),onClick={developer=!developer}){Text("☰  Developer settings")}

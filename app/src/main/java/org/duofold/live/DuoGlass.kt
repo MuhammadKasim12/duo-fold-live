@@ -86,6 +86,13 @@ internal object DuoGlassShader {
   return x-stretch;
  }
 
+ // Shade in physical panel coordinates, independently of the stretched texture.
+ float windowShadeEdge(float axis,float isInner,float isFallback){
+  return clamp(isInner>0.5 ? (isFallback>0.5 ? 1.0-axis : 1.0-2.0*axis) : axis,0.0,1.0);
+ }
+ float windowShadeAmount(float motion,float edge,float strength){
+  return min(1.0,2.0*motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35)*strength);
+ }
  half4 main(float2 p) {
   float2 uv=(p-origin)/extent;
   if(any(lessThan(uv,float2(0))) || any(greaterThan(uv,float2(1)))) return half4(0);
@@ -164,8 +171,9 @@ internal object DuoGlassShader {
   float shaderProgress=inner>0.5 ? clamp(a/1.570796327,0.0,1.0) : clamp((3.141592654-a)/1.570796327,0.0,1.0);
   float motion=smoothstep(0.0,1.0,shaderProgress);
   // Keep the 72 source-pixel reference radius, including the image's black margins.
-  float blurEdge=edge;
-  if(inner>0.5 && fallback<0.5)blurEdge=(edge+2.0*seamOffset)/(1.0+2.0*seamOffset);
+  float shadeEdge=windowReveal>0.5 ? windowShadeEdge(axis,inner,fallback) : edge;
+  float blurEdge=shadeEdge;
+  if(inner>0.5 && fallback<0.5)blurEdge=(shadeEdge+2.0*seamOffset)/(1.0+2.0*seamOffset);
   if(reflectedCover>0.5)blurEdge=max(blurEdge,(2.0*seamOffset-axis)/(1.0+2.0*seamOffset));
   float radius=72.0*motion*pow(clamp(blurEdge,0.0,1.0),1.35);
   radius*=blurStrength*(inner>0.5?1.25:1.0);
@@ -185,8 +193,8 @@ internal object DuoGlassShader {
    }
   }
   }
-  float effect=motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35);
-  color*=half(1.0-min(1.0,effect*2.0*intensity));
+  float darkening=windowShadeAmount(motion,shadeEdge,intensity);
+  color*=half(1.0-darkening);
   float alpha=opaqueContent>0.5?1.0:smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5)?0.015:0.035,progress);
   if(inner>0.5 && fallback<0.5 && axis>=0.5)alpha*=seamMask;
   return half4(color*half(alpha),half(alpha));

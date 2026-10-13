@@ -67,6 +67,7 @@ jobs:
       - name: Test and build unsigned release
         run: |
           python3 tools/check_inner_stretch.py
+          python3 tools/check_window_shading.py
           ./gradlew --no-daemon testReleaseUnitTest lintRelease assembleRelease
 
       - name: Sign and verify APK

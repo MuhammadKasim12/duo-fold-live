@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 public final class DuoApplication extends Application {
  @Override public void onCreate(){
   super.onCreate();
+  PrivilegedAccess.init(this);
   registerActivityLifecycleCallbacks(new DeveloperShortcut());
   FoldAwakeDefault.persist(this);
   SharedPreferences prefs=getSharedPreferences("standalone",MODE_PRIVATE);

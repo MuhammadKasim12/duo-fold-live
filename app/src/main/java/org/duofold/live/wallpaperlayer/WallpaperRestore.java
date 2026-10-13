@@ -1,4 +1,5 @@
 package org.duofold.live.wallpaperlayer;
+import org.duofold.live.PrivilegedAccess;
 import android.content.*;
 import android.os.*;
 import java.io.*;
@@ -15,7 +16,7 @@ public final class WallpaperRestore {
  private static final java.util.concurrent.ExecutorService worker=Executors.newSingleThreadExecutor();
  private static IBinder remote;private static boolean connecting,pending;private static long retryAt;
  private static int generation;
- private static Shizuku.UserServiceArgs boundArgs;
+ private static PrivilegedAccess.UserServiceArgs boundArgs;
  private static ServiceConnection connection;
  private static Runnable connectionTimeout;
  public static volatile String status="Wallpaper recovery idle";
@@ -38,12 +39,12 @@ public final class WallpaperRestore {
   if(!c.getSharedPreferences("standalone",0).edit().putBoolean(KEY,value).commit())throw new IOException("Could not save wallpaper preference");
   retryAt=0;status=value?"Saved enabled wallpaper; reconnecting":"Custom wallpaper disabled; photo retained";
  }
- public static Shizuku.UserServiceArgs args(Context c){return new Shizuku.UserServiceArgs(new ComponentName(c,HostLauncher.class)).daemon(true).processNameSuffix("wallpaper_layer").version(BuildConfig.VERSION_CODE);}
+ public static PrivilegedAccess.UserServiceArgs args(Context c){return new PrivilegedAccess.UserServiceArgs(new ComponentName(c,HostLauncher.class)).daemon(true).processNameSuffix("wallpaper_layer").version(BuildConfig.VERSION_CODE);}
  // Detach the observer only: the daemon may be hosting the user's active wallpaper.
  public static void reconnect(){
   generation++;
   if(connectionTimeout!=null){main.removeCallbacks(connectionTimeout);connectionTimeout=null;}
-  if(boundArgs!=null&&connection!=null)try{Shizuku.unbindUserService(boundArgs,connection,false);}catch(Exception e){org.duofold.live.RecoveryLog.add("Wallpaper callback detach: "+e.getClass().getSimpleName());}
+  if(boundArgs!=null&&connection!=null)try{PrivilegedAccess.unbindUserService(boundArgs,connection,false);}catch(Exception e){org.duofold.live.RecoveryLog.add("Wallpaper callback detach: "+e.getClass().getSimpleName());}
   boundArgs=null;connection=null;remote=null;connecting=false;retryAt=0;
   // An already-running transaction retains 'pending' until its worker returns.
  }
@@ -59,7 +60,7 @@ public final class WallpaperRestore {
   if(connecting||pending||SystemClock.elapsedRealtime()<retryAt)return;
   try{
    if(!new File(c.getFilesDir(),"photo.jpg").exists()){status="Saved wallpaper photo missing; choose a replacement";return;}
-   if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=0){status="Wallpaper saved; waiting for authorized Shizuku";return;}
+   if(!PrivilegedAccess.pingBinder()||PrivilegedAccess.checkSelfPermission()!=0){status="Wallpaper saved; waiting for authorized Shizuku";return;}
    if(remote==null||!remote.isBinderAlive()){
     connecting=true;retryAt=SystemClock.elapsedRealtime()+15000;
     final int attempt=++generation;final long started=SystemClock.elapsedRealtime();
@@ -77,7 +78,7 @@ public final class WallpaperRestore {
     };
     connectionTimeout=()->{if(attempt!=generation||!connecting)return;reconnect();retryAt=SystemClock.elapsedRealtime()+15000;status="Wallpaper helper: no service connection callback after 35 s; retrying";org.duofold.live.RecoveryLog.add(status);};
     main.postDelayed(connectionTimeout,org.duofold.live.HelperAttempt.START_TIMEOUT_MS);
-    Shizuku.bindUserService(boundArgs,connection);
+    PrivilegedAccess.bindUserService(boundArgs,connection);
     return;
    }
    pending=true;retryAt=SystemClock.elapsedRealtime()+15000;IBinder binder=remote;final int requestGeneration=generation;

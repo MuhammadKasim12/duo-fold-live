@@ -28,7 +28,7 @@ internal class FoldWakeConnection(context:Context):AutoCloseable {
  private var binding:HelperBinding?=null
  init {
   note("PREPARE requested; separate closing-episode connection")
-  val args=Shizuku.UserServiceArgs(ComponentName(context.applicationContext,FoldWakeService::class.java))
+  val args=PrivilegedAccess.UserServiceArgs(ComponentName(context.applicationContext,FoldWakeService::class.java))
    .daemon(false).processNameSuffix("fold_wake").version(BuildConfig.VERSION_CODE)
   val connection=object:ServiceConnection {
    override fun onServiceConnected(name:ComponentName,service:IBinder){

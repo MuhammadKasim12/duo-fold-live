@@ -1,8 +1,9 @@
 package org.duofold.live.wallpaperlayer;
+import org.duofold.live.PrivilegedAccess;
 import android.app.*;import android.os.*;import android.content.*;import android.graphics.*;import android.widget.*;import rikka.shizuku.Shizuku;import java.io.*;
 public class WallpaperActivity extends Activity {
  ImageView coverPreview,innerPreview; Bitmap previewBitmap; long previewStamp=-1;
- TextView status,backgroundStatus; Handler h=new Handler(); IBinder remote; boolean connecting=false,startOnConnect=false; File photo; Shizuku.UserServiceArgs args;
+ TextView status,backgroundStatus; Handler h=new Handler(); IBinder remote; boolean connecting=false,startOnConnect=false; File photo; PrivilegedAccess.UserServiceArgs args;
  final ServiceConnection connection=new ServiceConnection(){public void onServiceConnected(ComponentName n,IBinder b){remote=b;connecting=false;if(startOnConnect){startOnConnect=false;startRemote();}else{h.removeCallbacks(poll);h.post(poll);}}public void onServiceDisconnected(ComponentName n){remote=null;status.setText("Shizuku connection ended. Reopen Shizuku if needed; Disable wallpaper still removes the photo layer.");}};
  final Shizuku.OnRequestPermissionResultListener permission=(a,b)->runOnUiThread(()->{String message=b==0?"Authorized. Choose a photo and enable wallpaper.":"Shizuku permission denied.";status.setText(message);Toast.makeText(this,message,Toast.LENGTH_LONG).show();});
  public void onCreate(Bundle s){super.onCreate(s);photo=new File(getFilesDir(),"photo.jpg");if(!photo.exists()){File staged=new File(getFilesDir(),"chosen-home-background.jpg");if(staged.exists())try{java.nio.file.Files.copy(staged.toPath(),photo.toPath());}catch(Exception ignored){}}LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(20),dp(18),dp(20),dp(24));root.setBackgroundColor(0xff080a0e);
@@ -14,7 +15,7 @@ public class WallpaperActivity extends Activity {
  text(steps,"1. Choose a photo\n2. Enable your wallpaper\n3. Fold and unfold to enjoy it",16,0xffccd1e0);
  status=new TextView(this);status.setTextColor(0xffb8d4ff);status.setTextSize(14);status.setPadding(0,dp(12),0,dp(12));
  button(steps,"Choose / change photo",()->startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE),2));
- button(steps,"Enable custom wallpaper",()->{try{if(!photo.exists()){status.setText("Choose a photo first.");return;}if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=0){status.setText("Authorize Shizuku first.");return;}if(remote!=null&&remote.isBinderAlive()){startRemote();return;}if(connecting)return;startOnConnect=true;connecting=true;args=WallpaperRestore.args(this);Shizuku.bindUserService(args,connection);status.setText("Connecting…");}catch(Exception e){connecting=false;status.setText(e.toString());}});
+ button(steps,"Enable custom wallpaper",()->{try{if(!photo.exists()){status.setText("Choose a photo first.");return;}if(!PrivilegedAccess.pingBinder()||PrivilegedAccess.checkSelfPermission()!=0){status.setText("Authorize Shizuku first.");return;}if(remote!=null&&remote.isBinderAlive()){startRemote();return;}if(connecting)return;startOnConnect=true;connecting=true;args=WallpaperRestore.args(this);PrivilegedAccess.bindUserService(args,connection);status.setText("Connecting…");}catch(Exception e){connecting=false;status.setText(e.toString());}});
  button(steps,"Disable custom wallpaper",()->{try{WallpaperRestore.setEnabled(this,false);status.setText("Stop requested; removing photo layer.");h.removeCallbacks(poll);h.postDelayed(poll,200);}catch(Exception e){status.setText(e.toString());}});
  steps.addView(status);
  text(steps,"Your selection stays saved across updates. Choose a new photo any time. Disabling shows Samsung’s wallpaper again.",14,0xffb8c7d9);
@@ -46,8 +47,8 @@ public class WallpaperActivity extends Activity {
  if(getIntent().getBooleanExtra("auto_enable",false)){
   getIntent().removeExtra("auto_enable");
   h.post(()->{try{
-   if(!photo.exists()||!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=0){status.setText("Choose a photo and authorize Shizuku, then enable wallpaper.");return;}
-   startOnConnect=true;connecting=true;args=WallpaperRestore.args(this);Shizuku.bindUserService(args,connection);
+   if(!photo.exists()||!PrivilegedAccess.pingBinder()||PrivilegedAccess.checkSelfPermission()!=0){status.setText("Choose a photo and authorize Shizuku, then enable wallpaper.");return;}
+   startOnConnect=true;connecting=true;args=WallpaperRestore.args(this);PrivilegedAccess.bindUserService(args,connection);
   }catch(Exception e){connecting=false;status.setText("Could not start custom wallpaper: "+e);}});
  }
 
@@ -64,7 +65,7 @@ public class WallpaperActivity extends Activity {
  final Runnable poll=new Runnable(){public void run(){try{if(UnlockTrace.capturing()||UnlockTrace.status().startsWith("Capture saved"))status.setText(UnlockTrace.status());backgroundStatus.setText((WallpaperRestore.enabled(WallpaperActivity.this)?"Enabled":"Disabled")+" · "+WallpaperRestore.status+"\n"+UnlockTrace.status());}catch(Exception e){backgroundStatus.setText("Background status unavailable. Copy the background report for details.");}h.postDelayed(this,1000);}};
  protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==2&&result==RESULT_OK&&data!=null){status.setText("Loading photo…");new Thread(()->{try{Bitmap b=org.duofold.live.WallpaperPhoto.decode(this,data.getData());File tmp=new File(getFilesDir(),"photo-next.jpg");try(FileOutputStream out=new FileOutputStream(tmp)){if(!b.compress(Bitmap.CompressFormat.JPEG,100,out))throw new IOException("Photo encoding failed");}java.nio.file.Files.move(tmp.toPath(),photo.toPath(),java.nio.file.StandardCopyOption.REPLACE_EXISTING,java.nio.file.StandardCopyOption.ATOMIC_MOVE);b.recycle();runOnUiThread(()->{status.setText("Photo saved. If enabled, it updates automatically; otherwise tap Enable custom wallpaper.");refreshPreviews();});}catch(Exception e){runOnUiThread(()->status.setText("Photo failed: "+e));}}).start();}}
  protected void onResume(){super.onResume();refreshPreviews();h.removeCallbacks(poll);h.post(poll);h.postDelayed(()->reconnectForReport(),500);}
- void reconnectForReport(){try{if(remote!=null||connecting||!new File(getFilesDir(),"layer-report.txt").exists()||!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=0)return;connecting=true;startOnConnect=false;args=WallpaperRestore.args(this);Shizuku.bindUserService(args,connection);}catch(Exception e){connecting=false;}}
+ void reconnectForReport(){try{if(remote!=null||connecting||!new File(getFilesDir(),"layer-report.txt").exists()||!PrivilegedAccess.pingBinder()||PrivilegedAccess.checkSelfPermission()!=0)return;connecting=true;startOnConnect=false;args=WallpaperRestore.args(this);PrivilegedAccess.bindUserService(args,connection);}catch(Exception e){connecting=false;}}
  String currentReport(){String lock="";try{lock=new String(java.nio.file.Files.readAllBytes(new File(getFilesDir(),"lock-photo-status.txt").toPath()),java.nio.charset.StandardCharsets.UTF_8);}catch(Exception ignored){}return "Duo Fold Live "+org.duofold.live.BuildConfig.VERSION_NAME+"\nSaved wallpaper enabled: "+WallpaperRestore.enabled(this)+"\nRecovery: "+WallpaperRestore.status+"\nKeep-awake saved choice: "+getSharedPreferences("standalone",0).getBoolean("auto_keep_cover_awake",true)+"\n"+org.duofold.live.FoldAwakeDefault.status+"\n"+lock+"\n\n"+readSavedReport()+"\nObserver connection: "+(remote!=null&&remote.isBinderAlive()?"connected":"disconnected; host trace is saved independently");}
  String readSavedReport(){try{
   File f=new File(getFilesDir(),"layer-report.txt");String report=new String(java.nio.file.Files.readAllBytes(f.toPath()),java.nio.charset.StandardCharsets.UTF_8);

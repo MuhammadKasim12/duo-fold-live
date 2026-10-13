@@ -63,7 +63,7 @@ public final class LiveAngles {
  private final Context context; private final Handler main=new Handler(Looper.getMainLooper());
  private HandlerThread thread; private Handler worker; private volatile boolean running; private volatile IBinder reader;
  private WindowManager wm; private View anchor;
- private WindowManager secondaryWm;private View secondaryAnchor;private String anchorKey="",secondaryKey=""; private Shizuku.UserServiceArgs args;
+ private WindowManager secondaryWm;private View secondaryAnchor;private String anchorKey="",secondaryKey=""; private PrivilegedAccess.UserServiceArgs args;
  private volatile long lastPoll;
  private long secondaryRefreshAt,statusFormatAt;
  public static volatile boolean effectAllowed=true;
@@ -91,12 +91,12 @@ public final class LiveAngles {
  public void start(){
   if(running)return;
   try{
-   if(!Shizuku.pingBinder()||Shizuku.checkSelfPermission()!=0)throw new IllegalStateException("Authorize Shizuku, then reconnect");
+   if(!PrivilegedAccess.pingBinder()||PrivilegedAccess.checkSelfPermission()!=0)throw new IllegalStateException("Authorize Shizuku or existing root access, then reconnect");
    if(!android.provider.Settings.canDrawOverlays(context))throw new IllegalStateException("Allow display over other apps, then reconnect");
    running=true;current=this;last=0;count=0;action="org.duofold.live.wallpaperprobe.READ_"+SystemClock.elapsedRealtime();
    ensureAnchors();
    thread=new HandlerThread("duofold-angle-ipc");thread.start();worker=new Handler(thread.getLooper());
-   args=new Shizuku.UserServiceArgs(new ComponentName(context,AngleReader.class)).daemon(false).processNameSuffix("fold_angles").version(BuildConfig.VERSION_CODE);
+   args=new PrivilegedAccess.UserServiceArgs(new ComponentName(context,AngleReader.class)).daemon(false).processNameSuffix("fold_angles").version(BuildConfig.VERSION_CODE);
    status="Connecting to angle helper…";readerDiagnostics="Waiting for helper connection callback";
    binding=new HelperBinding(args,"Angle helper",connection,message->{status=message;readerDiagnostics=message;stop();});
    binding.start();

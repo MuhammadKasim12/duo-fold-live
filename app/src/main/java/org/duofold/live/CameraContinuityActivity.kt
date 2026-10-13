@@ -15,7 +15,7 @@ class CameraContinuityActivity:Activity(){
  private val worker=Executors.newSingleThreadExecutor()
  private val life=Binder()
  private var helper:IBinder?=null
- private var args:Shizuku.UserServiceArgs?=null
+ private var args:PrivilegedAccess.UserServiceArgs?=null
  private var bound=false
  private var dialog:Dialog?=null
  private var running=false
@@ -81,7 +81,7 @@ class CameraContinuityActivity:Activity(){
   if(getSharedPreferences("standalone",0).getBoolean("enabled",false)){note("Turn Duo animation OFF first");return}
   if(!android.provider.Settings.canDrawOverlays(this)){note("Allow display over other apps first");return}
   try{
-   check(Shizuku.pingBinder()&&Shizuku.checkSelfPermission()==android.content.pm.PackageManager.PERMISSION_GRANTED){"Authorize Shizuku first"}
+   check(PrivilegedAccess.pingBinder()&&PrivilegedAccess.checkSelfPermission()==android.content.pm.PackageManager.PERMISSION_GRANTED){"Authorize Shizuku first"}
    val dm=getSystemService(DisplayManager::class.java)
    val primary=dm.getDisplay(Display.DEFAULT_DISPLAY)?:error("Primary display missing")
    check(display?.displayId==primary.displayId){"Open this page on the primary screen"}
@@ -118,9 +118,9 @@ class CameraContinuityActivity:Activity(){
  private fun prepared(){
   if(!running||bound)return
   note("Secondary window shown before state request; waiting for draw/activation")
-  args=Shizuku.UserServiceArgs(ComponentName(this,CameraContinuityService::class.java)).daemon(false).processNameSuffix("camera_continuity").version(BuildConfig.VERSION_CODE)
+  args=PrivilegedAccess.UserServiceArgs(ComponentName(this,CameraContinuityService::class.java)).daemon(false).processNameSuffix("camera_continuity").version(BuildConfig.VERSION_CODE)
   bound=true
-  try{Shizuku.bindUserService(args!!,connection)}catch(e:Exception){finishTest(e.toString())}
+  try{PrivilegedAccess.bindUserService(args!!,connection)}catch(e:Exception){finishTest(e.toString())}
  }
  private fun call(code:Int,write:(Parcel)->Unit={},done:(Bundle)->Unit){
   val b=helper?:return;val epoch=generation
@@ -208,7 +208,7 @@ class CameraContinuityActivity:Activity(){
   running=false;generation++;main.removeCallbacksAndMessages(null)
   val b=helper;helper=null;capture=null;backgroundAllowed=false;contentPending=false;contentEpoch++
   if(b!=null)worker.execute{val p=Parcel.obtain();val r=Parcel.obtain();try{p.writeInterfaceToken(CameraContinuityService.TOKEN);b.transact(3,p,r,0)}catch(_:Exception){}finally{p.recycle();r.recycle()}}
-  if(bound){args?.let{runCatching{Shizuku.unbindUserService(it,connection,true)}};bound=false}
+  if(bound){args?.let{runCatching{PrivilegedAccess.unbindUserService(it,connection,true)}};bound=false}
   runCatching{dialog?.dismiss()};dialog=null;content=null;snapshot=null
   if(::start.isInitialized)start.isEnabled=true
   if(::nativeOption.isInitialized)nativeOption.isEnabled=true

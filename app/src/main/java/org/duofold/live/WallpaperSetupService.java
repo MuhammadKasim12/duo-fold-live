@@ -30,7 +30,7 @@ public final class WallpaperSetupService extends Binder {
   return true;
  }
  private static String apply(boolean repair,String profile)throws Exception {
-  if(android.os.Process.myUid()!=2000)throw new IllegalStateException("Start Shizuku using wireless or USB debugging (ADB mode)");
+  if(android.os.Process.myUid()!=2000 && android.os.Process.myUid()!=0)throw new IllegalStateException("Start Shizuku using wireless or USB debugging (ADB mode)");
   // Regional variants share eligibility; verify Samsung components and methods before writing.
   DeviceCompatibility.requireEligible(Build.MODEL, Build.VERSION.SDK_INT);
   String video=WallpaperProfile.video(profile);

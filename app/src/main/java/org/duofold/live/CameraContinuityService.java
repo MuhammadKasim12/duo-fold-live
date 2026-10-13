@@ -19,6 +19,7 @@ public final class CameraContinuityService extends Binder {
    else if(!primary.equals(panel()))stop("Primary mapping changed");
   }catch(Exception e){stop("Display check failed");}}
  },250,250,TimeUnit.MILLISECONDS);}
+ public synchronized void closeRoot(){stop("Root service closed");guard.shutdownNow();}
  private Object info()throws Exception{
   IBinder b=(IBinder)Class.forName("android.os.ServiceManager").getMethod("getService",String.class).invoke(null,"device_state");
   Object svc=Class.forName("android.hardware.devicestate.IDeviceStateManager$Stub").getMethod("asInterface",IBinder.class).invoke(null,b);

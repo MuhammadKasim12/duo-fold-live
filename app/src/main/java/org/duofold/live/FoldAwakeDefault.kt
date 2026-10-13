@@ -22,7 +22,7 @@ internal object FoldAwakeDefault {
   persist(context)
   if(!context.getSystemService(android.os.PowerManager::class.java).isInteractive)return
   if(pending || SystemClock.elapsedRealtime()<nextAttempt)return
-  if(!runCatching{Shizuku.pingBinder() && Shizuku.checkSelfPermission()==0}.getOrDefault(false)){
+  if(!runCatching{PrivilegedAccess.pingBinder() && PrivilegedAccess.checkSelfPermission()==0}.getOrDefault(false)){
    status="Keep-awake ON saved; waiting for authorized Shizuku; automatic retry active";return
   }
   pending=true

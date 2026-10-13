@@ -19,7 +19,7 @@ internal object FoldSettingsClient {
   val label=if(decoration)"Display helper" else "Keep-awake helper"
   if(lane.busy || lane.inFlight.get()){done(Bundle().apply{putString("error","$label already running");putBoolean("busy",true)});return@post}
   lane.busy=true
-  val args=Shizuku.UserServiceArgs(ComponentName(context.applicationContext,if(decoration) DisplaySettingsService::class.java else FoldSettingsService::class.java))
+  val args=PrivilegedAccess.UserServiceArgs(ComponentName(context.applicationContext,if(decoration) DisplaySettingsService::class.java else FoldSettingsService::class.java))
    .daemon(false).processNameSuffix(if(decoration)"display_settings" else "fold_settings").version(BuildConfig.VERSION_CODE)
   var finished=false
   lateinit var connection:ServiceConnection
