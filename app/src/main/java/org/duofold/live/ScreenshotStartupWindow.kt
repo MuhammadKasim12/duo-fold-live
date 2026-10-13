@@ -32,7 +32,7 @@ internal class ScreenshotStartupWindow(context:Context,display:Display){
  var committedStamp=0L;private set
  var draws=0;private set
  var strength=0f;private set
- val rendererRoute:String get()=if(incoming)"opaque composite incoming D$displayId" else if(composedStamp>0)"opaque composite outgoing D$displayId" else "idle"
+ val rendererRoute:String get()=if(incoming)"live glass SurfaceView incoming D$displayId" else if(composedStamp>0)"opaque composite outgoing D$displayId" else "idle"
  val attached:Boolean get()=dialog.isShowing&&view.isAttachedToWindow
  private fun identity():String=runCatching{Display::class.java.getMethod("getUniqueId").invoke(displays.getDisplay(displayId)).toString()}.getOrDefault("")
  fun refresh(){
@@ -78,7 +78,7 @@ internal class ScreenshotStartupWindow(context:Context,display:Display){
       DuoLiveShade(object:StandaloneFoldHost{
        override fun onMovement(){}
        override fun onFrame(active:Boolean,strength:Float){this@ScreenshotStartupWindow.strength=strength}
-      },ctx.getSharedPreferences("standalone",0).getFloat("intensity",.4f),innerPanel=inner,frozenFrame=input,opaqueContent=true)
+      },ctx.getSharedPreferences("standalone",0).getFloat("intensity",.4f),innerPanel=inner,frozenFrame=frame,opaqueContent=frame!=null,liveFrame=if(frame==null)input else null)
      }
     }
    }

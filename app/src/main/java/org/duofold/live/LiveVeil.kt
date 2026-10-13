@@ -20,7 +20,7 @@ import kotlin.math.exp
 
 /** Screenshot-free reference darkening over the live wallpaper and apps; no blur or 3D projection. */
 @Composable
-internal fun DuoLiveShade(host: StandaloneFoldHost, intensity: Float, innerPanel: Boolean? = null, frozenFrame:GlassFrame? = null, reflectedCover:Boolean = false, opaqueContent:Boolean = false) {
+internal fun DuoLiveShade(host: StandaloneFoldHost, intensity: Float, innerPanel: Boolean? = null, frozenFrame:GlassFrame? = null, reflectedCover:Boolean = false, opaqueContent:Boolean = false, liveFrame:GlassFrame? = null) {
     var angle by remember { mutableFloatStateOf(Float.NaN) }
     var visualAngle by remember { mutableFloatStateOf(Float.NaN) }
     var amount by remember { mutableFloatStateOf(0f) }
@@ -58,7 +58,7 @@ internal fun DuoLiveShade(host: StandaloneFoldHost, intensity: Float, innerPanel
     SideEffect { host.onFrame(amount>.003f,amount) }
     val fadePrefs=LocalContext.current.getSharedPreferences("standalone",0)
     val debug=AnimationModePolicy.blackFade(fadePrefs.getString("animation_mode",AnimationModePolicy.DEFAULT),fadePrefs.getBoolean("debug_mode",false))
-    if(!debug){DuoGlassSurface(visualAngle,amount,intensity,expanded,rotation,frozenFrame,reflectedCover,opaqueContent);return}
+    if(!debug){DuoGlassSurface(visualAngle,amount,intensity,expanded,rotation,frozenFrame,reflectedCover,opaqueContent,liveFrame);return}
     Canvas(Modifier.fillMaxSize()){
         if(opaqueContent && frozenFrame!=null)drawScreenshotBackdrop(drawContext.canvas.nativeCanvas,frozenFrame,size.width.toInt(),size.height.toInt())
         if(plain)drawRect(Color.Black.copy(alpha=PlainFadeCurve.dim(amount,tuning)))

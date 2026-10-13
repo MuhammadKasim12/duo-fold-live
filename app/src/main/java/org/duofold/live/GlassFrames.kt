@@ -108,7 +108,7 @@ internal object GlassFrames {
    try{p.writeInterfaceToken(GlassCapture.TOKEN);p.writeInt(valid.size);valid.forEach{p.writeTypedObject(it,0)};p.writeInt(1);p.writeInt(task);p.writeString(physical)
     LiveAngles.captureBinder().transact(5,p,r,0);r.readException();val b=r.readBundle(Bitmap::class.java.classLoader)
     val bitmap=b?.getParcelable("bitmap",Bitmap::class.java)
-    if(b?.getBoolean("ok")==true&&bitmap!=null)frame=GlassFrame(bitmap,b.getInt("width"),b.getInt("height"),b.getLong("stamp"),physicalId=b.getString("physicalId")?:"",displayId=1)
+    if(b?.getBoolean("ok")==true&&bitmap!=null)frame=GlassFrame(bitmap,b.getInt("width"),b.getInt("height"),b.getLong("stamp"),physicalId=b.getString("physicalId")?:"",displayId=1,rotation=b.getInt("rotation"))
     note=b?.getString("error")?:"Exact app capture complete"
    }catch(e:Exception){note=e.message?:note}finally{p.recycle();r.recycle()}
    val f=frame;val message=note;main.post{done(f,message)}
