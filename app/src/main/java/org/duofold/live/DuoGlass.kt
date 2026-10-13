@@ -244,7 +244,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
   if(value.isFinite() && value!=targetAngle){targetAngle=value;requestDraw()}
  }
  private var opaqueContent=false
- private var frozen=false;private var frame:GlassFrame?=null;private var amount=0f;private var intensity=1f;private var inner=false;private var rotation=0
+ private var frozen=false;private var frame:GlassFrame?=null;private var amount=0f;private var intensity=.4f;private var inner=false;private var rotation=0
  private val basePaint=Paint(Paint.FILTER_BITMAP_FLAG)
  private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
  private var program:RuntimeShader?=null

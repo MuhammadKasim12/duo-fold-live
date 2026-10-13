@@ -85,7 +85,7 @@ internal class ScreenshotStartupWindow(context:Context,display:Display){
       DuoLiveShade(object:StandaloneFoldHost{
        override fun onMovement(){}
        override fun onFrame(active:Boolean,strength:Float){this@ScreenshotStartupWindow.strength=strength}
-      },ctx.getSharedPreferences("standalone",0).getFloat("intensity",1f),innerPanel=inner,frozenFrame=input,opaqueContent=incoming)
+      },ctx.getSharedPreferences("standalone",0).getFloat("intensity",.4f),innerPanel=inner,frozenFrame=input,opaqueContent=incoming)
      }
     }
    }

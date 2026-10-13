@@ -108,7 +108,7 @@ class MainActivity:ComponentActivity(){
     var blurStrength by remember{mutableFloatStateOf(RenderQuality.blur(prefs.getFloat("blur_strength",.3f)))}
     var frostedReflection by remember{mutableStateOf(prefs.getBoolean("frosted_reflection",true))}
     var seamOffset by remember{mutableFloatStateOf(RenderQuality.seam(prefs.getFloat("seam_offset",.07f)))}
-    var intensity by remember{mutableFloatStateOf(prefs.getFloat("intensity",1f))}
+    var intensity by remember{mutableFloatStateOf(prefs.getFloat("intensity",.4f))}
     var closedThreshold by remember{mutableFloatStateOf(FoldThreshold.sanitizeClosed(prefs.getFloat("closed_threshold",2f)))}
     var threshold by remember{mutableFloatStateOf(FoldThreshold.sanitize(prefs.getFloat("open_threshold",172f)))}
     var status by remember{mutableStateOf("Connecting…")}
@@ -239,7 +239,7 @@ class MainActivity:ComponentActivity(){
        TextButton(onClick={blurStrength=.3f;prefs.edit().putFloat("blur_strength",.3f).apply();restart()}){Text("Reset blur amount")}
        InfoLabel("Glass strength · ${(intensity*100).roundToInt()}%","Controls the glass shading intensity, independently of blur. Default: 100%.")
        Slider(value=intensity,onValueChange={intensity=it},valueRange=.3f..1.5f,onValueChangeFinished={prefs.edit().putFloat("intensity",intensity).apply();restart()})
-       TextButton(onClick={intensity=1f;prefs.edit().putFloat("intensity",1f).apply();restart()}){Text("Reset glass strength")}
+       TextButton(onClick={intensity=.4f;prefs.edit().putFloat("intensity",.4f).apply();restart()}){Text("Reset glass strength")}
        Toggle("Full-resolution glass · higher GPU cost",fullResolution,help="Off uses half-resolution rendering to reduce GPU work. Content and handoff angles are unchanged."){fullResolution=it;booleanSetting("full_resolution_glass",it)}
 
        Text("Fully open at ${threshold.roundToInt()}°. Adjust this in Advanced.",style=MaterialTheme.typography.bodySmall)
