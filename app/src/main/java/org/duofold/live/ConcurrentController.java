@@ -32,7 +32,7 @@ final class ConcurrentController {
 
  synchronized Bundle incomingHoldInfo(){
   Bundle b=new Bundle();b.putLong("session",started);b.putBoolean("active",owned!=null&&cameraSession);
-  b.putBoolean("closing",primaryInner);b.putInt("task",cameraSession&&fixedRoute!=null?fixedRoute.selectedTask():-1);
+  b.putBoolean("routed",taskRequested&&!closingAppReturnAttempted);b.putBoolean("closing",primaryInner);b.putInt("task",cameraSession&&fixedRoute!=null?fixedRoute.selectedTask():-1);
   b.putString("physical",fixedSecondary);b.putInt("width",destinationWidth);b.putInt("height",destinationHeight);return b;
  }
  private long readinessLostAt;

@@ -469,6 +469,7 @@ internal class IncomingGlassView(context:Context):View(context){
  private val painter=FrostSurface(context)
  private var stamp=0L
  private var loggedStamp=0L
+ private var loggedAt=0L
  private val freshness=object:Runnable{override fun run(){invalidate();postDelayed(this,100)}}
  init{importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS}
  fun configure(frame:GlassFrame,amount:Float,intensity:Float,inner:Boolean,rotation:Int,angle:Float){
@@ -480,7 +481,7 @@ internal class IncomingGlassView(context:Context):View(context){
  override fun onDraw(canvas:Canvas){
   super.onDraw(canvas)
   painter.drawEmbedded(canvas)
-  if(stamp!=loggedStamp){loggedStamp=stamp;RecoveryLog.add("Incoming animation drawn in window buffer; D${display?.displayId}; size=${width}x$height; capture=$stamp; hardware=${canvas.isHardwareAccelerated}")}
+  if(stamp!=loggedStamp && (loggedAt==0L || SystemClock.elapsedRealtime()-loggedAt>=1000L)){loggedStamp=stamp;loggedAt=SystemClock.elapsedRealtime();RecoveryLog.add("Incoming animation drawn in window buffer; D${display?.displayId}; size=${width}x$height; capture=$stamp; hardware=${canvas.isHardwareAccelerated}")}
  }
  override fun onAttachedToWindow(){super.onAttachedToWindow();post(freshness)}
  override fun onDetachedFromWindow(){removeCallbacks(freshness);super.onDetachedFromWindow()}

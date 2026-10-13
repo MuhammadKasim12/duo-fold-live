@@ -400,6 +400,7 @@ class MainActivity:ComponentActivity(){
          TextButton(onClick={selectMode("windowed")}){Text("Restore Windowed Glass")}
         }
         OutlinedButton(onClick={startActivity(Intent(this@MainActivity,CameraContinuityActivity::class.java))}){Text("Camera-style continuity test")}
+        OutlinedButton(onClick={val report=StandaloneService.instance?.screenshotReport()?:"Accessibility disconnected";getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Screenshot mode test",report));android.widget.Toast.makeText(this@MainActivity,"Screenshot report copied",android.widget.Toast.LENGTH_SHORT).show()}){Text("Copy screenshot mode test report")}
         Text("Screen continuity test",style=MaterialTheme.typography.titleMedium)
         Text("Arm, return to Home or the app you want to test, fully close, then unfold within 30 seconds. During the 20-second hold, opening past 98° tries moving real content to the inner display. The inner animation uses the transferred app. Check that content stays visible, with full-size layout, touch and navigation. Folding below 94° returns content; only one transfer per test. Temporarily requests system navigation on the inner display; restores the prior display policy after the test. Samsung may reject Home routing. Exit may still flash. Copy the connection report afterward.",style=MaterialTheme.typography.bodySmall)
         OutlinedButton(enabled=enabled&&liveMirror&&!dual,onClick={LiveAngles.startContinuityProbe()}){Text("Arm 20-second continuity test")}

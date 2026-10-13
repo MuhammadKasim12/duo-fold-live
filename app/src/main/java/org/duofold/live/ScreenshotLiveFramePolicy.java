@@ -1,0 +1,7 @@
+package org.duofold.live;
+/** Reject outgoing, pre-route, stale and wrong-size frames at the live incoming renderer. */
+final class ScreenshotLiveFramePolicy {
+ static boolean accepts(String expected,String actual,int display,long verified,long stamp,long now,int width,int height,int actualWidth,int actualHeight){
+  return ScreenshotStartupPolicy.ownsFrame(expected,actual)&&display==1&&verified>0&&stamp>=verified&&GlassFramePolicy.usable(stamp,now,actualWidth,actualHeight,width,height);
+ }
+}
