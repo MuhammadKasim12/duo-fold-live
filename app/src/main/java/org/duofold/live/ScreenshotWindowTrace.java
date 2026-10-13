@@ -19,15 +19,19 @@ final class ScreenshotWindowTrace {
     final java.lang.Process running=process;final StringBuilder lines=new StringBuilder();
     Thread reader=new Thread(()->{
      try(BufferedReader in=new BufferedReader(new InputStreamReader(running.getInputStream(),StandardCharsets.UTF_8))){
-      String line;String header="";boolean relevant=false;int kept=0;
+      String line;String header="";boolean relevant=false;boolean opacityWindow=false;int attributesLeft=0;int kept=0;
       while((line=in.readLine())!=null){
-       if(line.contains("Window #")){header=line.trim();relevant=header.contains("Duo")||header.contains("org.duofold")||header.contains("launcher")||header.contains("Taskbar");kept=0;}
+       if(line.contains("Window #")){header=line.trim();relevant=header.contains("Duo")||header.contains("org.duofold")||header.contains("launcher")||header.contains("Taskbar");kept=0;attributesLeft=0;opacityWindow=header.contains("Duo physical outgoing screenshot")||header.contains("Duo Fold Live");}
+       if(opacityWindow&&(line.contains("mAttrs=")||attributesLeft>0||line.contains("mAlpha=")||line.contains("mLastAlpha=")||line.contains("mBaseLayer=")||line.contains("Surface: shown="))){
+        if(line.contains("mAttrs="))attributesLeft=5;else if(attributesLeft>0)attributesLeft--;
+        synchronized(lines){if(lines.length()<16000)lines.append(line.trim()).append('\n');}
+       }
        if(line.contains("mDisplayId=")){
         // Reserve output for every secondary window and primary app/launcher/animation windows.
         relevant|=line.contains("mDisplayId=1");
-        if(relevant)synchronized(lines){if(lines.length()<12000)lines.append(header).append(' ').append(line.trim()).append('\n');}
+        if(relevant)synchronized(lines){if(lines.length()<16000)lines.append(header).append(' ').append(line.trim()).append('\n');}
        }else if((relevant&&kept<3&&(line.contains("mHasSurface=")||line.contains("isOnScreen=")||line.contains("mFrame=")))||line.contains("mCurrentFocus=")||line.contains("mFocusedApp=")){
-        synchronized(lines){if(lines.length()<12000)lines.append(line.trim()).append('\n');}kept++;
+        synchronized(lines){if(lines.length()<16000)lines.append(line.trim()).append('\n');}kept++;
        }
       }
      }catch(IOException ignored){}

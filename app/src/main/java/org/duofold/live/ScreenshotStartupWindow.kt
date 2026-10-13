@@ -1,9 +1,6 @@
 package org.duofold.live
 
-import android.app.Dialog
-import android.content.Context
 import android.graphics.PixelFormat
-import android.graphics.drawable.ColorDrawable
 import android.hardware.display.DisplayManager
 import android.view.*
 import androidx.compose.foundation.layout.Box
@@ -16,11 +13,12 @@ import androidx.lifecycle.*
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
 /** Pre-attached on D1. It stays transparent until D1 owns the captured physical panel. */
-internal class ScreenshotStartupWindow(context:Context,display:Display){
- private val ctx=context.createDisplayContext(display).createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,null)
+internal class ScreenshotStartupWindow(context:StandaloneService,display:Display){
+ private val ctx=context.createDisplayContext(display).createWindowContext(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,null)
  private val displays=context.getSystemService(DisplayManager::class.java)
  private val displayId=display.displayId
- private val dialog=Dialog(ctx)
+ private val wm=ctx.getSystemService(WindowManager::class.java)
+ private var added=false
  private val life=OverlayOwner()
  private val view=ComposeView(ctx)
  private var physical by mutableStateOf("")
@@ -33,7 +31,8 @@ internal class ScreenshotStartupWindow(context:Context,display:Display){
  var draws=0;private set
  var strength=0f;private set
  val rendererRoute:String get()=if(incoming)"live glass SurfaceView incoming D$displayId" else if(composedStamp>0)"opaque composite outgoing D$displayId" else "idle"
- val attached:Boolean get()=dialog.isShowing&&view.isAttachedToWindow
+ val attached:Boolean get()=added&&view.isAttachedToWindow
+ val windowReport:String get()="Secondary window: TYPE_ACCESSIBILITY_OVERLAY (2032); requested alpha=1.0; view alpha=${view.alpha}; attached=$attached; system attributes in window snapshots"
  private fun identity():String=runCatching{Display::class.java.getMethod("getUniqueId").invoke(displays.getDisplay(displayId)).toString()}.getOrDefault("")
  fun refresh(){
   val next=identity()
@@ -83,16 +82,22 @@ internal class ScreenshotStartupWindow(context:Context,display:Display){
     }
    }
   }
-  dialog.window?.apply{
-   setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
-   setFormat(PixelFormat.TRANSLUCENT)
-   setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
-   clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-   addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
-   attributes=attributes.apply{dimAmount=0f;setFitInsetsTypes(0);layoutInDisplayCutoutMode=WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;title="Duo physical outgoing screenshot"}
-  }
-  dialog.setContentView(view)
  }
- fun show(){dialog.show();dialog.window?.setLayout(-1,-1);life.registry.currentState=Lifecycle.State.RESUMED;refresh()}
- fun close(){GlassFrames.surface(view,null);rootRegistered=false;life.registry.currentState=Lifecycle.State.DESTROYED;view.disposeComposition();runCatching{dialog.dismiss()}}
+ fun show(){
+  // Same service-owned window type as the working live renderer. Non-touchable
+  // TYPE_APPLICATION_OVERLAY windows can have their alpha capped by Android.
+  // Keep input pass-through without requesting private flags or changing policy.
+  val params=WindowManager.LayoutParams(-1,-1,WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+   WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+   WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,PixelFormat.TRANSLUCENT)
+  params.alpha=1f;params.dimAmount=0f;params.windowAnimations=0
+  params.gravity=Gravity.TOP or Gravity.LEFT;params.setFitInsetsTypes(0)
+  params.layoutInDisplayCutoutMode=WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+  params.title="Duo physical outgoing screenshot"
+  view.alpha=0f
+  wm.addView(view,params);added=true
+  life.registry.currentState=Lifecycle.State.RESUMED;refresh()
+ }
+
+ fun close(){GlassFrames.surface(view,null);rootRegistered=false;life.registry.currentState=Lifecycle.State.DESTROYED;view.disposeComposition();if(added)runCatching{wm.removeViewImmediate(view)};added=false}
 }
