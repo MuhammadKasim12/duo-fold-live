@@ -29,7 +29,19 @@ final class HomePhotoLayer {
  final Map<Integer,Integer> activeHomeWindows=new HashMap<>();long unlockedAt=-1;
  boolean homeVerified(Entry e){return WakeHomeHandoffPolicy.ready(e.homeReadyEpoch==bridgeEpoch,homeSeen.getOrDefault(e.target.display,-1L),SystemClock.elapsedRealtime())&&unlockedAt>=0&&homeSeen.getOrDefault(e.target.display,-1L)>=unlockedAt&&activeHomeWindows.getOrDefault(e.target.display,-1)==e.target.window;}
  boolean prepareBeforeUnlock;long homeWaitStarted=-1;boolean homeRetryQueued;String lastWakeSnapshot="";
- void syncWakeTest(){boolean selected=WakePreparationTest.enabled(context);if(selected!=prepareBeforeUnlock){prepareBeforeUnlock=selected;resetBridges();note.accept("Wake preparation test "+(selected?"ON; go Home, lock, then wake":"OFF; test bridge removed"));}}
+ void syncWakeTest(){
+  boolean selected=WakePreparationTest.enabled(context);if(selected==prepareBeforeUnlock)return;
+  prepareBeforeUnlock=selected;resetBridges();
+  if(selected){
+   // A previous debug OFF cycle may leave an attachment tied to a retired Home surface.
+   // Rebuild our own Home layers; callbacks for retired entries are ignored by identity.
+   for(Entry e:pending.values())e.close();pending.clear();
+   for(Entry e:entries.values())e.close();entries.clear();
+   attempts.clear();retryAt=0;activeHomeWindows.clear();
+   note.accept("Wake photo Home attachments reset on re-enable");requestRefresh();
+  }
+  note.accept("Wake preparation test "+(selected?"ON; go Home, lock, then wake":"OFF; test bridge removed"));
+ }
  boolean keyguardLocked(){return context.getSystemService(KeyguardManager.class).isKeyguardLocked();}
  void finishBridge(int display,String reason){
   bridgeDisplays.remove(display);Entry e=bridges.remove(display);if(e!=null){e.close();note.accept("Wake photo bridge removed: "+reason+" display="+display);}
@@ -170,7 +182,7 @@ final class HomePhotoLayer {
  void rebound(Entry e,AttachmentRequest request,AttachmentRequest.Result outcome,int result){
   if(outcome==AttachmentRequest.Result.IGNORED||e.rebind!=request)return;
   e.rebind=null;if(closed||e.released||entries.get(e.target.display)!=e)return;
-  if(outcome!=AttachmentRequest.Result.SUCCESS){status="Home photo reattachment "+outcome+" ("+result+")";note.accept(status);return;}
+  if(outcome!=AttachmentRequest.Result.SUCCESS){status="Wake photo Home reattachment "+outcome+" ("+result+")";note.accept(status);return;}
   refreshGeometry();if(prepareBeforeUnlock)commitHome(e);else homeReady(e);status="Home photo attachment acknowledged; display="+e.target.display+" window="+e.target.window+"; compositor visibility requires trace";note.accept(status);
  }
  void requestRefresh(){
@@ -242,7 +254,7 @@ final class HomePhotoLayer {
    relative.invoke(tx,e.photo,e.anchor,1);
    tx.setBuffer(e.photo,buffer).setAlpha(e.photo,1f);geometry(tx,e);tx.setVisibility(e.photo,true);
    if(previous!=null)previous.detach(tx);
-   tx.apply();entries.put(e.target.display,e);if(previous!=null)previous.release();
+   tx.apply();entries.put(e.target.display,e);attempts.remove(e.target.window);if(previous!=null)previous.release();
    status="Home photo attachment acknowledged; persistent photo parent on display "+e.target.display;
    note.accept(status+"; window="+e.target.window);if(prepareBeforeUnlock)commitHome(e);else homeReady(e);
   }catch(Throwable error){e.close();retryAt=SystemClock.elapsedRealtime()+5000;status="Home photo placement failed; existing wallpaper retained: "+failure(error);note.accept(status);}

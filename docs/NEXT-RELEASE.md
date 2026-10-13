@@ -4,7 +4,7 @@
 - Glass strength defaults to 40% for new setups and Reset glass strength. Existing saved strengths remain selected. UI, renderer, screenshot path, report fallback and initial setup agree.
 
 Remaining priorities (owner order, 2026-10-13):
-1. Custom wallpaper unlock flash. Alpha.3 adds an opt-in pre-unlock photo bridge test.
+1. Custom wallpaper unlock flash. User confirmed alpha.4 has no flash with preparation continuously enabled. Alpha.5 enables preparation by default, protects its developer override with a three-second hold, and rebuilds Home attachments on re-enable. Toggle recovery and the completed Home handoff still need device validation.
 2. Mid-fold display handoff, with experimental screenshot mode alongside it.
 3. Performance consistency.
 4. Quick-close unanimated cover flash, last of the main priorities.

@@ -23,6 +23,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -388,11 +389,6 @@ class MainActivity:ComponentActivity(){
         Text("Shortcut: tap with four fingers anywhere in the app.",style=MaterialTheme.typography.bodySmall)
         if(developer){
          SettingsCard("Developer settings","Diagnostics and experimental controls. Normal use does not require these."){
-        var wakePhotoTest by remember { mutableStateOf(org.duofold.live.wallpaperlayer.WakePreparationTest.enabled(this@MainActivity)) }
-        Toggle("Prepare custom wallpaper before unlock (test)",wakePhotoTest){wakePhotoTest=it;prefs.edit().putBoolean(org.duofold.live.wallpaperlayer.WakePreparationTest.KEY,it).apply()}
-        Text("Custom wallpaper must be enabled. Go Home, lock, wake the screen, pause on the lock screen, then unlock. Tests showing your photo beneath the lock-screen interface before unlock; may temporarily change its background. Turn off to restore the normal path. Saved lock-screen wallpaper is unchanged.",style=MaterialTheme.typography.bodySmall)
-        OutlinedButton(onClick={val report=org.duofold.live.wallpaperlayer.WakePreparationTest.report(this@MainActivity);(getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Wallpaper wake test",report));android.widget.Toast.makeText(this@MainActivity,"Wallpaper wake report copied",android.widget.Toast.LENGTH_SHORT).show()}){Text("Copy wallpaper wake test report")}
-        HorizontalDivider()
         Toggle("Closed-hinge jitter protection",jitterProtection){jitterProtection=it;booleanSetting("closed_hinge_jitter_protection",it)}
         Text("On by default. Starts at ${(ClosedHingeGate.startAngle(closedThreshold)).roundToInt()}°; once started, follows the hinge until it returns to ${closedThreshold.roundToInt()}° or less. Filters tiny closed-phone readings before the animation and cover preview start. Turn off to restore the original threshold behavior.",style=MaterialTheme.typography.bodySmall)
         HorizontalDivider()
@@ -430,6 +426,22 @@ class MainActivity:ComponentActivity(){
           Text(LiveAngles.rotationHold,style=MaterialTheme.typography.bodySmall)
           OutlinedButton(onClick={startActivity(Intent(this@MainActivity,org.duofold.live.wallpaperlayer.WallpaperActivity::class.java).putExtra("developer",true))}){Text("Wallpaper developer settings")}
           OutlinedButton(onClick={val sent=SupportPrompts.notify(this@MainActivity);android.widget.Toast.makeText(this@MainActivity,if(sent)"Preview notification sent; reminder schedule unchanged" else "Enable support notifications here and in Android settings",android.widget.Toast.LENGTH_LONG).show()}){Text("Preview support notification")}
+        HorizontalDivider()
+        var wakePhotoTest by remember { mutableStateOf(org.duofold.live.wallpaperlayer.WakePreparationTest.enabled(this@MainActivity)) }
+        val wakeViewConfiguration=remember(baseViewConfiguration){object:ViewConfiguration by baseViewConfiguration{override val longPressTimeoutMillis=3000L}}
+        CompositionLocalProvider(LocalViewConfiguration provides wakeViewConfiguration){
+         Row(Modifier.fillMaxWidth().combinedClickable(
+          onClick={if(!wakePhotoTest){wakePhotoTest=true;prefs.edit().putBoolean(org.duofold.live.wallpaperlayer.WakePreparationTest.KEY,true).apply()}else android.widget.Toast.makeText(this@MainActivity,"Hold for 3 seconds to turn off",android.widget.Toast.LENGTH_SHORT).show()},
+          onLongClick=if(wakePhotoTest){{wakePhotoTest=false;prefs.edit().putBoolean(org.duofold.live.wallpaperlayer.WakePreparationTest.KEY,false).apply()}}else null,
+          onLongClickLabel="Turn off wallpaper wake preparation",
+          role=androidx.compose.ui.semantics.Role.Switch
+         ).semantics{stateDescription=if(wakePhotoTest)"On" else "Off"},verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){
+          Text("Prepare custom wallpaper before unlock",Modifier.weight(1f))
+          Switch(checked=wakePhotoTest,onCheckedChange=null)
+         }
+        }
+        Text("On by default when custom wallpaper is enabled. Keeps your photo ready beneath the lock-screen interface for unlocking. Developer override: hold the toggle for 3 seconds to turn off; tap to turn it back on. Saved lock-screen wallpaper is unchanged.",style=MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick={val report=org.duofold.live.wallpaperlayer.WakePreparationTest.report(this@MainActivity);(getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Wallpaper wake test",report));android.widget.Toast.makeText(this@MainActivity,"Wallpaper wake report copied",android.widget.Toast.LENGTH_SHORT).show()}){Text("Copy wallpaper wake test report")}
          }
         }
 
