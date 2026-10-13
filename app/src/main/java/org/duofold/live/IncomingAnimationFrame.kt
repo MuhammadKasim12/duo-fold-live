@@ -16,6 +16,7 @@ internal object IncomingAnimationFrame {
  private var pending=false
  private var retryAt=0L
  private var physical=""
+ private var verifiedThisSession=false
  private var cleanStamp=0L
  private var capturing=false
  private var updates=0
@@ -23,8 +24,8 @@ internal object IncomingAnimationFrame {
  private var lastSession="No incoming live session completed"
  @JvmStatic fun report()="$status\nLast incoming session: $lastSession"
  @JvmStatic fun clear(){
-  if(session>0L)lastSession="session=$session; physical=$physical; live updates=$updates; exact app verified=${cleanStamp>0L}; last status=$status"
-  generation++;session=0L;physical="";frame=null;pending=false;retryAt=0L;cleanStamp=0L;updates=0;lastStamp=0L;releaseCapture();status="Incoming animation idle"
+  if(session>0L)lastSession="session=$session; physical=$physical; live updates=$updates; exact app verified during session=$verifiedThisSession; last status=$status"
+  generation++;session=0L;physical="";frame=null;pending=false;retryAt=0L;cleanStamp=0L;verifiedThisSession=false;updates=0;lastStamp=0L;releaseCapture();status="Incoming animation idle"
  }
  private fun releaseCapture(){if(capturing){capturing=false;GlassFrames.release()}}
  @JvmStatic fun update(context:Context,info:Bundle?,fresh:Boolean,allowed:Boolean){
@@ -63,7 +64,7 @@ internal object IncomingAnimationFrame {
    if(epoch!=generation)return@incoming
    pending=false
    if(captured!=null&&captured.physicalId==physical){
-    cleanStamp=captured.stamp;frame=captured
+    verifiedThisSession=true;cleanStamp=captured.stamp;frame=captured
     GlassFrames.configure(context)
     if(!capturing){capturing=true;GlassFrames.acquire()}
     GlassFrames.requestFreshCapture()

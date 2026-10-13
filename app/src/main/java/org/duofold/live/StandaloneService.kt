@@ -11,7 +11,6 @@ import android.hardware.display.DisplayManager
 import android.os.*
 import android.view.*
 import android.view.accessibility.AccessibilityEvent
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -21,9 +20,7 @@ import androidx.compose.ui.unit.dp
 import android.view.accessibility.AccessibilityWindowInfo
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.*
@@ -156,8 +153,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
                 val frozen=if(screenshot)HandoffFrames.forPanel(panelInner)?.takeIf{ScreenshotStartupPolicy.ownsFrame(it.physicalId,displayIdentity(displays.getDisplay(0)))} else null
                 SideEffect{composedScreenshotStamp=frozen?.stamp ?: 0L}
                 Box(Modifier.fillMaxSize()){
-                    if(frozen!=null)Image(frozen.bitmap.asImageBitmap(),null,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)
-                    DuoLiveShade(this@StandaloneService,intensity,innerPanel=panelInner,frozenFrame=frozen)
+                    DuoLiveShade(this@StandaloneService,intensity,innerPanel=panelInner,frozenFrame=frozen,opaqueContent=screenshot&&frozen!=null)
                 }
             }
         }

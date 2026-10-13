@@ -207,7 +207,7 @@ internal object DuoGlassShader {
  val context=androidx.compose.ui.platform.LocalContext.current
  DisposableEffect(running){GlassFrames.configure(context);if(running)GlassFrames.acquire();onDispose{if(running)GlassFrames.release()}}
  if(opaqueContent && frozenFrame!=null){
-  AndroidView(factory={IncomingGlassView(it)},modifier=Modifier.fillMaxSize(),update={it.configure(frozenFrame,amount,intensity,inner,rotation,angle)})
+  AndroidView(factory={ScreenshotGlassView(it)},modifier=Modifier.fillMaxSize(),update={it.configure(frozenFrame,amount,intensity,inner,rotation,angle)})
   return
  }
  AndroidView(factory={FrostSurface(it,reflectedCover=reflectedCover)},modifier=Modifier.fillMaxSize(),update={it.configure(frame,amount,intensity,inner,rotation,frozenFrame!=null,angle,opaqueContent)})
@@ -462,26 +462,40 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  }
 }
 
-/** The incoming effect is recorded into the overlay window's buffer. No child surface,
- * separate compositor alpha, or SurfaceView hole can expose a duplicate app layer.
- * The detached painter only shares shader code; it is never added to a window. */
-internal class IncomingGlassView(context:Context):View(context){
+/** Draw a complete captured backdrop before the effect. Shader cutouts, the clean
+ * inner half and a zero-effect frame must reveal this capture, never the live app.
+ * Black also covers any letterbox or transparent pixels in the captured bitmap. */
+internal fun drawScreenshotBackdrop(canvas:Canvas,frame:GlassFrame,width:Int,height:Int){
+ canvas.drawColor(Color.BLACK)
+ val scale=minOf(width.toFloat()/frame.bitmap.width,height.toFloat()/frame.bitmap.height)
+ val w=frame.bitmap.width*scale;val h=frame.bitmap.height*scale
+ canvas.drawBitmap(frame.bitmap,null,RectF((width-w)/2f,(height-h)/2f,(width+w)/2f,(height+h)/2f),screenshotBackdropPaint)
+}
+private val screenshotBackdropPaint=Paint(Paint.FILTER_BITMAP_FLAG)
+
+/** Both screenshot panels use one opaque window buffer: captured backdrop and
+ * distorted content come from the same frame. The detached shader painter's CLEAR
+ * and cutouts are isolated in its saveLayer, so they cannot erase the backdrop.
+ * No child SurfaceView is attached to this window. Normal live mode is unchanged. */
+internal class ScreenshotGlassView(context:Context):View(context){
  private val painter=FrostSurface(context)
+ private var frame:GlassFrame?=null
  private var stamp=0L
  private var loggedStamp=0L
  private var loggedAt=0L
  private val freshness=object:Runnable{override fun run(){invalidate();postDelayed(this,100)}}
  init{importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS}
  fun configure(frame:GlassFrame,amount:Float,intensity:Float,inner:Boolean,rotation:Int,angle:Float){
-  stamp=frame.stamp
+  this.frame=frame;stamp=frame.stamp
   painter.configure(frame,amount,intensity,inner,rotation,true,angle,true)
   postInvalidateOnAnimation()
  }
  override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){super.onSizeChanged(w,h,oldw,oldh);painter.layout(0,0,w,h)}
  override fun onDraw(canvas:Canvas){
   super.onDraw(canvas)
+  frame?.let{drawScreenshotBackdrop(canvas,it,width,height)}
   painter.drawEmbedded(canvas)
-  if(stamp!=loggedStamp && (loggedAt==0L || SystemClock.elapsedRealtime()-loggedAt>=1000L)){loggedStamp=stamp;loggedAt=SystemClock.elapsedRealtime();RecoveryLog.add("Incoming animation drawn in window buffer; D${display?.displayId}; size=${width}x$height; capture=$stamp; hardware=${canvas.isHardwareAccelerated}")}
+  if(stamp!=loggedStamp && (loggedAt==0L || SystemClock.elapsedRealtime()-loggedAt>=1000L)){loggedStamp=stamp;loggedAt=SystemClock.elapsedRealtime();RecoveryLog.add("Screenshot composite drawn; opaque backdrop + effect in one buffer; D${display?.displayId}; size=${width}x$height; capture=$stamp; hardware=${canvas.isHardwareAccelerated}")}
  }
  override fun onAttachedToWindow(){super.onAttachedToWindow();post(freshness)}
  override fun onDetachedFromWindow(){removeCallbacks(freshness);super.onDetachedFromWindow()}

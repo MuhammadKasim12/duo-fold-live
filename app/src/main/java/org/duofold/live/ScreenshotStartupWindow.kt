@@ -6,13 +6,10 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.ColorDrawable
 import android.hardware.display.DisplayManager
 import android.view.*
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.*
@@ -35,7 +32,7 @@ internal class ScreenshotStartupWindow(context:Context,display:Display){
  var committedStamp=0L;private set
  var draws=0;private set
  var strength=0f;private set
- val rendererRoute:String get()=if(incoming)"window-buffer incoming D$displayId" else if(composedStamp>0)"frozen outgoing D$displayId" else "idle"
+ val rendererRoute:String get()=if(incoming)"opaque composite incoming D$displayId" else if(composedStamp>0)"opaque composite outgoing D$displayId" else "idle"
  val attached:Boolean get()=dialog.isShowing&&view.isAttachedToWindow
  private fun identity():String=runCatching{Display::class.java.getMethod("getUniqueId").invoke(displays.getDisplay(displayId)).toString()}.getOrDefault("")
  fun refresh(){
@@ -76,16 +73,12 @@ internal class ScreenshotStartupWindow(context:Context,display:Display){
    SideEffect{composedStamp=frame?.stamp ?: 0L}
    CompositionLocalProvider(LocalConfiguration provides ctx.resources.configuration,LocalHinge provides null){
     Box(Modifier.fillMaxSize()){
-     if(frame!=null){
-      Image(frame.bitmap.asImageBitmap(),null,Modifier.fillMaxSize(),contentScale=ContentScale.Fit)
-
-     }
      val input=frame ?: IncomingAnimationFrame.frame?.takeIf{incoming&&it.physicalId==physical}
      if(input!=null){
       DuoLiveShade(object:StandaloneFoldHost{
        override fun onMovement(){}
        override fun onFrame(active:Boolean,strength:Float){this@ScreenshotStartupWindow.strength=strength}
-      },ctx.getSharedPreferences("standalone",0).getFloat("intensity",.4f),innerPanel=inner,frozenFrame=input,opaqueContent=incoming)
+      },ctx.getSharedPreferences("standalone",0).getFloat("intensity",.4f),innerPanel=inner,frozenFrame=input,opaqueContent=true)
      }
     }
    }
