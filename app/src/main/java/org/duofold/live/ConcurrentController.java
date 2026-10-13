@@ -47,6 +47,7 @@ final class ConcurrentController {
  }
 
  synchronized void closingAppReturnEnabled(boolean enabled){closingAppReturnEnabled=enabled;}
+ private long powerArmAt;
  private HandoffPowerOverride powerOverride;private boolean powerOverrideEnabled,powerOverrideArmed,powerCancellationSent;
  synchronized void powerOverrideEnabled(boolean enabled){if(powerOverrideEnabled&&!enabled&&powerOverride!=null)powerOverride.cancel("option disabled");powerOverrideEnabled=enabled;}
  private final EndpointPowerTrace endpointPower=new EndpointPowerTrace();
@@ -137,7 +138,7 @@ final class ConcurrentController {
   if(!current.getClass().getMethod("getIdentifier").invoke(current).equals(base.getClass().getMethod("getIdentifier").invoke(base)))throw new IllegalStateException("Existing display override; stop other test apps first");
   clearClosingDelay();promoted=false;promotionReady=false;
   if(cameraSession){readinessLostAt=0;closingAppReturnAttempted=false;taskRequested=false;taskVerified=false;routeCheckpoint=false;routeObservation="";panelsReadySince=0;routePollAt=0;fixedPrimary=physicalPrimary();fixedSecondary=physicalId(1);captureDestinationSize();capturedTasks=false;log("REQUEST after committed outgoing screenshot; retain physical primary="+fixedPrimary+"; source="+(inner?"inner":"cover"));samplePanels(Float.NaN,true,false,true);}
-  if(cameraSession&&powerOverrideEnabled){if(powerOverride==null)powerOverride=new HandoffPowerOverride();powerOverrideArmed=false;powerCancellationSent=false;powerOverride.newSession();}
+  if(cameraSession){powerOverrideArmed=false;powerCancellationSent=false;if(powerOverrideEnabled&&powerOverride==null)powerOverride=new HandoffPowerOverride();if(powerOverride!=null)powerOverride.newSession();}
   setConcurrent(inner,now); // Captured outgoing panel becomes the secondary Presentation.
  }
  private void setConcurrent(boolean inner,long now)throws Exception{
@@ -196,7 +197,6 @@ final class ConcurrentController {
    if(powerOverride!=null){
     if((!fresh||!cameraStartup)&&!powerCancellationSent){powerCancellationSent=true;powerOverride.cancel("stale angle or mode changed");}
     else if(!unlocked&&!powerCancellationSent){powerCancellationSent=true;powerOverride.cancelUnlessFoldSleep();}
-    else if(unlocked&&fresh&&cameraStartup&&!powerCancellationSent&&powerOverrideEnabled&&!powerOverrideArmed&&cameraSession&&owned!=null&&((primaryInner&&angle<=30f)||(!primaryInner&&angle>=150f))){powerOverrideArmed=true;endpointPower.arm("Samsung ON override boundary");powerOverride.arm();}
    }
    if(endpointReturnWaiting){
     if(owned!=null){releaseInternal();return;}
@@ -232,7 +232,7 @@ final class ConcurrentController {
    bootstrapping=false;
    if(angle>0&&closingDelay.active()){log("CLOSE_DELAY END: reopened");clearClosingDelay();}
    if(cameraSession&&owned!=null&&cameraStartup&&promoted){
-    if(now-started>=30000){log("RELEASE: promoted session time limit");releaseInternal();blocked=true;return;}
+    if(now-started>=30000){if(powerOverride!=null)powerOverride.cancel("session time limit");log("RELEASE: promoted session time limit");releaseInternal();blocked=true;return;}
     samplePanels(angle,windowPrepared,secondaryReady,false);
     if(!promotionReady){
      if(primaryReady(fixedSecondary)){
@@ -242,7 +242,7 @@ final class ConcurrentController {
      if(!promotionReady&&now>=promotionDeadline)throw new IllegalStateException("Incoming primary/app handoff timed out");
     }
     // Reversal ends this bounded experiment; a subsequent motion can select a fresh outgoing frame.
-    if(ScreenshotPrimaryPolicy.reversed(primaryInner,angle,handoffAngle)){log("RELEASE: reversed across handoff hysteresis");releaseInternal();blocked=true;return;}
+    if(ScreenshotPrimaryPolicy.reversed(primaryInner,angle,handoffAngle)){if(powerOverride!=null)powerOverride.cancel("motion reversed");log("RELEASE: reversed across handoff hysteresis");releaseInternal();blocked=true;return;}
    }
    if(FoldThreshold.endpoint(angle,openThreshold)){
     if(cameraSession&&angle==0&&owned!=null&&holdClosing()){status="Screenshot closing hold: awaiting Android release (1000 ms fallback)";return;}
@@ -269,6 +269,18 @@ final class ConcurrentController {
    if(cameraSession&&promoted){status=promotionReady?"Incoming panel primary; outgoing physical screenshot retained":"Waiting for incoming primary and exact app";return;}
    if(cameraSession){
     if(taskRequested&&ScreenshotPrimaryPolicy.shouldPromote(primaryInner,angle,handoffAngle)){
+     if(powerOverrideEnabled&&!powerCancellationSent){
+      if(!powerOverrideArmed){
+       if(powerOverride==null){powerOverride=new HandoffPowerOverride();powerOverride.newSession();}
+       powerOverrideArmed=true;powerArmAt=now;
+       log("REMAP ON HOLD: arm before state replacement; wait at most 500 ms for API result");
+       windows.capture("before remap ON request");endpointPower.arm("Samsung ON override before primary remap");powerOverride.arm();
+       status="Preparing bounded ON hold before primary handoff";return;
+      }
+      if(RemapPowerPolicy.waitForResult(powerOverride.settled(),powerArmAt,now)){status="Waiting for ON override API result";return;}
+      log("REMAP ON HOLD: API settled="+powerOverride.settled()+" accepted="+powerOverride.accepted()+"; proceeding; display samples determine effect");
+      windows.capture("ON request result before primary handoff");
+     }
      promoteIncoming(now);status="Switching incoming panel to primary during motion";return;
     }
     if(now-started>=30000){log("RELEASE: 30-second limit");releaseInternal();blocked=true;status="Fixed-panel test reached time limit";return;}
@@ -309,7 +321,7 @@ final class ConcurrentController {
    if(primaryIsInner!=primaryInner)throw new IllegalStateException("Primary physical display changed during session");
    // Hold one inner-primary session for the entire overlap; do not move tasks or swap at 90 degrees.
    status=secondaryReady?(primaryInner?"Inner live + frozen cover":"Cover live + frozen inner"):"Waiting for outgoing-panel freeze Presentation";
-  }catch(Exception e){Throwable root=e;while(root.getCause()!=null)root=root.getCause();if(cameraSession)log("RELEASE: "+root);releaseInternal();blocked=true;status="Concurrent mode error: "+root.getMessage();}
+  }catch(Exception e){Throwable root=e;while(root.getCause()!=null)root=root.getCause();if(cameraSession)log("RELEASE: "+root);if(powerOverride!=null)powerOverride.cancel("handoff error");releaseInternal();blocked=true;status="Concurrent mode error: "+root.getMessage();}
   finally{Binder.restoreCallingIdentity(token);}
  }
  private void releaseInternal(){

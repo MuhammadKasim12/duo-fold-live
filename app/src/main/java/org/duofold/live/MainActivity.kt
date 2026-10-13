@@ -79,7 +79,7 @@ class MainActivity:ComponentActivity(){
     var dual by remember{mutableStateOf(prefs.getBoolean("dual",false))}
     var jitterProtection by remember{mutableStateOf(prefs.getBoolean("closed_hinge_jitter_protection",true))}
     var closingAppReturn by remember{mutableStateOf(prefs.getBoolean("closing_app_return",false))}
-    var powerOverride by remember{mutableStateOf(prefs.getBoolean("handoff_power_override",false))}
+    var powerOverride by remember{mutableStateOf(prefs.getBoolean("screenshot_remap_power_hold",true))}
     var screenshotStartup by remember{mutableStateOf(prefs.getBoolean("screenshot_camera_startup",false))}
     var advanced by remember{mutableStateOf(false)}
     LaunchedEffect(developerShortcut){
@@ -131,8 +131,8 @@ class MainActivity:ComponentActivity(){
      if(shot && !ScreenshotModeAccess.unlocked(prefs)){screenshotNotice=true;return}
      dual=shot;liveMirror=!shot
      val edit=prefs.edit().putBoolean("dual",shot).putBoolean("cover_preview",!shot)
-     if(shot){screenshotStartup=true;closingAppReturn=true;powerOverride=false;jitterProtection=true
-      edit.putBoolean("screenshot_camera_startup",true).putBoolean("closing_app_return",true).putBoolean("handoff_power_override",false).putBoolean("incoming_app_hold",false).putBoolean("screenshot_endpoint_fade",false).putBoolean("closed_hinge_jitter_protection",true)
+     if(shot){screenshotStartup=true;closingAppReturn=true;jitterProtection=true
+      edit.putBoolean("screenshot_camera_startup",true).putBoolean("closing_app_return",true).putBoolean("incoming_app_hold",false).putBoolean("screenshot_endpoint_fade",false).putBoolean("closed_hinge_jitter_protection",true)
      }
      edit.apply();restart()
     }
@@ -277,7 +277,7 @@ class MainActivity:ComponentActivity(){
       SettingsCard("Advanced","Display thresholds, fold behavior, and diagnostics."){
        TextButton(onClick={advanced=!advanced}){Text(if(advanced)"Hide advanced settings" else "Show advanced settings")}
        if(advanced){
-        InfoLabel("Handoff angle · ${handoffAngle.roundToInt()}°","Cover-to-inner switch angle. Default: 85°; range: 75–115°. Closing uses 4° less to avoid repeated switching. Applies to live cover preview; legacy dual-screen screenshot and continuity tests use their own routing.")
+        InfoLabel("Handoff angle · ${handoffAngle.roundToInt()}°","Cover-to-inner switch angle. Default: 85°; range: 75–115°. Closing uses 4° less to avoid repeated switching. Applies to live cover preview and the screenshot window-first primary switch; legacy screenshot and continuity tests use their own routing.")
         Slider(value=handoffAngle,onValueChange={handoffAngle=it.roundToInt().toFloat()},valueRange=75f..115f,steps=39,onValueChangeFinished={prefs.edit().putFloat("handoff_angle",handoffAngle).apply();restart()})
         TextButton(onClick={handoffAngle=HandoffSettings.DEFAULT;prefs.edit().putFloat("handoff_angle",handoffAngle).apply();restart()}){Text("Reset handoff angle")}
        InfoLabel("Black fade smoothing · ${fadeSmoothing.roundToInt()} ms","Smooths the black fade as the hinge moves. Higher values add more smoothing.")
@@ -417,11 +417,11 @@ class MainActivity:ComponentActivity(){
         Toggle("Dual-screen screenshot handoff",dual){selectFoldingMode(it)}
         Text(if(dual)"Active path: dual-screen screenshot handoff" else "Active path: normal handoff. The next two switches are inactive while dual-screen handoff is OFF.",style=MaterialTheme.typography.bodySmall)
         Toggle("Screenshot window-first startup (experimental)",screenshotStartup){screenshotStartup=it;booleanSetting("screenshot_camera_startup",it)}
-        Toggle("Hold displays ON at handoff (experimental)",powerOverride){powerOverride=it;booleanSetting("handoff_power_override",it)}
-        Text("Requires both screenshot handoff options above. Requests Samsung ON overrides near full opening/closing, then releases them after two seconds. May be rejected or delay the switch; compare ON versus OFF and copy the short report.",style=MaterialTheme.typography.bodySmall)
+        Toggle("Hold displays ON during primary switch (experimental)",powerOverride){powerOverride=it;booleanSetting("screenshot_remap_power_hold",it)}
+        Text("Requires both screenshot handoff options above. Requests Samsung ON overrides immediately before the primary-panel switch, waits up to 500 ms for the API result, and releases the overrides after two seconds. Default ON for this test build. May be rejected or delay the switch; compare ON versus OFF and copy the short report.",style=MaterialTheme.typography.bodySmall)
         Text("Requires Dual-screen screenshot handoff ON. Diagnostic: commits the outgoing screenshot, then wakes the incoming panel while keeping the outgoing screen on. The selected animation runs over incoming app content. Final native-layout switch may still flash. Maximum hold: 30 seconds. Turn this off to restore the original screenshot path.",style=MaterialTheme.typography.bodySmall)
         Toggle("Closing app-first return (experimental)",closingAppReturn){closingAppReturn=it;booleanSetting("closing_app_return",it)}
-        Text("Screenshot window-first tests only. Returns the selected app to the primary screen at 15° while closing, before Android releases dual mode. Tests whether leaving Home focused contributes to fold sleep. May interrupt the live cover preview near closure. OFF by default.",style=MaterialTheme.typography.bodySmall)
+        Text("Legacy setting, inactive in the current window-first experiment: the selected app now follows the incoming primary at the handoff angle.",style=MaterialTheme.typography.bodySmall)
         Text("Cover preview is on by default; screenshot handoff is off. Debug changes the shading only.",style=MaterialTheme.typography.bodySmall)
         Text(GlassFrames.status,style=MaterialTheme.typography.bodySmall)
         Text(HandoffFrames.status,style=MaterialTheme.typography.bodySmall)
