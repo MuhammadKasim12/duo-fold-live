@@ -22,12 +22,15 @@ public class PhotoInstrumentation extends Instrumentation {
   if(unlockTrace!=null)unlockTrace.event(text);
   if(transitionHistory.size()>=80)transitionHistory.removeFirst();transitionHistory.addLast(event);
   if(text.contains("SCREEN_OFF")||UnlockTrace.capturing())return;
+  boolean wakeTest=WakePreparationTest.enabled(getTargetContext());
+  if(wakeTest&&!(text.startsWith("Screen event")||text.contains("submittedWhileLocked=true")||text.contains("atomic Home handoff")||text.contains("bounded Home readiness timeout")))return;
   if(traceWorker.isShutdown()||automation==null||captureBusy||SystemClock.elapsedRealtime()-lastCapture<150)return;
   captureBusy=true;lastCapture=SystemClock.elapsedRealtime();
   traceWorker.execute(()->{String snapshot;try{
    ParcelFileDescriptor fd=automation.executeShellCommand("dumpsys -t 2 window windows");
-   try(InputStream in=new ParcelFileDescriptor.AutoCloseInputStream(fd)){snapshot=WindowTraceFilter.read(new InputStreamReader(in,StandardCharsets.UTF_8));}
+   try(InputStream in=new ParcelFileDescriptor.AutoCloseInputStream(fd)){snapshot=WindowTraceFilter.read(new InputStreamReader(in,StandardCharsets.UTF_8),wakeTest);}
   }catch(Throwable e){snapshot="Window snapshot failed: "+e;}
+  if(wakeTest)WakePreparationTest.snapshot(event,snapshot);
   synchronized(PhotoInstrumentation.this){if(windowSnapshots.size()>=4)windowSnapshots.removeFirst();windowSnapshots.addLast("Triggered by "+event+"\n"+snapshot);captureBusy=false;}
   });
  }
