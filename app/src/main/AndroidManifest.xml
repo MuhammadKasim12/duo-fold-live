@@ -39,13 +39,6 @@
    <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility"/>
   </service>
   <activity android:name="org.duofold.live.wallpaperlayer.WallpaperActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"/>
-   <service android:name=".RootHelpers$Angles" android:exported="false" />
-  <service android:name=".RootHelpers$Settings" android:exported="false" />
-  <service android:name=".RootHelpers$Display" android:exported="false" />
-  <service android:name=".RootHelpers$Wake" android:exported="false" />
-  <service android:name=".RootHelpers$WallpaperSetup" android:exported="false" />
-  <service android:name=".RootHelpers$Wallpaper" android:exported="false" />
-  <service android:name=".RootHelpers$Camera" android:exported="false" />
-</application>
+ </application>
  <instrumentation android:name="org.duofold.live.wallpaperlayer.PhotoInstrumentation" android:targetPackage="org.duofold.live" android:functionalTest="true" android:label="Custom wallpaper host"/>
 </manifest>
