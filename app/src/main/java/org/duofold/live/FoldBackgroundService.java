@@ -94,21 +94,21 @@ createNotificationChannel(this);}
   try{
    if(!foldEnabled){if(angles!=null){angles.stop();angles=null;}LiveAngles.status="Fold animation disabled";}else{
    boolean reachable=PrivilegedAccess.pingBinder();
-   if(reachable!=lastReachable){lastReachable=reachable;RecoveryLog.add("Shizuku reachability="+reachable);}
+   if(reachable!=lastReachable){lastReachable=reachable;RecoveryLog.add("Privileged connection reachability="+reachable);}
    if(!reachable){
     clearEffect();
     if(angles!=null){angles.stop();angles=null;}
-    LiveAngles.status="Shizuku connection unavailable — check whether Shizuku says Running";
+    LiveAngles.status=PrivilegedAccess.rootSelected()?"Root unavailable — check root authorization in Connection & setup":"Shizuku connection unavailable — check whether Shizuku says Running";
    }else if(PrivilegedAccess.checkSelfPermission()!=0){
     if(angles!=null){angles.stop();angles=null;}
-    LiveAngles.status="Shizuku authorization needed — authorize Duo once";
+    LiveAngles.status="Connection authorization needed — check Connection & setup";
    }else if(now>=nextReaderAttempt&&(angles==null||!angles.isRunning()||angles.stalled())){
     nextReaderAttempt=now+30000;
     if(angles!=null)angles.stop();
     angles=new LiveAngles(FoldBackgroundService.this);angles.start();
    }
    }
-  }catch(Exception e){LiveAngles.status="Waiting for Shizuku: "+e.getClass().getSimpleName();}
+  }catch(Exception e){LiveAngles.status="Waiting for privileged access: "+e.getClass().getSimpleName();}
   FoldAwakeDefault.tick(FoldBackgroundService.this);
   InnerDecorRecovery.tick(FoldBackgroundService.this);
   String notice=!foldEnabled?FoldAwakeDefault.status:LiveAngles.fresh()?"Live hinge control active":LiveAngles.status;

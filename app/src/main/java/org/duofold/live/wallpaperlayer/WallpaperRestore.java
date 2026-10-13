@@ -60,7 +60,7 @@ public final class WallpaperRestore {
   if(connecting||pending||SystemClock.elapsedRealtime()<retryAt)return;
   try{
    if(!new File(c.getFilesDir(),"photo.jpg").exists()){status="Saved wallpaper photo missing; choose a replacement";return;}
-   if(!PrivilegedAccess.pingBinder()||PrivilegedAccess.checkSelfPermission()!=0){status="Wallpaper saved; waiting for authorized Shizuku";return;}
+   if(!PrivilegedAccess.pingBinder()||PrivilegedAccess.checkSelfPermission()!=0){status="Wallpaper saved; waiting for authorized Shizuku or root";return;}
    if(remote==null||!remote.isBinderAlive()){
     connecting=true;retryAt=SystemClock.elapsedRealtime()+15000;
     final int attempt=++generation;final long started=SystemClock.elapsedRealtime();
