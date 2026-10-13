@@ -15,7 +15,7 @@ public class LayerHost extends Binder {
  };
  void displayChanged(){if(!running)return;try{refresh();}catch(Throwable e){recordFailure(e);stop("Display update failed: "+reason(e));}}
  java.util.function.Consumer<String> transitionSink;
- void trace(String event){journal.phase(event);if(transitionSink!=null)transitionSink.accept(event);}
+ void trace(String event){WakePreparationTest.record(event);journal.phase(event);if(transitionSink!=null)transitionSink.accept(event);}
  int owner=-1,type; Context context; Bitmap bitmap; java.lang.Process log; Object wallpaper; Method command;
  public LayerHost(){attachInterface(null,TOKEN);}
  public LayerHost(Context registeredContext){this();context=registeredContext;}
@@ -56,7 +56,7 @@ public class LayerHost extends Binder {
  void screenEvent(String action){
   if(!running)return;
   KeyguardManager keyguard=context.getSystemService(KeyguardManager.class);
-  trace("Screen event "+action+"; keyguardLocked="+keyguard.isKeyguardLocked()+"; photo windows="+panels.size());
+  trace("Screen event "+action+"; keyguardLocked="+keyguard.isKeyguardLocked()+"; photo windows="+panels.size()+"; native photo="+(nativePhoto!=null)+"; Home bridge="+(homePhoto!=null)+"; pre-unlock test="+WakePreparationTest.enabled(context));
   if(homePhoto!=null)homePhoto.screenEvent(action);
   if(!Intent.ACTION_SCREEN_ON.equals(action)&&!Intent.ACTION_USER_PRESENT.equals(action))return;
   displayChanged();

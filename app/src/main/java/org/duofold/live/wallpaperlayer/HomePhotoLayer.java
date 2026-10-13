@@ -26,6 +26,8 @@ final class HomePhotoLayer {
  volatile boolean closed;volatile String status="Home photo waiting for launcher";long retryAt;
  final Map<Integer,Entry> bridges=new HashMap<>();final Map<Integer,Long> homeSeen=new HashMap<>();final Set<Integer> bridgeDisplays=new HashSet<>();
  volatile long bridgeEpoch;final WakeBridgePolicy bridgePolicy=new WakeBridgePolicy();boolean bridgeTickQueued,bridgeExpiryQueued;long bridgePollUntil;
+ boolean prepareBeforeUnlock;
+ void syncWakeTest(){boolean selected=WakePreparationTest.enabled(context);if(selected!=prepareBeforeUnlock){prepareBeforeUnlock=selected;resetBridges();note.accept("Wake preparation test "+(selected?"ON; go Home, lock, then wake":"OFF; test bridge removed"));}}
  boolean keyguardLocked(){return context.getSystemService(KeyguardManager.class).isKeyguardLocked();}
  void finishBridge(int display,String reason){
   bridgeDisplays.remove(display);Entry e=bridges.remove(display);if(e!=null){e.close();note.accept("Wake photo bridge removed: "+reason+" display="+display);}
@@ -38,16 +40,19 @@ final class HomePhotoLayer {
  final Runnable bridgeTick=new Runnable(){public void run(){
   bridgeTickQueued=false;if(closed||bridgeDisplays.isEmpty()||!context.getSystemService(PowerManager.class).isInteractive())return;
   long now=SystemClock.elapsedRealtime();boolean locked=keyguardLocked();
-  WakeBridgePolicy.State bridgeState=bridgePolicy.observe(locked,now);
+  WakeBridgePolicy.State bridgeState=bridgePolicy.observe(locked,now,prepareBeforeUnlock);
   if(bridgeState==WakeBridgePolicy.State.SHOW&&!bridgeExpiryQueued){
    bridgeExpiryQueued=true;long epoch=bridgeEpoch;
    main.postDelayed(()->endBridgeHold(epoch),WakeBridgePolicy.HOLD_MS);
   }
   if(bridgeState==WakeBridgePolicy.State.EXPIRED){endBridgeHold(bridgeEpoch);return;}
   for(Entry e:new ArrayList<>(bridges.values()))if(e.bridgeReady&&!e.released){
-   boolean show=bridgeState==WakeBridgePolicy.State.SHOW;
+   boolean show=bridgeState==WakeBridgePolicy.State.SHOW||bridgeState==WakeBridgePolicy.State.PRELOCK_SHOW;
    if(show!=e.bridgeShown)try(SurfaceControl.Transaction tx=new SurfaceControl.Transaction()){
-    geometry(tx,e);tx.setVisibility(e.photo,show).apply();e.bridgeShown=show;if(show)bridgePolicy.shown(SystemClock.elapsedRealtime());note.accept("Wake photo bridge "+(show?"shown":"hidden")+" display="+e.target.display);
+    geometry(tx,e);tx.setVisibility(e.photo,show);
+    final boolean beforeUnlock=locked;final long epoch=bridgeEpoch;
+    tx.addTransactionCommittedListener(command->main.post(command),()->{if(!closed&&epoch==bridgeEpoch)note.accept("Wake photo bridge transaction committed; show="+show+"; submittedWhileLocked="+beforeUnlock+"; display="+e.target.display+"; not optical proof");});
+    tx.apply();e.bridgeShown=show;if(show&&!locked)bridgePolicy.shown(SystemClock.elapsedRealtime());note.accept("Wake photo bridge "+(show?"shown":"hidden")+" display="+e.target.display+"; locked="+locked);
    }catch(Throwable error){finishBridge(e.target.display,"placement failed: "+failure(error));}
   }
   if(now<bridgePollUntil){bridgeTickQueued=true;main.postDelayed(this,8);}
@@ -107,6 +112,7 @@ final class HomePhotoLayer {
   attachment=new WindowAttachment(a);
   relative=SurfaceControl.Transaction.class.getMethod("setRelativeLayer",SurfaceControl.class,SurfaceControl.class,int.class);
   layerStack=SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class);
+  prepareBeforeUnlock=WakePreparationTest.enabled(context);
   setPhoto(photo);
  }
  long wakeGeneration;boolean reattachQueued;
@@ -115,6 +121,7 @@ final class HomePhotoLayer {
   main.postDelayed(()->{reattachQueued=false;if(closed)return;for(Entry e:entries.values())reattach(e);requestRefresh();pollBridge();},0);
  }
  void screenEvent(String action){
+  syncWakeTest();
   long generation=++wakeGeneration;
   if(Intent.ACTION_SCREEN_OFF.equals(action)){
    resetBridges();long now=SystemClock.elapsedRealtime();for(Map.Entry<Integer,Long> seen:homeSeen.entrySet())if(now-seen.getValue()<1500)bridgeDisplays.add(seen.getKey());
@@ -228,7 +235,7 @@ final class HomePhotoLayer {
   src.set((hardware.getWidth()-w)/2,(hardware.getHeight()-h)/2,(hardware.getWidth()+w)/2,(hardware.getHeight()+h)/2);
   tx.setGeometry(e.photo,src,new Rect(0,0,size.x,size.y),Surface.ROTATION_0);
  }
- void refreshGeometry(){if(closed)return;try(SurfaceControl.Transaction tx=new SurfaceControl.Transaction()){for(Entry e:entries.values())geometry(tx,e);for(Entry e:bridges.values())if(e.photo!=null)geometry(tx,e);tx.apply();}catch(Exception e){status="Home photo geometry waiting: "+e.getClass().getSimpleName();}}
+ void refreshGeometry(){if(closed)return;syncWakeTest();try(SurfaceControl.Transaction tx=new SurfaceControl.Transaction()){for(Entry e:entries.values())geometry(tx,e);for(Entry e:bridges.values())if(e.photo!=null)geometry(tx,e);tx.apply();}catch(Exception e){status="Home photo geometry waiting: "+e.getClass().getSimpleName();}}
  void setPhoto(Bitmap photo){
   Bitmap next=photo.copy(Bitmap.Config.HARDWARE,false);if(next==null)throw new IllegalStateException("Cannot prepare Home photo");
   HardwareBuffer old=buffer;hardware=next;buffer=next.getHardwareBuffer();

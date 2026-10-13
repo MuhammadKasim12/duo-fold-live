@@ -388,6 +388,11 @@ class MainActivity:ComponentActivity(){
         Text("Shortcut: tap with four fingers anywhere in the app.",style=MaterialTheme.typography.bodySmall)
         if(developer){
          SettingsCard("Developer settings","Diagnostics and experimental controls. Normal use does not require these."){
+        var wakePhotoTest by remember { mutableStateOf(org.duofold.live.wallpaperlayer.WakePreparationTest.enabled(this@MainActivity)) }
+        Toggle("Prepare custom wallpaper before unlock (test)",wakePhotoTest){wakePhotoTest=it;prefs.edit().putBoolean(org.duofold.live.wallpaperlayer.WakePreparationTest.KEY,it).apply()}
+        Text("Custom wallpaper must be enabled. Go Home, lock, wake the screen, pause on the lock screen, then unlock. Tests showing your photo beneath the lock-screen interface before unlock; may temporarily change its background. Turn off to restore the normal path. Saved lock-screen wallpaper is unchanged.",style=MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick={val report=org.duofold.live.wallpaperlayer.WakePreparationTest.report(this@MainActivity);(getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Wallpaper wake test",report));android.widget.Toast.makeText(this@MainActivity,"Wallpaper wake report copied",android.widget.Toast.LENGTH_SHORT).show()}){Text("Copy wallpaper wake test report")}
+        HorizontalDivider()
         Toggle("Closed-hinge jitter protection",jitterProtection){jitterProtection=it;booleanSetting("closed_hinge_jitter_protection",it)}
         Text("On by default. Starts at ${(ClosedHingeGate.startAngle(closedThreshold)).roundToInt()}°; once started, follows the hinge until it returns to ${closedThreshold.roundToInt()}° or less. Filters tiny closed-phone readings before the animation and cover preview start. Turn off to restore the original threshold behavior.",style=MaterialTheme.typography.bodySmall)
         HorizontalDivider()
