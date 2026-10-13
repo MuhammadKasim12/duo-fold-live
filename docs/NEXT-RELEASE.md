@@ -2,13 +2,14 @@
 
 - User confirmed on 2026-10-13 that the Windowed Glass retreat is fixed in 3.5.5-alpha.2.
 - Glass strength defaults to 40% for new setups and Reset glass strength. Existing saved strengths remain selected. UI, renderer, screenshot path, report fallback and initial setup agree.
+- Custom wallpaper unlock flash: partial success / largely resolved in 3.5.5-alpha.5. User reports no flashes after the off/on test, with possibly one on the first unlock, versus every unlock before preparation was implemented. Software logs also show a completed atomic Home handoff after re-enabling. Keep wake preparation ON by default in future builds, with the three-second-hold developer override. Defer residual first-unlock / missing-Home-eligibility investigation until after the main priorities; do not claim every edge case is fixed.
 
-Remaining priorities (owner order, 2026-10-13):
-1. Custom wallpaper unlock flash. User confirmed alpha.4 has no flash with preparation continuously enabled. Alpha.5 enables preparation by default, protects its developer override with a three-second hold, and rebuilds Home attachments on re-enable. Toggle recovery and the completed Home handoff still need device validation.
-2. Mid-fold display handoff, with experimental screenshot mode alongside it.
-3. Performance consistency.
-4. Quick-close unanimated cover flash, last of the main priorities.
+Remaining main priorities (owner order, 2026-10-13):
+1. Mid-fold display handoff, with experimental screenshot mode alongside it.
+2. Performance consistency.
+3. Quick-close unanimated cover flash, last of the main priorities.
 
 After the main priorities:
-5. Intermittent rotation recovery.
-6. On-device validation of direct root support.
+4. Intermittent rotation recovery.
+5. On-device validation of direct root support.
+6. Revisit residual custom wallpaper unlock flash edge cases.
