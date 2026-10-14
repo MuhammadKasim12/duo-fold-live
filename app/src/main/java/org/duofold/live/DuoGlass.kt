@@ -203,7 +203,7 @@ internal object DuoGlassShader {
 }
 @Composable internal fun DuoGlassSurface(angle:Float,amount:Float,intensity:Float,inner:Boolean,rotation:Int,frozenFrame:GlassFrame?=null,reflectedCover:Boolean=false,opaqueContent:Boolean=false,liveFrame:GlassFrame?=null){
  // Incoming screenshot-mode content uses the same live SurfaceView as normal mode.
- // Only the outgoing panel is frozen/composited into its window buffer.
+ // Outgoing content and the bounded incoming remap hold use a window-buffer composite.
  val frame=frozenFrame ?: liveFrame ?: GlassFrames.frame
  val running=frozenFrame==null && amount>.003f && LiveAngles.fresh()
  val context=androidx.compose.ui.platform.LocalContext.current

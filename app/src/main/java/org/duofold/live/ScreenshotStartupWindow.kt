@@ -24,6 +24,7 @@ internal class ScreenshotStartupWindow(context:StandaloneService,display:Display
  private var physical by mutableStateOf("")
  private var incoming by mutableStateOf(false)
  private var inner by mutableStateOf(false)
+ private var configuration by mutableStateOf(android.content.res.Configuration(ctx.resources.configuration))
  private var rootRegistered=false
  private var composedStamp=0L
  private var pendingStamp=0L
@@ -42,7 +43,8 @@ internal class ScreenshotStartupWindow(context:StandaloneService,display:Display
   inner=d?.mode?.let{minOf(it.physicalWidth,it.physicalHeight).toFloat()/maxOf(it.physicalWidth,it.physicalHeight)>.7f}?:false
   incoming=ScreenshotRenderPolicy.incoming(frame?.physicalId,next,LiveAngles.dualActive)
   view.alpha=if((frame!=null&&ScreenshotStartupPolicy.ownsFrame(frame.physicalId,next))||incoming)1f else 0f
-  if(!rootRegistered&&view.isAttachedToWindow)runCatching{
+  configuration=android.content.res.Configuration(ctx.resources.configuration)
+  if(view.isAttachedToWindow)runCatching{
    val root=View::class.java.getDeclaredMethod("getViewRootImpl").invoke(view)
    val sc=root.javaClass.getMethod("getSurfaceControl").invoke(root) as android.view.SurfaceControl
    if(sc.isValid){GlassFrames.surface(view,sc);rootRegistered=true}
@@ -70,7 +72,7 @@ internal class ScreenshotStartupWindow(context:StandaloneService,display:Display
   view.setContent{
    val frame=HandoffFrames.frame?.takeIf{ScreenshotStartupPolicy.ownsFrame(it.physicalId,physical)}
    SideEffect{composedStamp=frame?.stamp ?: 0L}
-   CompositionLocalProvider(LocalConfiguration provides ctx.resources.configuration,LocalHinge provides null){
+   CompositionLocalProvider(LocalConfiguration provides configuration,LocalHinge provides null){
     Box(Modifier.fillMaxSize()){
      val input=frame ?: IncomingAnimationFrame.frame?.takeIf{incoming&&it.physicalId==physical}
      if(input!=null){

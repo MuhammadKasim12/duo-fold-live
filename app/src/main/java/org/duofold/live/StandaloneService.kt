@@ -106,6 +106,11 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
         lifecycle.registry.currentState=Lifecycle.State.CREATED
         val compose=ComposeView(context);view=compose;compose.alpha=0f
         compose.viewTreeObserver.addOnPreDrawListener{
+            if(settings().getBoolean("screenshot_camera_startup",false))runCatching{
+                val root=View::class.java.getDeclaredMethod("getViewRootImpl").invoke(compose)
+                val sc=root.javaClass.getMethod("getSurfaceControl").invoke(root) as android.view.SurfaceControl
+                if(sc.isValid)GlassFrames.surface(compose,sc)
+            }
             val frame=HandoffFrames.frame
             if(composedScreenshotStamp>0L && frame!=null && !ScreenshotStartupPolicy.ownsFrame(frame.physicalId,displayIdentity(displays.getDisplay(0)))){
                 compose.alpha=0f
@@ -150,8 +155,10 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
             CompositionLocalProvider(LocalConfiguration provides config, LocalHinge provides rememberWindowHinge(context)) {
                 val screenshot=settings().getBoolean("dual",false)&&settings().getBoolean("screenshot_camera_startup",false)
                 val panelInner=minOf(screenWidth,screenHeight).toFloat()/maxOf(screenWidth,screenHeight)>.7f
-                val frozen=if(screenshot)HandoffFrames.forPanel(panelInner)?.takeIf{ScreenshotStartupPolicy.ownsFrame(it.physicalId,displayIdentity(displays.getDisplay(0)))} else null
-                SideEffect{composedScreenshotStamp=frozen?.stamp ?: 0L}
+                val outgoing=if(screenshot)HandoffFrames.forPanel(panelInner)?.takeIf{ScreenshotStartupPolicy.ownsFrame(it.physicalId,displayIdentity(displays.getDisplay(0)))} else null
+                val retained=if(screenshot && outgoing==null)IncomingAnimationFrame.retainedFor(displays.getDisplay(0),screenWidth,screenHeight) else null
+                val frozen=outgoing ?: retained
+                SideEffect{composedScreenshotStamp=outgoing?.stamp ?: 0L}
                 Box(Modifier.fillMaxSize()){
                     DuoLiveShade(this@StandaloneService,intensity,innerPanel=panelInner,frozenFrame=frozen,opaqueContent=screenshot&&frozen!=null,liveFrame=if(screenshot&&frozen==null)IncomingAnimationFrame.frame?.takeIf{it.physicalId==displayIdentity(displays.getDisplay(0))} else null)
                 }
@@ -202,7 +209,8 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
             val size=android.graphics.Point();display.getRealSize(size)
             val closing=primaryWasInner &&
                 minOf(size.x,size.y).toFloat()/maxOf(size.x,size.y)<=.7f
-            val retain=closing && LiveAngles.fresh() && LiveAngles.effectAllowed && !getSystemService(KeyguardManager::class.java).isKeyguardLocked &&
+            val screenshotRetain=settings().getBoolean("dual",false)&&settings().getBoolean("screenshot_camera_startup",false)&&LiveAngles.dualActive&&LiveAngles.fresh()&&usable()&&LiveAngles.effectAllowed
+            val retain=screenshotRetain || closing && LiveAngles.fresh() && LiveAngles.effectAllowed && !getSystemService(KeyguardManager::class.java).isKeyguardLocked &&
                 !settings().getBoolean("dual",false) && !settings().getBoolean("debug_mode",false) &&
                 settings().getString("animation_mode",AnimationModePolicy.DEFAULT)==AnimationModePolicy.DEFAULT
             if(!retain){RecoveryLog.add("Primary physical panel changed; rebuilding overlay");restart();return}
@@ -210,10 +218,10 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
             // capture client alive while swapping panel geometry; tearing them down here
             // used to add a second startup after the cover was already reported ON.
             CoverStartupTrace.begin("retained host; ${primaryKey} -> ${physicalKey(display)}; physical=${displayIdentity(display)}; state=${display.state}; size=${size.x}x${size.y}; r=${display.rotation}")
-            RecoveryLog.add("Cover startup test: retaining primary overlay across closing remap")
+            RecoveryLog.add(if(screenshotRetain)"Screenshot remap: retained primary overlay and composition" else "Cover startup test: retaining primary overlay across closing remap")
             primaryKey=physicalKey(display)
             retainedCoverHost=true
-            primaryWasInner=false
+            primaryWasInner=minOf(size.x,size.y).toFloat()/maxOf(size.x,size.y)>.7f
             screenWidth=size.x;screenHeight=size.y
             config=Configuration(windowContext!!.resources.configuration)
             GlassFrames.requestFreshCapture()
@@ -252,7 +260,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
         if(screenshotStartup && settings().getBoolean("enabled",false) && usable() && LiveAngles.effectAllowed){
             dismissSecondary()
             val target=displays.getDisplays("com.samsung.android.hardware.display.category.BUILTIN").firstOrNull{it.displayId==1}
-            val key=if(target==null)"" else physicalKey(current!!)+"->"+physicalKey(target)
+            val key=if(target==null)"" else "logical-D${target.displayId}"
             if(target==null){closeScreenshotWindow();secondaryError="Screenshot destination unavailable";return}
             if(screenshotWindow!=null && screenshotKey!=key)closeScreenshotWindow()
             if(screenshotWindow==null && SystemClock.elapsedRealtime()>=screenshotRetry){
