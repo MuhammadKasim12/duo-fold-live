@@ -58,7 +58,7 @@ class MainActivity:ComponentActivity(){
   rikka.shizuku.Shizuku.addRequestPermissionResultListener(shizukuPermission)
   if(FirstRun.required(this)){startActivity(Intent(this,SetupActivity::class.java));finish();return}
   setContent{
-   MaterialTheme(colorScheme=darkColorScheme(primary=Color(0xff9dc4ff),secondary=Color(0xffa8d5c2),background=Color(0xff080a0e),surface=Color(0xff171a20),surfaceVariant=Color(0xff242830))){
+   DuoTheme{
     val prefs=remember{getSharedPreferences("standalone",0)}
     val scope=rememberCoroutineScope()
     var enabled by remember{mutableStateOf(prefs.getBoolean("enabled",false))}
@@ -143,8 +143,9 @@ class MainActivity:ComponentActivity(){
     }}
     if(screenshotNotice)AlertDialog(onDismissRequest={screenshotNotice=false},title={Text("Coming soon")},text={Text("Screenshot Mode is in the final stages of active development.")},confirmButton={TextButton(onClick={screenshotNotice=false}){Text("OK")}})
     Surface(Modifier.fillMaxSize()){
-     Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
-      Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xff1d3048),Color(0xff172128))),RoundedCornerShape(28.dp)).padding(24.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+     Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal=maxOf(20, (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp-720)/2).dp,vertical=24.dp),verticalArrangement=Arrangement.spacedBy(20.dp)){
+      Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xff263d5b),Color(0xff252139))),RoundedCornerShape(32.dp)).padding(26.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+       DuoSignature()
        Text("Duo Fold Live",style=MaterialTheme.typography.headlineLarge)
        Text("Make every fold feel fluid.",style=MaterialTheme.typography.bodyLarge,color=MaterialTheme.colorScheme.onSurfaceVariant)
        Toggle("Enable animation",enabled){
@@ -245,9 +246,10 @@ class MainActivity:ComponentActivity(){
 
        Text("Fully open at ${threshold.roundToInt()}°. Adjust this in Advanced.",style=MaterialTheme.typography.bodySmall)
       }
-      SettingsCard("Custom wallpaper","Your photo on Home, with live hinge support in the background."){
-       Button(onClick={startActivity(Intent(this@MainActivity,org.duofold.live.wallpaperlayer.WallpaperActivity::class.java))}){Text("Choose & manage custom wallpaper")}
-       Text("One photo, separate crops. Your selection survives updates.",style=MaterialTheme.typography.bodySmall)
+      SettingsCard("Make it yours","Two screens. A world of possibilities."){
+       WallpaperInvitation()
+       Button(onClick={startActivity(Intent(this@MainActivity,WallpaperStudioActivity::class.java))},modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text("Choose Custom Wallpaper")}
+       Text("Choose a photo for each screen. Frame it just right. Keep it across updates.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
       }
       SettingsCard("Notifications","Choose which routine notifications you see."){
        Text("Hide the persistent running notification in Samsung’s notification settings. Duo Fold Live will continue running.",style=MaterialTheme.typography.bodySmall)
@@ -461,6 +463,7 @@ class MainActivity:ComponentActivity(){
        InfoLabel("Support reminders","First shown after 3 days of successful use, then 7 days later, 14 days later, and every 30 days. You can snooze or stop reminders.")
       }
       Text("Duo Fold Live ${BuildConfig.VERSION_NAME} · Glass reference: chuspeeism/iphone-duo (MIT).",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+      Text("Duo Fold Live is a free, open-source hobby project, provided “as is” without warranties. Use it at your own risk. To the extent permitted by applicable law, the authors and contributors are not liable for device damage, data loss, malfunctions, or other harm arising from its use. Not affiliated with or endorsed by Samsung.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
      }
     }
    }
@@ -468,9 +471,9 @@ class MainActivity:ComponentActivity(){
  }
 }
 @Composable internal fun SettingsCard(title:String,subtitle:String,content:@Composable ColumnScope.()->Unit){
- Card(shape=RoundedCornerShape(24.dp),modifier=Modifier.fillMaxWidth()){
-  Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
-   Text(title,style=MaterialTheme.typography.titleLarge);Text(subtitle,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant);content()
+ Card(shape=RoundedCornerShape(28.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface),border=androidx.compose.foundation.BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant.copy(alpha=.5f)),modifier=Modifier.fillMaxWidth()){
+  Column(Modifier.padding(22.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+   Text(title,style=MaterialTheme.typography.titleLarge);Text(subtitle,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant);content()
   }
  }
 }

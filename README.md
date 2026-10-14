@@ -195,3 +195,7 @@ Duo Fold Live is the name of this app. The following are separate upstream proje
 - **[Shizuku](https://github.com/RikkaApps/Shizuku)** and its API contributors: the ADB-assisted access used by the live angle reader and helpers.
 
 Thank you to the original authors and contributors. These credits do not imply their endorsement of this app. MIT for project code, subject to preserved third-party licenses; see [LICENSE](LICENSE), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and the notices bundled under `app/src/main/assets/licenses/`.
+
+## Hobby project disclaimer
+
+Duo Fold Live is a free, open-source hobby project, provided “as is” without warranties. Use it at your own risk. To the extent permitted by applicable law, the authors and contributors are not liable for device damage, data loss, malfunctions, or other harm arising from its use. Not affiliated with or endorsed by Samsung. See [LICENSE](LICENSE) for the full license terms.

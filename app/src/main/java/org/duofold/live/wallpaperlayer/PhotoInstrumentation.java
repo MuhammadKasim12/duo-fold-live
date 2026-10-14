@@ -62,6 +62,7 @@ public class PhotoInstrumentation extends Instrumentation {
     try {host.start(ParcelFileDescriptor.open(new File(getTargetContext().getFilesDir(),"photo.jpg"),ParcelFileDescriptor.MODE_READ_ONLY));}
     catch(Exception e){host.recordFailure(e);host.stop("Photo startup failed: "+e);}
    });
+   try{PanelPhotos initial=PanelPhotos.load(getTargetContext());runOnMainSync(()->host.updateAlbum(initial));}catch(Exception e){transition("Album unavailable; original photo retained: "+e);}
    if(!new File(getTargetContext().getFilesDir(),"legacy-renderer").exists()&&host.running){
     try{
      String hierarchy;
@@ -82,11 +83,11 @@ public class PhotoInstrumentation extends Instrumentation {
        host.main.post(()->{if(host.homePhoto!=null)host.homePhoto.windowChanged();});
       }
      });
-     host.homePhoto.requestRefresh();
+     host.homePhoto.album=host.album;host.homePhoto.requestRefresh();
     }catch(Throwable e){host.trace("Home transition photo unavailable; existing wallpaper retained: "+LayerHost.reason(e));}
    });
    File photo=new File(getTargetContext().getFilesDir(),"photo.jpg");
-   long photoVersion=photo.lastModified(),nextReport=0;
+   long photoVersion=photo.lastModified(),nextReport=0;String albumVersion=PanelPhotos.version(getTargetContext());
    while(true){
     if(!host.running || SystemClock.elapsedRealtime()>=nextReport){
      runOnMainSync(()->lastReport=host.report());publish(lastReport);nextReport=SystemClock.elapsedRealtime()+3000;
@@ -98,6 +99,8 @@ public class PhotoInstrumentation extends Instrumentation {
      Bitmap replacement=BitmapFactory.decodeFile(photo.getAbsolutePath());
      if(replacement!=null){runOnMainSync(()->{host.updatePhoto(replacement);host.journal.phase("Custom photo updated");});photoVersion=changed;}
     }
+    String nextAlbumVersion=PanelPhotos.version(getTargetContext());
+    if(!nextAlbumVersion.equals(albumVersion)){try{PanelPhotos next=PanelPhotos.load(getTargetContext());runOnMainSync(()->host.updateAlbum(next));albumVersion=nextAlbumVersion;}catch(Exception e){transition("Album update deferred; previous photos retained: "+e);albumVersion=nextAlbumVersion;}}
     if(stop.exists()||!WallpaperRestore.enabled(getTargetContext())){
      runOnMainSync(()->host.stop("Custom wallpaper disabled; original wallpaper unchanged"));
      continue;

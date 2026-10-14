@@ -4,6 +4,7 @@ import android.window.*;import android.view.*;import android.graphics.*;import a
 public final class NativePhotoLayer extends DisplayAreaOrganizer {
  final HashMap<IBinder,Entry> layers=new HashMap<>();final Consumer<String> note;final Consumer<Throwable> failed;
  final android.content.Context context;final boolean independent;int independentCount;
+ PanelPhotos album;
  boolean registered,closed;Bitmap hardware;HardwareBuffer buffer;
  public NativePhotoLayer(android.content.Context context,Handler main,Consumer<String> note,Consumer<Throwable> failed){super(r->main.post(r));this.context=context;this.independent=!new java.io.File(context.getFilesDir(),"disable-wake-layer").exists();this.note=note;this.failed=failed;}
  public void start(Bitmap photo)throws Exception{
@@ -77,6 +78,9 @@ public final class NativePhotoLayer extends DisplayAreaOrganizer {
    Rect src=new Rect(0,0,w,h);
    if((float)w/h>target){int crop=Math.max(1,Math.round(h*target));src.left=(w-crop)/2;src.right=src.left+crop;}
    else{int crop=Math.max(1,Math.round(w/target));src.top=(h-crop)/2;src.bottom=src.top+crop;}
+   PanelPhotos.Photo selected=album==null?null:album.forDisplay(display,bounds.width(),bounds.height());
+   if(selected!=null){src=selected.crop(bounds.width(),bounds.height());t.setBuffer(e.child,selected.buffer());if(e.wake!=null)t.setBuffer(e.wake,selected.buffer());}
+   else{t.setBuffer(e.child,buffer);if(e.wake!=null)t.setBuffer(e.wake,buffer);}
    t.setGeometry(e.child,src,new Rect(0,0,bounds.width(),bounds.height()),Surface.ROTATION_0);
    if(e.wake!=null)t.setGeometry(e.wake,src,new Rect(bounds),Surface.ROTATION_0);
   }catch(Exception error){throw new IllegalStateException("Native photo geometry",error);}

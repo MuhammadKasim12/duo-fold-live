@@ -16,6 +16,7 @@ public class LayerHost extends Binder {
  void displayChanged(){if(!running)return;try{refresh();}catch(Throwable e){recordFailure(e);stop("Display update failed: "+reason(e));}}
  java.util.function.Consumer<String> transitionSink;
  void trace(String event){WakePreparationTest.record(event);journal.phase(event);if(transitionSink!=null)transitionSink.accept(event);}
+ PanelPhotos album;
  int owner=-1,type; Context context; Bitmap bitmap; java.lang.Process log; Object wallpaper; Method command;
  public LayerHost(){attachInterface(null,TOKEN);}
  public LayerHost(Context registeredContext){this();context=registeredContext;}
@@ -48,7 +49,7 @@ public class LayerHost extends Binder {
  }catch(Throwable e){recordFailure(e);stop("Unavailable: "+reason(e));}finally{try{fd.close();}catch(IOException ignored){}}}
  void activateNative(){
   NativePhotoLayer candidate=null;
-  try{candidate=new NativePhotoLayer(context,main,s->journal.phase(s),e->fallbackNative(e));candidate.start(bitmap);nativePhoto=candidate;nativeStatus="Native compositor + retained wallpaper windows (below apps)";trace("Native photo active; retaining wallpaper windows through sleep/unlock");}
+  try{candidate=new NativePhotoLayer(context,main,s->journal.phase(s),e->fallbackNative(e));candidate.album=album;candidate.start(bitmap);nativePhoto=candidate;nativeStatus="Native compositor + retained wallpaper windows (below apps)";trace("Native photo active; retaining wallpaper windows through sleep/unlock");}
   catch(Throwable e){if(candidate!=null)candidate.close();recordFailure(e);nativeStatus="Legacy fallback: "+reason(e);journal.phase(nativeStatus);}
  }
  void fallbackNative(Throwable error){recordFailure(error);if(nativePhoto!=null){nativePhoto.close();nativePhoto=null;}nativeStatus="Legacy fallback: "+reason(error);journal.phase(nativeStatus);displayChanged();}
@@ -65,6 +66,7 @@ public class LayerHost extends Binder {
    panel.view.requestLayout();panel.view.postInvalidateOnAnimation();
   }
  }
+ void updateAlbum(PanelPhotos next){PanelPhotos old=album;album=next;if(nativePhoto!=null){nativePhoto.album=next;nativePhoto.refreshDisplays();}if(homePhoto!=null){homePhoto.album=next;homePhoto.refreshGeometry();}for(Panel panel:panels.values())panel.view.invalidate();if(old!=null)old.close();}
  void updatePhoto(Bitmap photo){bitmap=photo;if(homePhoto!=null)homePhoto.setPhoto(photo);if(nativePhoto!=null){try{nativePhoto.setPhoto(photo);}catch(Throwable e){fallbackNative(e);}}for(Panel panel:panels.values())panel.view.invalidate();}
  void recordFailure(Throwable e){
   journal.fail(operation+": "+reason(e));
@@ -96,7 +98,7 @@ public class LayerHost extends Binder {
    protected void onDetachedFromWindow(){trace("Display "+id+" view detached");super.onDetachedFromWindow();}
    final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);protected void onSizeChanged(int w,int h,int oldw,int oldh){super.onSizeChanged(w,h,oldw,oldh);traceNextDraw=true;trace("Display "+id+" resize "+oldw+"x"+oldh+" -> "+w+"x"+h);invalidate();}
    protected void onConfigurationChanged(android.content.res.Configuration config){super.onConfigurationChanged(config);requestLayout();invalidate();}
-   protected void onDraw(Canvas c){super.onDraw(c);Bitmap b=bitmap;if(b==null||b.isRecycled())return;float scale=Math.max((float)getWidth()/b.getWidth(),(float)getHeight()/b.getHeight());float w=b.getWidth()*scale,h=b.getHeight()*scale;c.drawBitmap(b,null,new RectF((getWidth()-w)/2,(getHeight()-h)/2,(getWidth()+w)/2,(getHeight()+h)/2),p);if(traceNextDraw||getTag()!=null){String reason=String.valueOf(getTag());setTag(null);traceNextDraw=false;trace("Display "+id+" photo draw callback "+getWidth()+"x"+getHeight()+"; "+reason);}}};
+   protected void onDraw(Canvas c){super.onDraw(c);PanelPhotos.Photo selected=album==null?null:album.forDisplay(getDisplay(),getWidth(),getHeight());Bitmap b=selected==null?bitmap:selected.bitmap;if(b==null||b.isRecycled())return;float scale=Math.max((float)getWidth()/b.getWidth(),(float)getHeight()/b.getHeight());float w=b.getWidth()*scale,h=b.getHeight()*scale;if(selected!=null)c.drawBitmap(b,selected.crop(getWidth(),getHeight()),new Rect(0,0,getWidth(),getHeight()),p);else c.drawBitmap(b,null,new RectF((getWidth()-w)/2,(getHeight()-h)/2,(getWidth()+w)/2,(getHeight()+h)/2),p);if(traceNextDraw||getTag()!=null){String reason=String.valueOf(getTag());setTag(null);traceNextDraw=false;trace("Display "+id+" photo draw callback "+getWidth()+"x"+getHeight()+"; "+reason);}}};
   view.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
   WindowManager.LayoutParams lp=new WindowManager.LayoutParams(-1,-1,type,WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED|WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN|WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,PixelFormat.OPAQUE);
   lp.packageName=context.getPackageName();lp.setTitle("Duo persistent wallpaper photo");lp.windowAnimations=0;lp.rotationAnimation=WindowManager.LayoutParams.ROTATION_ANIMATION_SEAMLESS;lp.setFitInsetsTypes(0);lp.layoutInDisplayCutoutMode=WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
@@ -111,7 +113,7 @@ public class LayerHost extends Binder {
   new Thread(()->{Pattern p=Pattern.compile("mCurrentAngle=([0-9]+(?:\\.[0-9]+)?)");try(BufferedReader r=new BufferedReader(new InputStreamReader(child.getInputStream()))){String line;while((line=r.readLine())!=null){if(log!=child)return;Matcher m=p.matcher(line);if(!m.find())continue;try{long event=(long)(Double.parseDouble(line.trim().split("\\s+",2)[0])*1000);long age=System.currentTimeMillis()-event;if(age< -100||age>1500)continue;float a=Float.parseFloat(m.group(1));if(a<0||a>180)continue;angle=a;last=SystemClock.elapsedRealtime()-Math.max(age,0);responses++;angles.add(a);}catch(Exception ignored){}}}catch(IOException ignored){}} ,"Samsung angle observation").start();
  }catch(IOException e){details="Angle observation unavailable: "+e;}}
  void removePanels(){for(Panel p:panels.values())p.remove();panels.clear();}
- void stop(String message){if(homePhoto!=null){homePhoto.close();homePhoto=null;}if(nativePhoto!=null){nativePhoto.close();nativePhoto=null;}journal.stopped(message);running=false;main.removeCallbacks(tick);if(listening&&displayManager!=null){displayManager.unregisterDisplayListener(displayListener);listening=false;}removePanels();java.lang.Process old=log;log=null;if(old!=null)old.destroy();bitmap=null;state=message;until=0;}
+ void stop(String message){if(homePhoto!=null){homePhoto.close();homePhoto=null;}if(nativePhoto!=null){nativePhoto.close();nativePhoto=null;}journal.stopped(message);running=false;main.removeCallbacks(tick);if(listening&&displayManager!=null){displayManager.unregisterDisplayListener(displayListener);listening=false;}removePanels();if(album!=null){album.close();album=null;}java.lang.Process old=log;log=null;if(old!=null)old.destroy();bitmap=null;state=message;until=0;}
  String report(){long now=SystemClock.elapsedRealtime();return "Duo Wallpaper Layer 0.13\n"+Build.MODEL+" / Android "+Build.VERSION.RELEASE+"\n"+state+"\n"+journal.report()+"\nRenderer: "+(nativePhoto!=null?nativePhoto.rendererDescription():nativeStatus)+"\nHome transition photo: "+(homePhoto==null?"Unavailable / not started":homePhoto.status)+"\nCurrent operation: "+operation+"\n"+failureTrace+"\n"+(nativePhoto!=null?"Native surfaces active; retained wallpaper windows="+panels.keySet():details)+"\nDuration: "+(running?"Until disabled or host ends":"Stopped")+"\nWindow attaches: "+windowAdds+"; retained configuration changes: "+retainedChanges+"\nRegistered window host UID: "+android.os.Process.myUid()+"\nWallpaper commands attempted: "+requests+"\nAngle observation is supplied separately by the Shizuku launcher.\nRenderer leaves home wallpaper bindings and physical display states unchanged. Separate lock-photo action is reported by the app.";}
 
  static class Panel{final WindowManager wm;final View view;String key;Panel(WindowManager w,View v,String k){wm=w;view=v;key=k;}void remove(){try{wm.removeViewImmediate(view);}catch(Exception ignored){}}}

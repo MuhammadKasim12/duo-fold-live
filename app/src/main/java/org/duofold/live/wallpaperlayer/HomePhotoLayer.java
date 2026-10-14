@@ -111,7 +111,7 @@ final class HomePhotoLayer {
  void commitHome(Entry e){
   if(e.released||closed)return;long epoch=bridgeEpoch;
   try(SurfaceControl.Transaction tx=new SurfaceControl.Transaction()){
-   geometry(tx,e);relative.invoke(tx,e.photo,e.anchor,1);tx.setBuffer(e.photo,buffer).setAlpha(e.photo,1f).setVisibility(e.photo,true);
+   geometry(tx,e);relative.invoke(tx,e.photo,e.anchor,1);tx.setAlpha(e.photo,1f).setVisibility(e.photo,true);
    tx.addTransactionCommittedListener(command->main.post(command),()->{if(closed||epoch!=bridgeEpoch||e.released||entries.get(e.target.display)!=e)return;e.homeReadyEpoch=epoch;note.accept("Wake photo Home transaction committed; epoch="+epoch+"; display="+e.target.display+"; window="+e.target.window+"; locked="+keyguardLocked());homeReady(e);});tx.apply();
   }catch(Throwable error){note.accept("Wake photo Home commit failed: "+failure(error));}
  }
@@ -141,6 +141,7 @@ final class HomePhotoLayer {
    }else {tx.apply();finishBridge(e.target.display,"Home handoff after full 1000 ms hold");}
   }catch(Throwable error){note.accept("Wake photo handoff failed: "+failure(error));finishBridge(e.target.display,"hold complete; handoff failed");}
  }
+ PanelPhotos album;
  Bitmap hardware;HardwareBuffer buffer;
  HomePhotoLayer(Context c,UiAutomation a,Handler h,Consumer<String> n,Bitmap photo,IntFunction<SurfaceControl> parent)throws Exception{
   context=c;automation=a;main=h;note=n;photoParent=parent;
@@ -270,6 +271,8 @@ final class HomePhotoLayer {
   Rect src=new Rect(0,0,hardware.getWidth(),hardware.getHeight());float scale=Math.max((float)size.x/src.width(),(float)size.y/src.height());
   int w=Math.min(src.width(),Math.max(1,Math.round(size.x/scale))),h=Math.min(src.height(),Math.max(1,Math.round(size.y/scale)));
   src.set((hardware.getWidth()-w)/2,(hardware.getHeight()-h)/2,(hardware.getWidth()+w)/2,(hardware.getHeight()+h)/2);
+  PanelPhotos.Photo selected=album==null?null:album.forDisplay(d,size.x,size.y);
+  if(selected!=null){src=selected.crop(size.x,size.y);tx.setBuffer(e.photo,selected.buffer());}else tx.setBuffer(e.photo,buffer);
   tx.setGeometry(e.photo,src,new Rect(0,0,size.x,size.y),Surface.ROTATION_0);
  }
  void refreshGeometry(){if(closed)return;syncWakeTest();try(SurfaceControl.Transaction tx=new SurfaceControl.Transaction()){for(Entry e:entries.values())geometry(tx,e);for(Entry e:bridges.values())if(e.photo!=null)geometry(tx,e);tx.apply();}catch(Exception e){status="Home photo geometry waiting: "+e.getClass().getSimpleName();}}

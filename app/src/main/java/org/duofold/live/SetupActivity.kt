@@ -81,7 +81,7 @@ class SetupActivity : ComponentActivity() {
   stage=if(intent.getBooleanExtra("repair",false)) 2 else prefs.getInt("step",0)
   Shizuku.addRequestPermissionResultListener(listener)
   setContent {
-   MaterialTheme(colorScheme=darkColorScheme(primary=Color(0xffc9bdff),background=Color(0xff10121c),surface=Color(0xff1b1e2b))){
+   DuoTheme{
     val scope=rememberCoroutineScope()
     var custom by remember{mutableStateOf(prefs.getBoolean("custom",false))}
     var hasPhoto by remember{mutableStateOf(File(filesDir,"photo.jpg").exists())}

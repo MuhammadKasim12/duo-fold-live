@@ -13,3 +13,7 @@ After the main priorities:
 4. Intermittent rotation recovery.
 5. On-device validation of direct root support.
 6. Revisit residual custom wallpaper unlock flash edge cases.
+
+
+## 3.5.5-alpha.14 — wallpaper studio preview
+Independent cover/inner photos and crop controls, shared rendering selection, and an app visual refresh. Existing advanced wallpaper controls retained. Validate on-device before promotion; remap flash remains tabled. See `3.5.5-alpha.14-CHANGELOG.md`.
