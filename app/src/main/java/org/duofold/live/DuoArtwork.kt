@@ -27,8 +27,8 @@ import androidx.compose.ui.unit.dp
  }
 }
 @Composable internal fun WallpaperInvitation(){
- Row(Modifier.fillMaxWidth().height(112.dp).background(Brush.linearGradient(listOf(Color(0xff253c52),Color(0xff302b49))),RoundedCornerShape(20.dp)).padding(16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(20.dp)){
-  Canvas(Modifier.width(100.dp).fillMaxHeight()){
+ Row(Modifier.fillMaxWidth().heightIn(min=112.dp).background(Brush.linearGradient(listOf(Color(0xff253c52),Color(0xff302b49))),RoundedCornerShape(20.dp)).padding(16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(20.dp)){
+  Canvas(Modifier.width(100.dp).height(80.dp)){
    val h=size.height;val w=size.width
    drawRoundRect(Brush.linearGradient(listOf(Color(0xffb8d9ed),Color(0xff718cc1))),Offset.Zero,Size(w*.34f,h),CornerRadius(8.dp.toPx()))
    drawRoundRect(Brush.linearGradient(listOf(Color(0xffafc8bc),Color(0xff7d76b1))),Offset(w*.43f,h*.16f),Size(w*.57f,h*.68f),CornerRadius(8.dp.toPx()))

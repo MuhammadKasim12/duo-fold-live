@@ -79,7 +79,11 @@ class WallpaperStudioActivity:ComponentActivity() {
    while(true){enabled=WallpaperRestore.enabled(this@WallpaperStudioActivity);running=WallpaperRestore.status;delay(1000)}
   }
   var bitmap by remember{mutableStateOf<Bitmap?>(null)}
-  LaunchedEffect(draft.file,resumeEpoch){bitmap=null;if(draft.file.isNotEmpty())bitmap=withContext(Dispatchers.IO){BitmapFactory.decodeFile(File(filesDir,draft.file).path)}}
+  LaunchedEffect(draft.file,resumeEpoch){bitmap=null;if(draft.file.isNotEmpty())bitmap=withContext(Dispatchers.IO){val file=File(filesDir,draft.file).path
+    val options=BitmapFactory.Options().apply{inJustDecodeBounds=true};BitmapFactory.decodeFile(file,options)
+    options.inJustDecodeBounds=false;options.inSampleSize=1
+    while(maxOf(options.outWidth,options.outHeight)/options.inSampleSize>1536)options.inSampleSize*=2
+    BitmapFactory.decodeFile(file,options)}}
   val picker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->if(uri!=null){
    val panel=selected;busy=true
    scope.launch{try{
