@@ -79,7 +79,6 @@ class MainActivity:ComponentActivity(){
     var dual by remember{mutableStateOf(prefs.getBoolean("dual",false))}
     var jitterProtection by remember{mutableStateOf(prefs.getBoolean("closed_hinge_jitter_protection",true))}
     var closingAppReturn by remember{mutableStateOf(prefs.getBoolean("closing_app_return",false))}
-    var powerOverride by remember{mutableStateOf(prefs.getBoolean("screenshot_remap_power_hold",true))}
     var screenshotStartup by remember{mutableStateOf(prefs.getBoolean("screenshot_camera_startup",false))}
     var advanced by remember{mutableStateOf(false)}
     LaunchedEffect(developerShortcut){
@@ -419,11 +418,10 @@ class MainActivity:ComponentActivity(){
         Toggle("Dual-screen screenshot handoff",dual){selectFoldingMode(it)}
         Text(if(dual)"Active path: dual-screen screenshot handoff" else "Active path: normal handoff. The next two switches are inactive while dual-screen handoff is OFF.",style=MaterialTheme.typography.bodySmall)
         Toggle("Screenshot window-first startup (experimental)",screenshotStartup){screenshotStartup=it;booleanSetting("screenshot_camera_startup",it)}
-        Toggle("Hold displays ON during primary switch (experimental)",powerOverride){powerOverride=it;booleanSetting("screenshot_remap_power_hold",it)}
-        Text("Requires both screenshot handoff options above. Requests Samsung ON overrides immediately before the primary-panel switch, waits up to 500 ms for the API result, and releases the overrides after two seconds. Default ON for this test build. May be rejected or delay the switch; compare ON versus OFF and copy the short report.",style=MaterialTheme.typography.bodySmall)
+        Text("Screenshot mode keeps the outgoing panel primary until the endpoint. The earlier mid-fold ON-hold experiment is inactive.",style=MaterialTheme.typography.bodySmall)
         Text("Requires Dual-screen screenshot handoff ON. Diagnostic: commits the outgoing screenshot, then wakes the incoming panel while keeping the outgoing screen on. The selected animation runs over incoming app content. Final native-layout switch may still flash. Maximum hold: 30 seconds. Turn this off to restore the original screenshot path.",style=MaterialTheme.typography.bodySmall)
         Toggle("Closing app-first return (experimental)",closingAppReturn){closingAppReturn=it;booleanSetting("closing_app_return",it)}
-        Text("Legacy setting, inactive in the current window-first experiment: the selected app now follows the incoming primary at the handoff angle.",style=MaterialTheme.typography.bodySmall)
+        Text("Legacy setting, inactive in the current window-first experiment: the selected app returns after the incoming panel becomes primary at the fold endpoint.",style=MaterialTheme.typography.bodySmall)
         Text("Cover preview is on by default; screenshot handoff is off. Debug changes the shading only.",style=MaterialTheme.typography.bodySmall)
         Text(GlassFrames.status,style=MaterialTheme.typography.bodySmall)
         Text(HandoffFrames.status,style=MaterialTheme.typography.bodySmall)
