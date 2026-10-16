@@ -14,7 +14,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.*
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -115,13 +116,20 @@ class WallpaperStudioActivity:ComponentActivity() {
      val shape=RoundedCornerShape(if(selected==0)28.dp else 22.dp)
      Box(Modifier.widthIn(max=if(selected==0)230.dp else 420.dp).fillMaxWidth().aspectRatio(aspect).clip(shape).background(Color(0xff202837)).border(2.dp,MaterialTheme.colorScheme.outlineVariant,shape)){
       val image=bitmap
-      if(image!=null)Canvas(Modifier.fillMaxSize().semantics{contentDescription="${if(selected==0)"Cover" else "Inner"} wallpaper crop preview. Drag to reposition, pinch to zoom; sliders below offer the same controls."}.pointerInput(image,selected,busy){if(!busy)detectTransformGestures{_,pan,zoom,_->
-       val current=WallpaperDraft.parse(if(selected==0)coverJson else innerJson)
-       val nextZoom=(current.zoom*zoom).coerceIn(1f,4f)
-       val crop=WallpaperCrop.rect(image.width,image.height,size.width,size.height,nextZoom,current.x,current.y)
-       val rangeX=image.width-(crop[2]-crop[0]);val rangeY=image.height-(crop[3]-crop[1])
-       val scale=size.width.toFloat()/(crop[2]-crop[0])
-       update(current.copy(zoom=nextZoom,x=if(rangeX>0)(current.x-pan.x/scale/rangeX).coerceIn(0f,1f) else .5f,y=if(rangeY>0)(current.y-pan.y/scale/rangeY).coerceIn(0f,1f) else .5f))
+      if(image!=null)Canvas(Modifier.fillMaxSize().semantics{contentDescription="${if(selected==0)"Cover" else "Inner"} wallpaper crop preview. Drag to reposition, pinch to zoom; sliders below offer the same controls."}.pointerInput(image,selected,busy){if(!busy)awaitEachGesture {
+       // Claim touches inside the preview before the scrolling page can intercept them.
+       awaitFirstDown(requireUnconsumed=false,pass=PointerEventPass.Initial).consume()
+       do {
+        val event=awaitPointerEvent(PointerEventPass.Initial)
+        val pan=event.calculatePan();val zoom=event.calculateZoom()
+        val centroid=event.calculateCentroid(useCurrent=false)
+        if(centroid.x.isFinite()&&centroid.y.isFinite()&&(pan.x!=0f||pan.y!=0f||zoom!=1f)){
+         val current=WallpaperDraft.parse(if(selected==0)coverJson else innerJson)
+         val next=WallpaperCrop.transform(image.width,image.height,size.width,size.height,current.zoom,current.x,current.y,centroid.x,centroid.y,pan.x,pan.y,zoom)
+         update(current.copy(zoom=next[0],x=next[1],y=next[2]))
+        }
+        event.changes.forEach{it.consume()}
+       }while(event.changes.any{it.pressed})
       }}){
        val r=WallpaperCrop.rect(image.width,image.height,size.width.toInt(),size.height.toInt(),draft.zoom,draft.x,draft.y)
        drawContext.canvas.nativeCanvas.drawBitmap(image,android.graphics.Rect(r[0],r[1],r[2],r[3]),android.graphics.RectF(0f,0f,size.width,size.height),android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))

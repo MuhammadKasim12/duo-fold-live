@@ -11,5 +11,15 @@ public final class WallpaperCrop {
   int left=Math.round((width-w)*x),top=Math.round((height-h)*y);
   return new int[]{left,top,left+w,top+h};
  }
+ /** Keep the image point under the pinch centroid fixed while applying pan in preview pixels. */
+ public static float[] transform(int w,int h,int tw,int th,float zoom,float x,float y,float cx,float cy,float dx,float dy,float factor){
+  zoom=bounded(zoom,1,4,1);x=bounded(x,0,1,.5f);y=bounded(y,0,1,.5f);
+  float next=bounded(zoom*factor,1,4,zoom);
+  float base=Math.max((float)tw/w,(float)th/h),oldScale=base*zoom,scale=base*next;
+  float oldW=tw/oldScale,oldH=th/oldScale,newW=tw/scale,newH=th/scale;
+  float left=(w-oldW)*x+cx/oldScale-(cx+dx)/scale;
+  float top=(h-oldH)*y+cy/oldScale-(cy+dy)/scale;
+  return new float[]{next,w-newW>.001f?bounded(left/(w-newW),0,1,.5f):.5f,h-newH>.001f?bounded(top/(h-newH),0,1,.5f):.5f};
+ }
  public static boolean cover(int width,int height){return (double)Math.min(width,height)/Math.max(width,height)<.72;}
 }
