@@ -135,6 +135,7 @@ final class CoverHandoff {
   }catch(Exception e){owned=previous;innerHeld=previousInner;releaseOwned();Throwable root=e;while(root.getCause()!=null)root=root.getCause();status="Handoff unavailable: "+root.getClass().getSimpleName()+": "+root.getMessage();}
   finally{Binder.restoreCallingIdentity(identity);}
  }
+ synchronized boolean innerActive(){return owned!=null && innerHeld;}
  synchronized boolean active(){return owned!=null && !innerHeld;}
  synchronized void release(){prewarm.reset();probe.abort();nativeProbe.update(false,0,false);releaseOwned();}
  private void releaseOwned(){

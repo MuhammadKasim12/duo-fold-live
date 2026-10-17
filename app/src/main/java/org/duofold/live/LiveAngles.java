@@ -56,6 +56,7 @@ public final class LiveAngles {
  public static String handoffStatus="Normal display control";
  public static String status="Angle reader off";
  public static String closedHingeReport="Closed-hinge jitter protection: awaiting helper";
+ public static float currentAngle(){return angle;}
  public static long ageMs(){return last==0?-1:SystemClock.elapsedRealtime()-last;}
  public static boolean fresh(){return last>0 && SystemClock.elapsedRealtime()-last<750;}
  public static void add(Listener l){listeners.add(l);if(fresh())l.angle(angle,last*1000000L);}

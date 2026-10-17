@@ -277,13 +277,13 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private fun trackReadyFrame(rendered:GlassFrame?,endpoint:Boolean){
   if(preview || frozen || readinessPending)return
   if(!inner){
-   if(display?.displayId!=0 || rendered==null || !CoverStartupTrace.needsCommit())return
+   if((!CoverStartupTrace.needsCommit() && !PreviewTransition.needsCoverCommit()) || reflectedCover || display?.displayId!=0 || rendered==null || rendered.stamp==lastReadyCapture || rendered.physicalId!=CoverBridge.identity(display) || rendered.width!=width || rendered.height!=height)return
    val gen=readinessGeneration;val episode=CoverStartupTrace.episode
    val note="capture=${rendered.stamp}; size=${rendered.width}x${rendered.height}; view=${width}x${height}; angle=$targetAngle; visual=$renderedAngle; amount=$amount; smoothing=$smoothingMs"
    readinessPending=true
    try{SurfaceControl.Transaction().use { transaction ->
     transaction.addTransactionCommittedListener(context.mainExecutor){
-     if(gen==readinessGeneration && holder.surface.isValid){readinessPending=false;CoverStartupTrace.commit(episode,note)}
+     if(gen==readinessGeneration && holder.surface.isValid && rendered.physicalId==CoverBridge.identity(display)){readinessPending=false;lastReadyCapture=rendered.stamp;CoverStartupTrace.commit(episode,note);PreviewTransition.coverFrameCommitted(rendered)}
     }
     applyTransactionToFrame(transaction)
    }}catch(e:Exception){readinessPending=false;CoverStartupTrace.event("COMMIT unavailable: ${e.javaClass.simpleName}")}
