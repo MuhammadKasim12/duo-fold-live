@@ -3,7 +3,7 @@ import org.junit.Assert.*
 import org.junit.Test
 class OnboardingPolicyTest {
  @Test fun startupDefaultsDoNotSkipFreshSetup(){
-  val keys=setOf("auto_keep_cover_awake","cover_preview","dual","defaults_170_applied","animation_mode","preview_default_203")
+  val keys=setOf("keep_awake_opt_in","auto_keep_cover_awake","cover_preview","dual","defaults_170_applied","animation_mode","preview_default_203")
   assertFalse(OnboardingPolicy.hasLegacySettings(keys))
   assertTrue(OnboardingPolicy.needsSetup(0,OnboardingPolicy.hasLegacySettings(keys),false))
  }

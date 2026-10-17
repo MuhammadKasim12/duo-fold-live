@@ -13,6 +13,7 @@ public final class RuntimeControls {
   FoldAwakeDefault.setEnabled(c,false);
   try{WallpaperRestore.setEnabled(c,false);}catch(java.io.IOException e){RecoveryLog.add("Wallpaper stop: "+e.getMessage());}
   WallpaperRestore.reconnect();
+  LiveAngles.stopCurrent();
   StandaloneService s=StandaloneService.Companion.getInstance();if(s!=null)s.restart();
   c.stopService(new Intent(c,FoldBackgroundService.class));
  }

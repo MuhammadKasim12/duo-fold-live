@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 
 /** Disclosures are separate, with explicit acceptance before access is used. */
 class PrivacyActivity:ComponentActivity(){
@@ -24,6 +25,8 @@ class PrivacyActivity:ComponentActivity(){
    val access=remember(revision){RuntimeConsent.accepted(this,"accessibility")}
    val screen=remember(revision){RuntimeConsent.accepted(this,"screen")}
    var awake by remember{mutableStateOf(FoldAwakeDefault.enabled(this))}
+   var awakeStatus by remember{mutableStateOf(FoldAwakeDefault.status)}
+   LaunchedEffect(Unit){while(true){awakeStatus=FoldAwakeDefault.status;delay(500)}}
    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
     Text("Privacy & controls",style=MaterialTheme.typography.headlineMedium)
     Text("Choose whether to enable Duo’s access. Declining leaves the animation off. You can withdraw consent and stop background work here at any time.")
@@ -33,7 +36,7 @@ class PrivacyActivity:ComponentActivity(){
     Text("Keep cover awake on close",style=MaterialTheme.typography.titleMedium)
     Text("Optional. Changes Samsung’s fold-lock setting and uses a bounded wake hold during closing. May increase battery use. Power-button locking is unchanged. Turning this off restores the setting recorded before Duo changed it, if it has not since been changed elsewhere. For upgrades from older builds, the original setting is unknown; check Samsung’s Lock when folded setting yourself.")
     Switch(checked=awake,enabled=access&&screen,onCheckedChange={awake=it;FoldAwakeDefault.setEnabled(this,it);if(it)org.duofold.live.wallpaperlayer.WallpaperRestore.resume(this)})
-    Text(FoldAwakeDefault.status,style=MaterialTheme.typography.bodySmall)
+    Text(awakeStatus,style=MaterialTheme.typography.bodySmall)
     Button(onClick={RuntimeControls.stopAll(this);awake=false;revision++}){Text("Stop all Duo background work")}
     OutlinedButton(onClick={RuntimeConsent.withdraw(this);awake=false;revision++}){Text("Withdraw both consents & stop")}
     Text("Stopping retains your photos and preferences. Android permissions remain granted until you revoke them in Settings. Samsung’s underlying home wallpaper remains installed; choose another wallpaper in Samsung Settings if desired.",style=MaterialTheme.typography.bodySmall)

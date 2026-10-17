@@ -30,6 +30,7 @@ final class SupportPrompts {
   return p;
  }
  private static boolean due(Context c){
+  if(BuildConfig.IS_PLAY)return false;
   SharedPreferences p=schedule(c);return SupportPromptPolicy.due(System.currentTimeMillis(),p.getLong("first_use",0),p.getLong("next_due",0),p.getLong("last_invitation",0),p.getLong("snooze_until",0),!enabled(c),working(c));
  }
  private static void seen(Context c){
