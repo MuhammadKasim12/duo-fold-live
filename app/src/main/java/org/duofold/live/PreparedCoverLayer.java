@@ -8,6 +8,7 @@ import android.view.SurfaceControl;
 /** Helper-owned black cover reveal buffer. Never resizes with the app's primary SurfaceView. */
 final class PreparedCoverLayer {
  private final Handler handler;
+ private final CoverLayerCleanup cleanup;
  private Object dm,wm,power;
  private java.lang.reflect.Method info,locked,interactive;
  private SurfaceControl layer;
@@ -23,7 +24,7 @@ final class PreparedCoverLayer {
  private volatile String trace="Prepared cover layer idle";
  private synchronized void event(String text){trace+="\n"+SystemClock.elapsedRealtime()+": "+text;if(trace.length()>5000)trace=trace.substring(trace.length()-5000);}
  String report(){return "Prepared cover layer (software commits, not optical visibility):\n"+trace;}
- PreparedCoverLayer(Handler handler){this.handler=handler;}
+ PreparedCoverLayer(Handler handler){this.handler=handler;cleanup=new CoverLayerCleanup(this::event);}
  void control(boolean value,float angle,float handoff){
   this.angle=angle;this.handoff=handoff;lease=SystemClock.elapsedRealtime();
   boolean changed=enabled!=value;enabled=value;
@@ -51,7 +52,7 @@ final class PreparedCoverLayer {
  void prepare(long captured,String source,int sourceRotation){
   handler.post(()->{Bitmap projected=null,next=null;HardwareBuffer nextBuffer=null;try{
    init();long now=SystemClock.elapsedRealtime();
-   if(!allowed() || start>0 || !CoverBridgePolicy.freshSource(now,captured))return;
+   if(!allowed() || cleanup.pending() || start>0 || !CoverBridgePolicy.freshSource(now,captured))return;
    Object primary=info.invoke(dm,0),secondary=info.invoke(dm,1);
    if(primary==null||secondary==null||!inner(primary)||inner(secondary)||!id(primary).equals(source)||n(primary,"rotation")!=sourceRotation||n(secondary,"rotation")!=sourceRotation)return;
    int w=n(secondary,"logicalWidth"),h=n(secondary,"logicalHeight");String physical=id(secondary);
@@ -120,11 +121,16 @@ final class PreparedCoverLayer {
   handler.postDelayed(this,4);
  }catch(Exception e){clear("tracking failed: "+e.getMessage());}}};
  private void clear(String reason){
-  if(layer!=null || start>0)event("CLEAR "+reason+"; held="+(start==0?0:SystemClock.elapsedRealtime()-start)+"ms");
+  if(layer!=null || start>0)event("CLEAR_REQUEST "+reason+"; held="+(start==0?0:SystemClock.elapsedRealtime()-start)+"ms");
   generation++;if(gate!=null)gate.abort(reason);handler.removeCallbacks(tick);start=0;ready=0;stack=-1;
-  if(layer!=null){try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){t.setVisibility(layer,false).reparent(layer,null).apply();}catch(Exception ignored){}layer.release();layer=null;}
-  if(buffer!=null){buffer.close();buffer=null;}if(hardware!=null){hardware.recycle();hardware=null;}
+  if(layer!=null){
+   SurfaceControl retired=layer;HardwareBuffer retiredBuffer=buffer;Bitmap retiredBitmap=hardware;
+   layer=null;buffer=null;hardware=null;
+   cleanup.retire(retired,retiredBuffer,retiredBitmap,reason);
+  }else{
+   if(buffer!=null){buffer.close();buffer=null;}if(hardware!=null){hardware.recycle();hardware=null;}
+  }
  }
  void reset(){handler.post(()->clear("app disabled bridge"));}
- void close(){enabled=false;handler.post(()->clear("helper stopped"));}
+ void close(){enabled=false;handler.post(()->{clear("helper stopped");cleanup.close();});}
 }
