@@ -420,7 +420,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
    val started=SystemClock.elapsedRealtimeNanos()
    val canvas=windowCanvas ?: holder.lockHardwareCanvas()
    val lockedAt=SystemClock.elapsedRealtimeNanos()
-   val windowSave=if(windowCanvas!=null)canvas.saveLayer(0f,0f,width.toFloat(),height.toFloat(),null) else -1
+   val windowSave=if(windowCanvas!=null && !recordingSubmission)canvas.saveLayer(0f,0f,width.toFloat(),height.toFloat(),null) else -1
    var rendered:GlassFrame?=null
    var endpoint=false
    try{
@@ -532,7 +532,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
       holder.unlockCanvasAndPost(canvas)
      }
     }else {
-     canvas.restoreToCount(windowSave)
+     if(windowSave>=0)canvas.restoreToCount(windowSave)
      if(recordingSubmission && (rendered!=null || endpoint))trackReadyFrame(rendered,endpoint)
     }
     val postedAt=SystemClock.elapsedRealtimeNanos()
