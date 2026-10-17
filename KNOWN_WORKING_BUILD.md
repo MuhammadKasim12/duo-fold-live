@@ -6,6 +6,11 @@ User approved 3.5.4-alpha.7 cover-close behavior for stable promotion on 2026-10
 - Stable: [v3.5.4](https://github.com/joeconsorti/duo-fold-live/releases/tag/v3.5.4).
 - Preserve all historical releases and signing identity. Optical behavior still requires handset testing; the separate mid-fold switch and wallpaper unlock flash are not claimed fixed.
 
+## 3.5.5 pre-release checkpoints — 2026-10-17
+
+- **Before performance cleanup: 3.5.5-alpha.32**, [CI 202](https://github.com/joeconsorti/duo-fold-live/releases/tag/ci-202-1), source `4d33937b2e0e6a73e0a3f6d1e7c71da7b63fd1e6`. User-approved black reveal and confirmed layer cleanup; preserve as the pre-optimization comparison/rollback build.
+- **Retained candidate: 3.5.5-alpha.33**, [CI 203](https://github.com/joeconsorti/duo-fold-live/releases/tag/ci-203-1), source `62e3b1a02076fe39a531ddeeba9e9efa3aeda374`. User approved keeping the performance cleanup. No APK shrinking. Next requested change is the launcher icon, pending preview approval; main/stable has not been promoted.
+
 ## Historical wallpaper rollback record
 
 # Wallpaper rollback baseline — preserve alpha.13
