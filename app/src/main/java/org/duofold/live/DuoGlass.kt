@@ -314,7 +314,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private val choreographer=Choreographer.getInstance()
  private val vsync=Choreographer.FrameCallback { now ->
   frameQueued=false
-  if(holder.surface.isValid && dirty){
+  if(holder.surface.isValid && dirty && !submissionBusy){
    dirty=false
    if(!preview && targetAngle.isFinite() && LiveAngles.fresh()){
     val dt=if(lastFrameNanos==0L)8.33f else ((now-lastFrameNanos)/1_000_000f).coerceIn(1f,50f)
@@ -325,11 +325,11 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
       else DuoShadeCurve.progress(renderedAngle,inner,openThreshold)
    }
    lastFrameNanos=now
-   drawFrame()
+   if(useAsyncSubmission())drawAsyncFrame() else drawFrame()
    if(!preview && LiveAngles.fresh() && targetAngle.isFinite() && kotlin.math.abs(renderedAngle-targetAngle)>=.01f)requestDraw()
   }
  }
- private fun requestDraw(){dirty=true;if(!frameQueued && holder.surface.isValid){frameQueued=true;choreographer.postFrameCallback(vsync)}}
+ private fun requestDraw(){dirty=true;if(!frameQueued && !submissionBusy && holder.surface.isValid){frameQueued=true;choreographer.postFrameCallback(vsync)}}
  private fun preferFastRefresh(){
   val rate=display?.supportedModes?.filter{it.physicalWidth==display?.mode?.physicalWidth && it.physicalHeight==display?.mode?.physicalHeight}?.maxOfOrNull{it.refreshRate}?.coerceAtMost(120f) ?: 60f
   if(rate!=appliedRate && holder.surface.isValid)runCatching{holder.surface.setFrameRate(rate,Surface.FRAME_RATE_COMPATIBILITY_DEFAULT,Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS);appliedRate=rate}
@@ -360,11 +360,61 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
   if(!preview){removeCallbacks(clearGuard);postDelayed(clearGuard,100)}
  }
  override fun surfaceChanged(h:SurfaceHolder,format:Int,w:Int,height:Int){readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(!preview){GlassFrames.surface(this,surfaceControl);if(!reflectedCover)GlassFrames.requestFreshCapture();if(!reflectedCover && context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true) && !context.getSharedPreferences("standalone",0).getBoolean("dual",false))PreviewTransition.markAnimation(surfaceControl)};preferFastRefresh();requestDraw()}
- override fun surfaceDestroyed(h:SurfaceHolder){removeCallbacks(clearGuard);paintedEffect=false;fallback("");readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
+ override fun surfaceDestroyed(h:SurfaceHolder){stopSubmission();removeCallbacks(clearGuard);paintedEffect=false;fallback("");readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
+ // Main owns the shader, geometry and recording. The worker exclusively owns the
+ // hardware canvas lock/draw/post. Never mutate the recording while it is in flight.
+ // Coalesce requests into dirty; do not queue captured frames behind a slow post.
+ private var submitter:LiveSurfaceSubmitter?=null
+ private var submissionBusy=false
+ private val submissionNode=RenderNode("Duo live submission")
+ private fun useAsyncSubmission()=!preview && !frozen && diagnosticMode==0 &&
+  !context.getSharedPreferences("standalone",0).getBoolean("dual",false)
+ private fun stopSubmission(){
+  val old=submitter;submitter=null
+  old?.close() // SurfaceHolder requires all worker access to end before destruction returns.
+  submissionBusy=false
+  submissionNode.discardDisplayList()
+ }
+ private fun drawAsyncFrame(){
+  if(width<=0 || height<=0)return
+  val worker=submitter ?: LiveSurfaceSubmitter(holder).also{submitter=it}
+  val generation=readinessGeneration
+  val panelInner=inner
+  val rate=appliedRate
+  val started=SystemClock.elapsedRealtimeNanos()
+  val recordWidth=bufferWidth.takeIf{it>0} ?: width
+  val recordHeight=bufferHeight.takeIf{it>0} ?: height
+  submissionNode.setPosition(0,0,recordWidth,recordHeight)
+  val recording=submissionNode.beginRecording(recordWidth,recordHeight)
+  recording.scale(recordWidth.toFloat()/width,recordHeight.toFloat()/height)
+  try{drawFrame(recording,true)}finally{submissionNode.endRecording()}
+  val recorded=SystemClock.elapsedRealtimeNanos()
+  submissionBusy=true
+  worker.submit(submissionNode,recordWidth,recordHeight){locked,drawn,posted,error ->
+   // The worker never waits for this callback, including during surface teardown.
+   context.mainExecutor.execute{
+    if(submitter===worker){
+     submissionBusy=false
+     if(error!=null){
+      readinessGeneration++;readinessPending=false
+      RecoveryLog.add("Live surface submission failed: ${error.javaClass.simpleName}: ${error.message}")
+     }else if(generation==readinessGeneration){
+      FrameTelemetry.record(panelInner,posted,posted-started,rate)
+     }
+     val now=SystemClock.elapsedRealtime()
+     if(now-lastSlowCanvasLog>=1000 && posted-recorded>=32_000_000L){
+      lastSlowCanvasLog=now
+      RecoveryLog.add("Live worker canvas: panel=${if(panelInner)"inner" else "cover"}; record=${(recorded-started)/1_000_000} ms; queue+lock=${(locked-recorded)/1_000_000} ms; draw=${(drawn-locked)/1_000_000} ms; buffer post=${(posted-drawn)/1_000_000} ms; main completion=${(SystemClock.elapsedRealtimeNanos()-posted)/1_000_000} ms; current=${generation==readinessGeneration}")
+     }
+     if(dirty)requestDraw()
+    }
+   }
+  }
+ }
  /** Reuse the exact shader painter in a normal window View, without attaching this SurfaceView. */
  fun drawEmbedded(canvas:Canvas){drawFrame(canvas)}
  private var lastSlowCanvasLog=0L
- private fun drawFrame(windowCanvas:Canvas?=null){
+ private fun drawFrame(windowCanvas:Canvas?=null,recordingSubmission:Boolean=false){
   if((windowCanvas==null && !holder.surface.isValid) || width<=0 || height<=0)return
   runCatching{
    val started=SystemClock.elapsedRealtimeNanos()
@@ -481,9 +531,12 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
       readinessDone=SystemClock.elapsedRealtimeNanos()
       holder.unlockCanvasAndPost(canvas)
      }
-    }else canvas.restoreToCount(windowSave)
+    }else {
+     canvas.restoreToCount(windowSave)
+     if(recordingSubmission && (rendered!=null || endpoint))trackReadyFrame(rendered,endpoint)
+    }
     val postedAt=SystemClock.elapsedRealtimeNanos()
-    if(!preview)FrameTelemetry.record(inner,postedAt,postedAt-started,appliedRate)
+    if(!preview && !recordingSubmission)FrameTelemetry.record(inner,postedAt,postedAt-started,appliedRate)
     val now=SystemClock.elapsedRealtime()
     if(windowCanvas==null && !preview && !frozen && postedAt-started>=32_000_000L && now-lastSlowCanvasLog>=1000 && !context.getSharedPreferences("standalone",0).getBoolean("dual",false)){
      lastSlowCanvasLog=now
