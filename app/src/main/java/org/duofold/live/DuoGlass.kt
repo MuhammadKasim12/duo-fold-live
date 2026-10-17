@@ -475,15 +475,19 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     // Only successful glass rendering or a deliberate fully-open clear qualifies.
     // Attach before posting this buffer. A fallback draw never sends readiness.
     val paintedAt=SystemClock.elapsedRealtimeNanos()
+    var readinessDone=paintedAt
     if(windowCanvas==null){
-     try{if(rendered!=null || endpoint)trackReadyFrame(rendered,endpoint)}finally{holder.unlockCanvasAndPost(canvas)}
+     try{if(rendered!=null || endpoint)trackReadyFrame(rendered,endpoint)}finally{
+      readinessDone=SystemClock.elapsedRealtimeNanos()
+      holder.unlockCanvasAndPost(canvas)
+     }
     }else canvas.restoreToCount(windowSave)
     val postedAt=SystemClock.elapsedRealtimeNanos()
     if(!preview)FrameTelemetry.record(inner,postedAt,postedAt-started,appliedRate)
     val now=SystemClock.elapsedRealtime()
     if(windowCanvas==null && !preview && !frozen && postedAt-started>=32_000_000L && now-lastSlowCanvasLog>=1000 && !context.getSharedPreferences("standalone",0).getBoolean("dual",false)){
      lastSlowCanvasLog=now
-     RecoveryLog.add("Live canvas stages: panel=${if(inner)"inner" else "cover"}; lock=${(lockedAt-started)/1_000_000} ms; paint=${(paintedAt-lockedAt)/1_000_000} ms; readiness/post=${(postedAt-paintedAt)/1_000_000} ms")
+     RecoveryLog.add("Live canvas stages: panel=${if(inner)"inner" else "cover"}; lock=${(lockedAt-started)/1_000_000} ms; paint=${(paintedAt-lockedAt)/1_000_000} ms; readiness=${(readinessDone-paintedAt)/1_000_000} ms; buffer post=${(postedAt-readinessDone)/1_000_000} ms")
     }
    }
   }.onFailure{readinessGeneration++;readinessPending=false;RecoveryLog.add("Glass draw error: ${it.javaClass.simpleName}: ${it.message}")}

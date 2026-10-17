@@ -41,7 +41,7 @@ internal object GlassFrames {
  private fun resetMeasurement(){measuredStart=SystemClock.elapsedRealtime();measuredFrames=0;measuredFps=0f}
  fun acquire(){clients++;if(clients==1){resetMeasurement();generation++;main.post(tick)}}
  fun release(){clients=(clients-1).coerceAtLeast(0);if(clients==0){generation++;frame=null;main.removeCallbacks(tick)}}
- private var urgentUntil=0L
+ @Volatile private var urgentUntil=0L
  fun requestFreshCapture(){
   generation++;frame=null;urgentUntil=SystemClock.elapsedRealtime()+900
   main.removeCallbacks(tick)
@@ -68,7 +68,9 @@ internal object GlassFrames {
    val capturedBitmap=response?.getParcelable("bitmap",Bitmap::class.java)
    val pyramid=if((!liveCapture || gen==generation)&&response?.getBoolean("ok")==true&&capturedBitmap!=null)runCatching{levels(capturedBitmap)}.getOrDefault(emptyList()) else emptyList()
    val processingDone=SystemClock.elapsedRealtimeNanos()
+   val deliveryProbe=if(liveCapture && SystemClock.elapsedRealtime()<urgentUntil)LiveDeliveryProbe.begin("capture D$captureDisplay gen=$gen") else null
    main.post{
+    deliveryProbe?.finish()
     pending=false
     val delivered=SystemClock.elapsedRealtimeNanos()
     val accepted=gen==generation && clients>0 && !suspended && captureDisplay==targetCaptureDisplay()
