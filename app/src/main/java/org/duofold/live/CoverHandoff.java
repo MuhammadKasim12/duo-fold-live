@@ -12,6 +12,21 @@ final class CoverHandoff {
  private final ContinuityProbePolicy probe=new ContinuityProbePolicy();
  synchronized boolean probeHolding(){return probe.holding();}
  synchronized String probeStatus(){return probe.status+"\n"+nativeProbe.report();}
+ private final ClosingPrewarmPolicy prewarm=new ClosingPrewarmPolicy();
+ private Runnable prewarmTimer;
+ private void clearPrewarm(){if(delayHandler!=null && prewarmTimer!=null)delayHandler.removeCallbacks(prewarmTimer);prewarmTimer=null;}
+ private void prepareCover(){
+  changeState(true);
+  if(owned==null || !innerHeld)return;
+  final Object expected=owned;
+  event("PREWARM cover: inner remains primary; bounded "+ClosingPrewarmPolicy.HOLD_MS+" ms; not panel ON proof");
+  if(delayHandler==null){HandlerThread thread=new HandlerThread("Duo-closing-release");thread.start();delayHandler=new Handler(thread.getLooper());}
+  prewarmTimer=()->{synchronized(CoverHandoff.this){
+   if(owned!=expected || !innerHeld)return;
+   event("PREWARM expired without handoff; releasing preparation");releaseOwned();
+  }};
+  delayHandler.postDelayed(prewarmTimer,ClosingPrewarmPolicy.HOLD_MS);
+ }
  private float handoffAngle=HandoffSettings.DEFAULT;
  // Let Android complete closure; bound the cover request with the tested one-second fallback.
  private final ClosingReleaseDelay delay=new ClosingReleaseDelay();
@@ -71,10 +86,12 @@ final class CoverHandoff {
    event("CLOSE_DELAY ABORT: fresh="+fresh+" interactive="+interactive+" direct="+direct);releaseOwned();return;
   }
   if(delay.active() && angle>0)clearDelay("reopening; normal handoff resumed");
+  boolean prepare=prewarm.update(angle,fresh,interactive,direct&&probeRequest==0,openThreshold,this.handoffAngle);
   int test=probe.update(SystemClock.elapsedRealtime(),probeRequest,angle,fresh,interactive&&direct,owned!=null&&!innerHeld);
   nativeProbe.update(test==ContinuityProbePolicy.HOLD,angle,interactive);
   if(test==ContinuityProbePolicy.HOLD)return;
   if(test==ContinuityProbePolicy.FINISH){event("RELEASE reason=continuity test finished");releaseOwned();return;}
+  if(prepare && owned==null){prepareCover();return;}
   if(owned!=null){
    int next=DirectHandoffPolicy.next(innerHeld,angle,fresh,interactive,direct,openThreshold,this.handoffAngle);
    if(next==DirectHandoffPolicy.RELEASE){if(deferClosingRelease(angle,fresh,interactive,direct))return;event("RELEASE decision: fresh="+fresh+" interactive="+interactive+" direct="+direct+" open="+openThreshold);releaseOwned();return;}
@@ -88,6 +105,7 @@ final class CoverHandoff {
   changeState(false);
  }
  private void changeState(boolean toInner){
+  clearPrewarm();
   long identity=Binder.clearCallingIdentity();Object previous=owned;boolean previousInner=innerHeld;long decisionAt=SystemClock.elapsedRealtime();
   try{
    init();
@@ -109,7 +127,7 @@ final class CoverHandoff {
     if(m.getName().equals("equals"))return proxy==args[0];
     if(m.getName().equals("toString"))return "DuoCoverHandoff";
     if(m.getName().equals("onRequestActivated")){synchronized(this){event("REQUEST ACTIVE callback; request="+(toInner?"inner":"cover")+"; since decision="+(SystemClock.elapsedRealtime()-decisionAt)+" ms; not panel ON proof");}}
-    if(m.getName().equals("onRequestCanceled")){synchronized(this){event("ANDROID CANCEL callback; current owned request="+(owned==next)+" request="+(toInner?"inner":"cover"));if(owned==next){clearDelay("Android canceled owned request");owned=null;innerHeld=false;status="Concurrent handoff request canceled by system";}}}return null;
+    if(m.getName().equals("onRequestCanceled")){synchronized(this){event("ANDROID CANCEL callback; current owned request="+(owned==next)+" request="+(toInner?"inner":"cover"));if(owned==next){clearPrewarm();clearDelay("Android canceled owned request");owned=null;innerHeld=false;status="Concurrent handoff request canceled by system";}}}return null;
    });
    owned=next;innerHeld=toInner;long submittedAt=SystemClock.elapsedRealtime();request.invoke(manager,next,(Executor)Runnable::run,callback);
    event("REQUEST returned; preparation="+(submittedAt-decisionAt)+" ms; binder="+(SystemClock.elapsedRealtime()-submittedAt)+" ms; physical remap measured separately");
@@ -118,8 +136,9 @@ final class CoverHandoff {
   finally{Binder.restoreCallingIdentity(identity);}
  }
  synchronized boolean active(){return owned!=null && !innerHeld;}
- synchronized void release(){probe.abort();nativeProbe.update(false,0,false);releaseOwned();}
+ synchronized void release(){prewarm.reset();probe.abort();nativeProbe.update(false,0,false);releaseOwned();}
  private void releaseOwned(){
+  clearPrewarm();
   clearDelay("explicit release");policy.reset();if(owned==null)return;long identity=Binder.clearCallingIdentity();
   try{event("EXPLICIT cancelStateRequest; held="+(innerHeld?"inner":"cover"));cancel.invoke(manager);event("EXPLICIT cancelStateRequest returned");owned=null;innerHeld=false;status="Normal display control restored";}catch(Exception e){status="Display release pending";}finally{Binder.restoreCallingIdentity(identity);}
  }
