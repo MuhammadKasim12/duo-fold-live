@@ -121,7 +121,7 @@ final class HomePhotoLayer {
    long seen=homeSeen.getOrDefault(e.target.display,-1L);
    if(!homeVerified(e)){noteWakeSnapshot("Home readiness pending; display="+e.target.display+"; committedThisWake="+(e.homeReadyEpoch==bridgeEpoch)+"; activeHomeSample="+seen);queueHomeRetry(bridgeEpoch);return;}
   }else e.homeReadyEpoch=bridgeEpoch;
-  if(bridgePolicy.remaining(SystemClock.elapsedRealtime())>0){
+  if(WakeHomeHandoffPolicy.waitForMinimumHold(prepareBeforeUnlock,bridgePolicy.remaining(SystemClock.elapsedRealtime()))){
    Entry held=bridges.get(e.target.display);
    if(held!=null&&held.bridgeReady)try(SurfaceControl.Transaction tx=new SurfaceControl.Transaction()){
     geometry(tx,held);relative.invoke(tx,held.photo,e.anchor,1);tx.setVisibility(held.photo,true).apply();
@@ -136,7 +136,7 @@ final class HomePhotoLayer {
    if(bridge!=null&&bridge.photo!=null)tx.setVisibility(bridge.photo,false);
    if(prepareBeforeUnlock&&bridge!=null){
     if(bridge.handoffPending)return;bridge.handoffPending=true;long epoch=bridgeEpoch;
-    tx.addTransactionCommittedListener(command->main.post(command),()->{if(closed||epoch!=bridgeEpoch||bridges.get(e.target.display)!=bridge)return;note.accept("Wake photo atomic Home handoff committed; display="+e.target.display);finishBridge(e.target.display,"Home photo committed and active; atomic handoff committed");});
+    tx.addTransactionCommittedListener(command->main.post(command),()->{if(closed||epoch!=bridgeEpoch||bridges.get(e.target.display)!=bridge)return;note.accept("Wake photo atomic Home handoff committed; display="+e.target.display+"; since unlock="+(unlockedAt<0?-1:SystemClock.elapsedRealtime()-unlockedAt)+" ms; verified readiness; minimum hold bypassed");finishBridge(e.target.display,"Home photo committed and active; atomic handoff committed");});
     tx.apply();main.postDelayed(()->{if(!closed&&epoch==bridgeEpoch&&bridges.get(e.target.display)==bridge)finishBridge(e.target.display,"handoff commit callback timeout; cleanup");},WakeHomeHandoffPolicy.MAX_EXTRA_WAIT_MS);
    }else {tx.apply();finishBridge(e.target.display,"Home handoff after full 1000 ms hold");}
   }catch(Throwable error){note.accept("Wake photo handoff failed: "+failure(error));finishBridge(e.target.display,"hold complete; handoff failed");}
@@ -218,6 +218,9 @@ final class HomePhotoLayer {
     if(epoch==bridgeEpoch&&prepareBeforeUnlock&&!bridgeDisplays.isEmpty())noteWakeSnapshot("window sample; epoch="+epoch+"; locked="+locked+"; activeHome="+activeHome+"; otherApp="+otherActive+"; HomeTargets="+targets.size()+"; lockTargets="+lockTargets.size()+"; bridges="+bridges.keySet());
     if(epoch==bridgeEpoch)for(Target t:lockTargets)prepareBridge(t);
     for(Target t:targets)ensure(t);
+    // A fresh Home sample may arrive after the photo commit. Re-evaluate now,
+    // without waiting for another attachment or the legacy one-second timer.
+    if(epoch==bridgeEpoch&&prepareBeforeUnlock)for(Entry e:new ArrayList<>(entries.values()))homeReady(e);
    });
   }catch(Throwable e){main.post(()->{if(!closed)status="Home photo lookup waiting: "+e.getClass().getSimpleName();});}finally{querying.set(false);}});}catch(RejectedExecutionException ignored){querying.set(false);}
  }

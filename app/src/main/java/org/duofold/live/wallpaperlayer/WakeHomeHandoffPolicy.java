@@ -3,5 +3,6 @@ package org.duofold.live.wallpaperlayer;
 final class WakeHomeHandoffPolicy {
  static final long MAX_EXTRA_WAIT_MS=2000;
  static boolean ready(boolean committedThisWake,long activeHomeSample,long now){return committedThisWake&&activeHomeSample>=0&&now>=activeHomeSample&&now-activeHomeSample<=1000;}
+ static boolean waitForMinimumHold(boolean verifiedPreparationMode,long remaining){return !verifiedPreparationMode&&remaining>0;}
  private WakeHomeHandoffPolicy(){}
 }

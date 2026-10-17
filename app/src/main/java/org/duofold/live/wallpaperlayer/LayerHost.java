@@ -66,7 +66,7 @@ public class LayerHost extends Binder {
    panel.view.requestLayout();panel.view.postInvalidateOnAnimation();
   }
  }
- void updateAlbum(PanelPhotos next){PanelPhotos old=album;album=next;if(nativePhoto!=null){nativePhoto.album=next;nativePhoto.refreshDisplays();}if(homePhoto!=null){homePhoto.album=next;homePhoto.refreshGeometry();}for(Panel panel:panels.values())panel.view.invalidate();if(old!=null)old.close();}
+ void updateAlbum(PanelPhotos next){if(next!=null)trace("Wallpaper cache ready: cover="+(next.cover!=null)+"; inner="+(next.inner!=null)+"; decoded images and GPU buffers retained");PanelPhotos old=album;album=next;if(nativePhoto!=null){nativePhoto.album=next;nativePhoto.refreshDisplays();}if(homePhoto!=null){homePhoto.album=next;homePhoto.refreshGeometry();}for(Panel panel:panels.values())panel.view.invalidate();if(old!=null)old.close();}
  void updatePhoto(Bitmap photo){bitmap=photo;if(homePhoto!=null)homePhoto.setPhoto(photo);if(nativePhoto!=null){try{nativePhoto.setPhoto(photo);}catch(Throwable e){fallbackNative(e);}}for(Panel panel:panels.values())panel.view.invalidate();}
  void recordFailure(Throwable e){
   journal.fail(operation+": "+reason(e));

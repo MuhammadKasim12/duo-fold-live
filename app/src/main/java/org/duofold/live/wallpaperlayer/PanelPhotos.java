@@ -25,7 +25,11 @@ public final class PanelPhotos implements AutoCloseable {
  public static PanelPhotos load(Context c)throws Exception{
   JSONObject j=manifest(c);if(!j.has("cover")&&!j.has("inner"))return null;
   Photo cover=null,inner=null;HashMap<String,Asset> assets=new HashMap<>();
-  try{cover=read(c,j.optJSONObject("cover"),assets);inner=read(c,j.optJSONObject("inner"),assets);return new PanelPhotos(cover,inner);}
+  try{cover=read(c,j.optJSONObject("cover"),assets);inner=read(c,j.optJSONObject("inner"),assets);
+   // Prepare on the album-loading thread, before publishing to the host. Retain
+   // decoded photos and GPU buffers through folds and sleep until album replacement.
+   if(cover!=null)cover.buffer();if(inner!=null)inner.buffer();
+   return new PanelPhotos(cover,inner);}
   catch(Exception e){if(cover!=null)cover.close();if(inner!=null)inner.close();throw e;}
  }
  private static Photo read(Context c,JSONObject j,HashMap<String,Asset> assets)throws Exception{
