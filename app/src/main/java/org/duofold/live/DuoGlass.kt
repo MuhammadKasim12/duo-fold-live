@@ -308,6 +308,23 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
    }
   }catch(e:Exception){readinessPending=false;RecoveryLog.add("Glass frame readiness unavailable: ${e.javaClass.simpleName}")}
  }
+ private var diagnosticEpisode=0
+ private fun startupFrame(rendered:GlassFrame?,endpoint:Boolean,id:Int){
+  if(preview || frozen || reflectedCover || display?.displayId!=0)return
+  HandoffStartupTrace.event(if(rendered!=null)"GLASS_DRAW" else if(endpoint)"ENDPOINT_CLEAR" else if(paintedEffect)"FALLBACK_DRAW" else "CLEAR_DRAW",
+   "rendererInner=$inner; view=${width}x${height}; amount=$amount; intensity=$intensity; angle=$targetAngle; visual=$renderedAngle; alpha=$alpha; shown=$isShown; reason=$fallbackReason",id=id)
+  if(rendered==null || diagnosticEpisode==id || id==0)return
+  diagnosticEpisode=id
+  val generation=readinessGeneration
+  val frameNote="capture=${rendered.stamp}; physical=${rendered.physicalId}; rendererInner=$inner; view=${width}x${height}; amount=$amount; callback time, not photons"
+  try{SurfaceControl.Transaction().use { t ->
+   t.addTransactionCommittedListener(context.mainExecutor){
+    HandoffStartupTrace.event(if(generation==readinessGeneration && holder.surface.isValid)"GLASS_COMMIT" else "GLASS_COMMIT_INVALIDATED",
+     frameNote,id=id)
+   }
+   applyTransactionToFrame(t)
+  }}catch(e:Exception){HandoffStartupTrace.event("DIAGNOSTIC_COMMIT_ERROR",e.javaClass.simpleName,id=id)}
+ }
  private var frameQueued=false
  private var dirty=true
  private var appliedRate=0f
@@ -348,6 +365,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
   if(selected!=classic){classic=selected;bitmap=null;program=runCatching{RuntimeShader(if(classic)ClassicGlassShader.source else DuoGlassShader.source)}.getOrElse{RecoveryLog.add("Glass shader compilation failed: ${it.message}");null}}
   requestDraw()}
  override fun surfaceCreated(h:SurfaceHolder){
+  if(!preview && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event("SURFACE_CREATED","view=${width}x${height}; inner=$inner")
   if(!preview){
    GlassFrames.surface(this,surfaceControl)
    if(!reflectedCover)GlassFrames.requestFreshCapture()
@@ -359,15 +377,17 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
   updateBufferSize();preferFastRefresh();requestDraw()
   if(!preview){removeCallbacks(clearGuard);postDelayed(clearGuard,100)}
  }
- override fun surfaceChanged(h:SurfaceHolder,format:Int,w:Int,height:Int){readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(!preview){GlassFrames.surface(this,surfaceControl);if(!reflectedCover)GlassFrames.requestFreshCapture();if(!reflectedCover && context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true) && !context.getSharedPreferences("standalone",0).getBoolean("dual",false))PreviewTransition.markAnimation(surfaceControl)};preferFastRefresh();requestDraw()}
- override fun surfaceDestroyed(h:SurfaceHolder){removeCallbacks(clearGuard);paintedEffect=false;fallback("");readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
+ override fun surfaceChanged(h:SurfaceHolder,format:Int,w:Int,height:Int){if(!preview && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event("SURFACE_CHANGED","buffer=${w}x${height}; inner=$inner",false);readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(!preview){GlassFrames.surface(this,surfaceControl);if(!reflectedCover)GlassFrames.requestFreshCapture();if(!reflectedCover && context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true) && !context.getSharedPreferences("standalone",0).getBoolean("dual",false))PreviewTransition.markAnimation(surfaceControl)};preferFastRefresh();requestDraw()}
+ override fun surfaceDestroyed(h:SurfaceHolder){if(!preview && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event("SURFACE_DESTROYED","inner=$inner",false);removeCallbacks(clearGuard);paintedEffect=false;fallback("");readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
  /** Reuse the exact shader painter in a normal window View, without attaching this SurfaceView. */
  fun drawEmbedded(canvas:Canvas){drawFrame(canvas)}
  private fun drawFrame(windowCanvas:Canvas?=null){
   if((windowCanvas==null && !holder.surface.isValid) || width<=0 || height<=0)return
   runCatching{
    val started=SystemClock.elapsedRealtimeNanos()
+   val traceId=HandoffStartupTrace.token()
    val canvas=windowCanvas ?: holder.lockHardwareCanvas()
+   val lockedAt=SystemClock.elapsedRealtimeNanos()
    val windowSave=if(windowCanvas!=null)canvas.saveLayer(0f,0f,width.toFloat(),height.toFloat(),null) else -1
    var rendered:GlassFrame?=null
    var endpoint=false
@@ -466,7 +486,11 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     // Only successful glass rendering or a deliberate fully-open clear qualifies.
     // Attach before posting this buffer. A fallback draw never sends readiness.
     if(windowCanvas==null){
-     try{if(rendered!=null || endpoint)trackReadyFrame(rendered,endpoint)}finally{holder.unlockCanvasAndPost(canvas)}
+     try{startupFrame(rendered,endpoint,traceId);if(rendered!=null || endpoint)trackReadyFrame(rendered,endpoint)}finally{
+      val posting=SystemClock.elapsedRealtimeNanos()
+      holder.unlockCanvasAndPost(canvas)
+      if(!preview && !frozen && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event(if(rendered!=null)"GLASS_POST" else "NON_GLASS_POST","lockMs=${(lockedAt-started)/1000000}; drawAndReadinessMs=${(posting-lockedAt)/1000000}; postMs=${(SystemClock.elapsedRealtimeNanos()-posting)/1000000}",id=traceId)
+     }
     }else canvas.restoreToCount(windowSave)
     if(!preview)FrameTelemetry.record(inner,SystemClock.elapsedRealtimeNanos(),SystemClock.elapsedRealtimeNanos()-started,appliedRate)
    }
