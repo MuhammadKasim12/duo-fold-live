@@ -8,6 +8,7 @@ public final class DuoApplication extends Application {
   PrivilegedAccess.init(this);
   registerActivityLifecycleCallbacks(new DeveloperShortcut());
   FoldAwakeDefault.persist(this);
+  if(BuildConfig.IS_PLAY)getSystemService(android.app.NotificationManager.class).cancel(220);
   SharedPreferences prefs=getSharedPreferences("standalone",MODE_PRIVATE);
   if(!prefs.getBoolean("defaults_170_applied",false)){
    prefs.edit().putBoolean("cover_preview",true).putBoolean("dual",false)

@@ -90,12 +90,14 @@ class SetupActivity : ComponentActivity() {
     var authorized by remember{mutableStateOf(false)}
     var overlay by remember{mutableStateOf(false)}
     var accessibility by remember{mutableStateOf(false)}
+    var consent by remember{mutableStateOf(RuntimeConsent.ready(this@SetupActivity))}
     var usb by remember{mutableStateOf(false)}
     LaunchedEffect(Unit){while(true){
      shizuku=runCatching{PrivilegedAccess.pingBinder()}.getOrDefault(false)
      authorized=shizuku && runCatching{PrivilegedAccess.checkSelfPermission()==PackageManager.PERMISSION_GRANTED}.getOrDefault(false)
      overlay=Settings.canDrawOverlays(this@SetupActivity)
      accessibility=StandaloneService.instance!=null
+     consent=RuntimeConsent.ready(this@SetupActivity)
 
      delay(500)
     }}
@@ -182,24 +184,25 @@ class SetupActivity : ComponentActivity() {
         }
        }
        3->{
+        OutlinedButton(onClick={open(Intent(this@SetupActivity,PrivacyActivity::class.java))}){Text("Review privacy & consent")}
         Text("Ready for the animation",style=MaterialTheme.typography.headlineSmall)
         Text("The required Samsung fold wallpaper is configured on both home screens. Finish these Android permissions so the animation can run over other apps.")
         OutlinedButton(onClick={open(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")))}){Text(if(overlay)"Overlay access granted" else "Allow display over other apps")}
-        OutlinedButton(onClick={open(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}){Text(if(accessibility)"Accessibility connected" else "Enable Duo accessibility")}
+        OutlinedButton(onClick={open(Intent(this@SetupActivity,PrivacyActivity::class.java))}){Text(if(accessibility)"Accessibility connected" else "Enable Duo accessibility")}
         Text("1. Settings → Accessibility → Installed apps → Duo Fold Live: try enabling it. 2. If Restricted setting appears: Settings → Apps → Duo Fold Live → ⋮ → Allow restricted settings; confirm. 3. Return to Accessibility and enable Duo. If the ⋮ menu is missing, report the exact warning and your Android/One UI version. Overlay permission is separate. Enable accessibility only if you trust the app.",style=MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick={open(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:$packageName")))}){Text("Open app info")}
         OutlinedButton(onClick={if(checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),75)}){Text("Allow service notifications")}
-        Text("Default: Windowed Glass, inspired by iPhone Duo with even more windowed glass. Choose styles in Folding animation styles. Keep-awake is always on and checked in the background.")
+        Text("Default: Windowed Glass, inspired by iPhone Duo with even more windowed glass. Choose styles in Folding animation styles. Keep-awake is optional; choose it in Privacy & controls.")
         Button(onClick={
          if(!authorized){message="Authorize your selected connection before finishing.";attempted=false;go(2);return@Button}
          prefs.edit().putInt("state",2).commit()
-         getSharedPreferences("standalone",0).edit().putBoolean("enabled",true).putBoolean("auto_keep_cover_awake",true).apply()
+         getSharedPreferences("standalone",0).edit().putBoolean("enabled",true).apply()
          startForegroundService(Intent(this@SetupActivity,FoldBackgroundService::class.java))
          StandaloneService.instance?.restart()
          startActivity(Intent(this@SetupActivity,MainActivity::class.java))
          if(custom&&hasPhoto)startActivity(Intent(this@SetupActivity,org.duofold.live.wallpaperlayer.WallpaperActivity::class.java).putExtra("auto_enable",true))
          finish()
-        },enabled=overlay&&accessibility&&prefs.getBoolean("wallpaper_verified",false)){Text("Finish & enable animation")}
+        },enabled=consent&&overlay&&accessibility&&prefs.getBoolean("wallpaper_verified",false)){Text("Finish & enable animation")}
        }
       }
       if(message.isNotBlank())Text(message,style=MaterialTheme.typography.bodySmall)

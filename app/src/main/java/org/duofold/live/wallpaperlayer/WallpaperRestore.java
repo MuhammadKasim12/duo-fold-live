@@ -33,6 +33,7 @@ public final class WallpaperRestore {
   p.edit().putBoolean(KEY,active).commit();return active;
  }
  public static synchronized void setEnabled(Context c,boolean value)throws IOException{
+  if(value&&!org.duofold.live.RuntimeConsent.ready(c))throw new IOException("Review Privacy & controls in Duo before enabling wallpaper");
   File stop=new File(c.getFilesDir(),"stop-layer");
   if(value){if(!new File(c.getFilesDir(),"photo.jpg").exists())throw new IOException("Choose a photo first");if(stop.exists()&&!stop.delete())throw new IOException("Could not clear wallpaper stop request");}
   else if(!stop.exists()&&!stop.createNewFile())throw new IOException("Could not save wallpaper stop request");
@@ -51,11 +52,12 @@ public final class WallpaperRestore {
  public static void resume(Context context){
   Context c=context.getApplicationContext();
   org.duofold.live.FoldAwakeDefault.persist(c);
+  if(!org.duofold.live.RuntimeControls.wanted(c))return;
   try{c.startForegroundService(new Intent(c,FoldBackgroundService.class));}catch(Exception e){status="Wallpaper choice saved; open Duo to resume: "+e.getClass().getSimpleName();}
  }
  public static void tick(Context context){
   Context c=context.getApplicationContext();
-  if(!enabled(c)){status="Custom wallpaper disabled; photo retained";return;}
+  if(!org.duofold.live.RuntimeConsent.ready(c)||!enabled(c)){status="Custom wallpaper disabled; photo retained";return;}
   if(PhotoInstrumentation.running){status="Saved custom wallpaper running";return;}
   if(connecting||pending||SystemClock.elapsedRealtime()<retryAt)return;
   try{
@@ -87,7 +89,8 @@ public final class WallpaperRestore {
     try{
      if(!enabled(c)){result="Custom wallpaper disabled";}
      else{
-      File stop=new File(c.getFilesDir(),"stop-layer");if(stop.exists()&&!stop.delete())throw new IOException("Wallpaper stop request pending");
+      if(!org.duofold.live.RuntimeConsent.ready(c))throw new IOException("Review Privacy & controls in Duo before enabling wallpaper");
+  File stop=new File(c.getFilesDir(),"stop-layer");if(stop.exists())throw new IOException("Wallpaper stop request pending");
       Parcel p=Parcel.obtain(),r=Parcel.obtain();int active;
       try{p.writeInterfaceToken(HostLauncher.TOKEN);if(!binder.transact(4,p,r,0))throw new IOException("Wallpaper observer unavailable");r.readException();active=r.readInt();}finally{p.recycle();r.recycle();}
       if(active==0&&enabled(c)){

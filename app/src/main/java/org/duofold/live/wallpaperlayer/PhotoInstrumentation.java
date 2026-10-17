@@ -39,7 +39,7 @@ public class PhotoInstrumentation extends Instrumentation {
  public void onCreate(Bundle args){super.onCreate(args);start();}
  public void onStart(){
   File stop=new File(getTargetContext().getFilesDir(),"stop-layer");
-  if(!WallpaperRestore.enabled(getTargetContext())||stop.exists()){finish(0,new Bundle());return;}
+  if(!org.duofold.live.RuntimeConsent.ready(getTargetContext())||!WallpaperRestore.enabled(getTargetContext())||stop.exists()){finish(0,new Bundle());return;}
   running=true;
   try {
    // No-restart instrumentation preserves the app process. Restrict exemptions
@@ -101,7 +101,7 @@ public class PhotoInstrumentation extends Instrumentation {
     }
     String nextAlbumVersion=PanelPhotos.version(getTargetContext());
     if(!nextAlbumVersion.equals(albumVersion)){try{PanelPhotos next=PanelPhotos.load(getTargetContext());runOnMainSync(()->host.updateAlbum(next));albumVersion=nextAlbumVersion;}catch(Exception e){transition("Album update deferred; previous photos retained: "+e);albumVersion=nextAlbumVersion;}}
-    if(stop.exists()||!WallpaperRestore.enabled(getTargetContext())){
+    if(!org.duofold.live.RuntimeConsent.ready(getTargetContext())||stop.exists()||!WallpaperRestore.enabled(getTargetContext())){
      runOnMainSync(()->host.stop("Custom wallpaper disabled; original wallpaper unchanged"));
      continue;
     }

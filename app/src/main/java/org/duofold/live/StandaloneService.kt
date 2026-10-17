@@ -98,7 +98,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
             handler.postDelayed({if(instance===this@StandaloneService && settings().getBoolean("enabled",false)){restart();RecoveryLog.add("Overlay rebuilt after unlock")}},150)
         } else {updateDisplay();resumeIfUsable()}
     }}
-    private fun usable()=::displays.isInitialized && displays.getDisplay(Display.DEFAULT_DISPLAY)?.state==Display.STATE_ON && !getSystemService(KeyguardManager::class.java).isKeyguardLocked()
+    private fun usable()=RuntimeConsent.ready(this) && ::displays.isInitialized && displays.getDisplay(Display.DEFAULT_DISPLAY)?.state==Display.STATE_ON && !getSystemService(KeyguardManager::class.java).isKeyguardLocked()
     private fun previewMode()=AnimationModePolicy.mirrors(settings().getString("animation_mode",AnimationModePolicy.DEFAULT)) && LiveAngles.effectAllowed && settings().getBoolean("cover_preview",true) && !settings().getBoolean("dual",false)
     private val runtimeSettings by lazy { RuntimeSettings.get(this) }
     private fun settings()=runtimeSettings
@@ -113,7 +113,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
     fun restart(){
         retainedPrimaryHost=false
         removeHost()
-        if(!settings().getBoolean("enabled",false)){note("Off — turn on Enable fold animation");return}
+        if(!RuntimeConsent.ready(this) || !settings().getBoolean("enabled",false)){note("Off — turn on Enable fold animation");return}
         runCatching { startForegroundService(Intent(this, FoldBackgroundService::class.java)) }.onFailure { note("Open Duo and tap Start background animation") }
         val display=displays.getDisplay(Display.DEFAULT_DISPLAY)?:return
         primaryKey=primaryHostKey(display)

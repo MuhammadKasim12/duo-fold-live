@@ -48,6 +48,7 @@ class MainActivity:ComponentActivity(){
  override fun onDestroy(){rikka.shizuku.Shizuku.removeRequestPermissionResultListener(shizukuPermission);super.onDestroy()}
 
  private fun startBackground(){
+  if(!RuntimeControls.wanted(this))return
   if(checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),43)
   startForegroundService(Intent(this,FoldBackgroundService::class.java))
  }
@@ -147,7 +148,8 @@ class MainActivity:ComponentActivity(){
        Text("Duo Fold Live",style=MaterialTheme.typography.headlineLarge)
        Text("Make every fold feel fluid.",style=MaterialTheme.typography.bodyLarge,color=MaterialTheme.colorScheme.onSurfaceVariant)
        Toggle("Enable animation",enabled){
-        if(it && (!Settings.canDrawOverlays(this@MainActivity) || StandaloneService.instance==null)){
+        if(it && !RuntimeConsent.ready(this@MainActivity)){startActivity(Intent(this@MainActivity,PrivacyActivity::class.java))}
+        else if(it && (!Settings.canDrawOverlays(this@MainActivity) || StandaloneService.instance==null)){
          startActivity(Intent(this@MainActivity,SetupActivity::class.java).putExtra("repair",true))
         }else{enabled=it;booleanSetting("enabled",it)}
        }
@@ -165,6 +167,10 @@ class MainActivity:ComponentActivity(){
         Button(onClick={FoldBackgroundService.reconnectHelpers(this@MainActivity)}){Text("Reconnect helpers")}
         Text("Allow up to 35 seconds. If the helpers still time out, stop and start Shizuku, then return here.",style=MaterialTheme.typography.bodySmall)
        }
+      }
+      SettingsCard("Privacy & controls","Review access, choose keep-awake, or stop background work."){
+       Button(onClick={startActivity(Intent(this@MainActivity,PrivacyActivity::class.java))}){Text("Privacy & controls")}
+       OutlinedButton(onClick={RuntimeControls.stopAll(this@MainActivity);enabled=false}){Text("Stop all")}
       }
       DeviceProfileChoice{startActivity(Intent(this@MainActivity,SetupActivity::class.java).putExtra("repair",true))}
       if(supportBanner){
@@ -259,7 +265,7 @@ class MainActivity:ComponentActivity(){
         ShizukuOnly { Button(onClick={val result=ShizukuAccess.request(this@MainActivity,42); if(result.startsWith("Permission requested"))android.widget.Toast.makeText(this@MainActivity,result,android.widget.Toast.LENGTH_LONG).show() else ShizukuAccess.show(this@MainActivity,result)}){Text("Authorize Shizuku")} }
         OutlinedButton(onClick={ShizukuAccess.show(this@MainActivity,ShizukuAccess.report(this@MainActivity))}){Text("Connection report")}
         OutlinedButton(onClick={startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")))}){Text("Allow overlays")}
-        OutlinedButton(onClick={startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))}){Text("Enable accessibility")}
+        OutlinedButton(onClick={startActivity(Intent(this@MainActivity,PrivacyActivity::class.java))}){Text("Enable accessibility")}
         OutlinedButton(onClick={FoldBackgroundService.reconnectHelpers(this@MainActivity);StandaloneService.instance?.restart()}){Text("Reconnect helpers")}
         Text("Keep Samsung’s interactive wallpaper on both screens. Stop any older fold helper. If accessibility is blocked: App info → ⋮ → Allow restricted settings.",style=MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick={startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:$packageName")))}){Text("App & battery settings")}
@@ -373,9 +379,9 @@ class MainActivity:ComponentActivity(){
         if(rotationRepair.isNotEmpty())Text(rotationRepair,style=MaterialTheme.typography.bodySmall)
         HorizontalDivider()
         Text("Keep cover awake on close",style=MaterialTheme.typography.titleMedium)
-        Text("Always on, including when animation is off. Requires authorized Shizuku or root.",style=MaterialTheme.typography.bodySmall)
+        Text("Optional. Choose whether Duo changes the fold-lock setting in Privacy & controls. Requires authorized Shizuku or root.",style=MaterialTheme.typography.bodySmall)
         Text("Still locking? In Samsung Settings, search “Lock when folded” and turn it OFF. Return to Home and fold to test.",style=MaterialTheme.typography.bodySmall)
-        OutlinedButton(onClick={FoldAwakeDefault.reconnect();FoldAwakeDefault.tick(this@MainActivity);startBackground()}){Text("Recheck keep-awake now")}
+        OutlinedButton(onClick={startActivity(Intent(this@MainActivity,PrivacyActivity::class.java))}){Text("Keep-awake controls")}
         TextButton(modifier=Modifier.bringIntoViewRequester(developerAnchor),onClick={developer=!developer}){Text("☰  Developer settings")}
         Text("Shortcut: tap with four fingers anywhere in the app.",style=MaterialTheme.typography.bodySmall)
         if(developer){
@@ -421,7 +427,7 @@ class MainActivity:ComponentActivity(){
           Text(status,style=MaterialTheme.typography.bodySmall)
           Text(LiveAngles.rotationHold,style=MaterialTheme.typography.bodySmall)
           OutlinedButton(onClick={startActivity(Intent(this@MainActivity,org.duofold.live.wallpaperlayer.WallpaperActivity::class.java).putExtra("developer",true))}){Text("Wallpaper developer settings")}
-          OutlinedButton(onClick={val sent=SupportPrompts.notify(this@MainActivity);android.widget.Toast.makeText(this@MainActivity,if(sent)"Preview notification sent; reminder schedule unchanged" else "Allow support notifications in Android settings",android.widget.Toast.LENGTH_LONG).show()}){Text("Preview support notification")}
+          if(!BuildConfig.IS_PLAY)OutlinedButton(onClick={val sent=SupportPrompts.notify(this@MainActivity);android.widget.Toast.makeText(this@MainActivity,if(sent)"Preview notification sent; reminder schedule unchanged" else "Allow support notifications in Android settings",android.widget.Toast.LENGTH_LONG).show()}){Text("Preview support notification")}
         HorizontalDivider()
         var wakePhotoTest by remember { mutableStateOf(org.duofold.live.wallpaperlayer.WakePreparationTest.enabled(this@MainActivity)) }
         val wakeViewConfiguration=remember(baseViewConfiguration){object:ViewConfiguration by baseViewConfiguration{override val longPressTimeoutMillis=3000L}}
@@ -452,17 +458,17 @@ class MainActivity:ComponentActivity(){
         try{startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName).putExtra(Settings.EXTRA_CHANNEL_ID,"fold_live"))}
         catch(e:ActivityNotFoundException){startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName))}
        }){Text("Running notification settings")}
-       Text("Support notifications are enabled automatically, subject to Android notification settings. Reminder scheduling, snooze, and stop actions still apply.",style=MaterialTheme.typography.bodySmall)
+       if(!BuildConfig.IS_PLAY)Text("Support notifications are enabled automatically, subject to Android notification settings. Reminder scheduling, snooze, and stop actions still apply.",style=MaterialTheme.typography.bodySmall)
       }
        }
       }
-      SettingsCard("Support Duo Fold Live","Free, independent, and built with care for your Fold."){
+      if(!BuildConfig.IS_PLAY)SettingsCard("Support Duo Fold Live","Free, independent, and built with care for your Fold."){
        Text("Donations support development. All features remain free.")
        Button(onClick={SupportPrompts.open(this@MainActivity);supportBanner=false}){Text("Support on Ko-fi")}
        InfoLabel("Support reminders","First shown after 3 days of successful use, then 7 days later, 14 days later, and every 30 days. You can snooze or stop reminders.")
       }
       Text("Duo Fold Live ${BuildConfig.VERSION_NAME} · Glass reference: chuspeeism/iphone-duo (MIT).",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-      Text("Duo Fold Live is a free, open-source hobby project, provided “as is” without warranties. Use it at your own risk. To the extent permitted by applicable law, the authors and contributors are not liable for device damage, data loss, malfunctions, or other harm arising from its use. Not affiliated with or endorsed by Samsung.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+      Text("Duo Fold Live is an open-source project, provided “as is” without warranties. Use it at your own risk. To the extent permitted by applicable law, the authors and contributors are not liable for device damage, data loss, malfunctions, or other harm arising from its use. Not affiliated with or endorsed by Samsung.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
      }
     }
    }

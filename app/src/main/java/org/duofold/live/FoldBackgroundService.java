@@ -7,7 +7,7 @@ import rikka.shizuku.Shizuku;
 public class FoldBackgroundService extends Service {
  public static boolean running=false;
  private final Handler main=new Handler(Looper.getMainLooper());
- private boolean wanted(){FoldAwakeDefault.persist(this);return true;}
+ private boolean wanted(){return RuntimeControls.wanted(this);}
  private LiveAngles angles;
  private FoldAwakeGuard awakeGuard;
  private ClosureDiagnostics closureDiagnostics;
@@ -52,16 +52,14 @@ createNotificationChannel(this);}
  private Notification notification(String message){
   PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class),PendingIntent.FLAG_IMMUTABLE);
   PendingIntent stop=PendingIntent.getService(this,1,new Intent(this,FoldBackgroundService.class).setAction("STOP"),PendingIntent.FLAG_IMMUTABLE);
-  return new Notification.Builder(this,"fold_live").setSmallIcon(android.R.drawable.ic_menu_compass).setContentTitle("Duo Fold Live is running").setContentText(message).setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).addAction(new Notification.Action.Builder(null,"Stop animation / wallpaper",stop).build()).build();
+  return new Notification.Builder(this,"fold_live").setSmallIcon(android.R.drawable.ic_menu_compass).setContentTitle("Duo Fold Live is running").setContentText(message).setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).addAction(new Notification.Action.Builder(null,"Stop all",stop).build()).build();
  }
  public int onStartCommand(Intent i,int flags,int id){
   // Must promote even when restoring a now-disabled service, then stop cleanly.
   startForeground(112,notification("Connecting to the live angle reader"));lastNotice="";
   if(i!=null&&"RECONNECT_HELPERS".equals(i.getAction()))resetHelpers("Manual helper reconnect");
   if(i!=null&&"STOP".equals(i.getAction())){
-   getSharedPreferences("standalone",0).edit().putBoolean("enabled",false).apply();
-   try{org.duofold.live.wallpaperlayer.WallpaperRestore.setEnabled(this,false);}catch(java.io.IOException e){RecoveryLog.add("Could not save wallpaper stop: "+e.getClass().getSimpleName());}
-   if(StandaloneService.Companion.getInstance()!=null)StandaloneService.Companion.getInstance().restart();
+   RuntimeControls.stopAll(this);
    if(!wanted()){stopSelf();return START_NOT_STICKY;}
   }
   if(!wanted()){stopSelf();return START_NOT_STICKY;}

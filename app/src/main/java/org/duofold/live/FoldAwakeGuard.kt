@@ -18,7 +18,7 @@ internal class FoldAwakeGuard(private val context:Context){
  private fun sample(angle:Float){
   if(!LiveAngles.fresh())return
   val now=SystemClock.uptimeMillis()
-  val enabled=context.getSharedPreferences("standalone",0).getBoolean("enabled",false)
+  val enabled=RuntimeConsent.ready(context) && FoldAwakeDefault.enabled(context) && context.getSharedPreferences("standalone",0).getBoolean("enabled",false)
   if(!enabled){release();previous=angle;peak=angle;return}
   if(blocked && (angle>=172f || angle>lowest+5f)){blocked=false;peak=angle}
   if(!peak.isFinite() || angle>peak)peak=angle
@@ -41,7 +41,7 @@ internal class FoldAwakeGuard(private val context:Context){
  }
  private val tick=object:Runnable{override fun run(){
   if(until==0L)return
-  if(SystemClock.uptimeMillis()>=until || !context.getSharedPreferences("standalone",0).getBoolean("enabled",false)){blocked=true;release();return}
+  if(!RuntimeConsent.ready(context) || !FoldAwakeDefault.enabled(context) || SystemClock.uptimeMillis()>=until || !context.getSharedPreferences("standalone",0).getBoolean("enabled",false)){blocked=true;release();return}
   if(!power.isInteractive && !pending && !attempted){
    pending=true;attempted=true
    val expectedEpisode=episode

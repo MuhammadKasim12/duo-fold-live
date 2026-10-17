@@ -25,7 +25,12 @@ public class FoldSettingsService extends Binder {
    else if(action.startsWith("decor_")){out=decor(action,original);}else{
    String before=command(user,"get",null),expected;
    if(!known(before))throw new IllegalStateException("Unrecognized fold setting: "+before);
-   if("always".equals(action))expected="stay_awake_on_fold_key";
+   if("read".equals(action))expected=before;
+   else if("restore".equals(action)){
+    if(!known(original))throw new IllegalArgumentException("Invalid saved fold setting");
+    expected=FoldSettingPolicy.restoration(before,original);
+   }
+   else if("always".equals(action))expected="stay_awake_on_fold_key";
    else throw new IllegalArgumentException("Unknown fold setting action");
    if(!expected.equals(before))command(user,"null".equals(expected)?"delete":"put",expected);
    String actual=command(user,"get",null);if(!expected.equals(actual))throw new IOException("Readback mismatch: "+actual);
@@ -123,7 +128,7 @@ public class FoldSettingsService extends Binder {
   out.putBoolean("setterAvailable",setter!=null);out.putString("displayApis",available.toString());
   out.putInt("display",display);return out;
  }
- private static boolean known(String s){return Arrays.asList("null","stay_awake_on_fold_key","selective_stay_awake_key","sleep_on_fold_key").contains(s);}
+ private static boolean known(String s){return FoldSettingPolicy.known(s);}
  private static String command(int user,String verb,String value)throws Exception{
   List<String> args=new ArrayList<>(Arrays.asList("settings","--user",Integer.toString(user),verb,"system","fold_lock_behavior"));if("put".equals(verb))args.add(value);
   java.lang.Process p=new ProcessBuilder(args).redirectErrorStream(true).start();

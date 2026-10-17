@@ -10,10 +10,10 @@ final class SupportPrompts {
  private static SharedPreferences prefs(Context c){return c.getSharedPreferences("duo_support",0);}
  private static boolean working(Context c){return c.getSharedPreferences("standalone",0).getBoolean("enabled",false)&&LiveAngles.fresh()&&StandaloneService.Companion.getInstance()!=null;}
  static void recordUse(Context c){
-  if(!working(c)||c.getSharedPreferences("first_run",0).getInt("state",0)==1)return;
+  if(BuildConfig.IS_PLAY||!working(c)||c.getSharedPreferences("first_run",0).getInt("state",0)==1)return;
   SharedPreferences p=prefs(c);if(p.getLong("first_use",0)==0)p.edit().putLong("first_use",System.currentTimeMillis()).apply();
  }
- static boolean enabled(Context c){return !prefs(c).getBoolean("retired_weekly",false);}
+ static boolean enabled(Context c){return !BuildConfig.IS_PLAY&&!prefs(c).getBoolean("retired_weekly",false);}
  static void stop(Context c){prefs(c).edit().putBoolean("retired_weekly",true).apply();c.getSystemService(NotificationManager.class).cancel(ID);}
  static void snooze(Context c){prefs(c).edit().putLong("snooze_until",System.currentTimeMillis()+SupportPromptPolicy.WEEK).apply();c.getSystemService(NotificationManager.class).cancel(ID);}
  private static SharedPreferences schedule(Context c){
@@ -38,10 +38,11 @@ final class SupportPrompts {
  }
  static synchronized boolean inAppDue(Context c){return due(c);}
  static synchronized void seenInApp(Context c){if(due(c))seen(c);}
- static void open(Context c){prefs(c).edit().putLong("snooze_until",System.currentTimeMillis()+3*SupportPromptPolicy.WEEK).apply();c.getSystemService(NotificationManager.class).cancel(ID);try{c.startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(URL)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}catch(ActivityNotFoundException e){android.widget.Toast.makeText(c,"Open ko-fi.com/joeconsorti in your browser",android.widget.Toast.LENGTH_LONG).show();}}
+ static void open(Context c){if(BuildConfig.IS_PLAY)return;prefs(c).edit().putLong("snooze_until",System.currentTimeMillis()+3*SupportPromptPolicy.WEEK).apply();c.getSystemService(NotificationManager.class).cancel(ID);try{c.startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(URL)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}catch(ActivityNotFoundException e){android.widget.Toast.makeText(c,"Open ko-fi.com/joeconsorti in your browser",android.widget.Toast.LENGTH_LONG).show();}}
  private static PendingIntent action(Context c,String action,int request){return PendingIntent.getBroadcast(c,request,new Intent(c,SupportReminderReceiver.class).setAction(action),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);}
  static synchronized void tick(Context c){if(due(c)&&notify(c))seen(c);}
  static synchronized boolean notify(Context c){
+  if(BuildConfig.IS_PLAY)return false;
   // The former app toggle no longer gates delivery. Android permission/channel
   // settings and the existing invitation schedule remain authoritative.
   NotificationManager nm=c.getSystemService(NotificationManager.class);

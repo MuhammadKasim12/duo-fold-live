@@ -92,6 +92,7 @@ public final class LiveAngles {
  public boolean isRunning(){return running;}
  public void start(){
   if(running)return;
+  if(!RuntimeConsent.ready(context)){status="Review Privacy & controls before enabling animation";return;}
   try{
    if(!PrivilegedAccess.pingBinder()||PrivilegedAccess.checkSelfPermission()!=0)throw new IllegalStateException("Authorize Shizuku or existing root access, then reconnect");
    if(!android.provider.Settings.canDrawOverlays(context))throw new IllegalStateException("Allow display over other apps, then reconnect");
