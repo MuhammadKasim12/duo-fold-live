@@ -363,11 +363,13 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  override fun surfaceDestroyed(h:SurfaceHolder){removeCallbacks(clearGuard);paintedEffect=false;fallback("");readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
  /** Reuse the exact shader painter in a normal window View, without attaching this SurfaceView. */
  fun drawEmbedded(canvas:Canvas){drawFrame(canvas)}
+ private var lastSlowCanvasLog=0L
  private fun drawFrame(windowCanvas:Canvas?=null){
   if((windowCanvas==null && !holder.surface.isValid) || width<=0 || height<=0)return
   runCatching{
    val started=SystemClock.elapsedRealtimeNanos()
    val canvas=windowCanvas ?: holder.lockHardwareCanvas()
+   val lockedAt=SystemClock.elapsedRealtimeNanos()
    val windowSave=if(windowCanvas!=null)canvas.saveLayer(0f,0f,width.toFloat(),height.toFloat(),null) else -1
    var rendered:GlassFrame?=null
    var endpoint=false
@@ -472,10 +474,17 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
    }finally{
     // Only successful glass rendering or a deliberate fully-open clear qualifies.
     // Attach before posting this buffer. A fallback draw never sends readiness.
+    val paintedAt=SystemClock.elapsedRealtimeNanos()
     if(windowCanvas==null){
      try{if(rendered!=null || endpoint)trackReadyFrame(rendered,endpoint)}finally{holder.unlockCanvasAndPost(canvas)}
     }else canvas.restoreToCount(windowSave)
-    if(!preview)FrameTelemetry.record(inner,SystemClock.elapsedRealtimeNanos(),SystemClock.elapsedRealtimeNanos()-started,appliedRate)
+    val postedAt=SystemClock.elapsedRealtimeNanos()
+    if(!preview)FrameTelemetry.record(inner,postedAt,postedAt-started,appliedRate)
+    val now=SystemClock.elapsedRealtime()
+    if(windowCanvas==null && !preview && !frozen && postedAt-started>=32_000_000L && now-lastSlowCanvasLog>=1000 && !context.getSharedPreferences("standalone",0).getBoolean("dual",false)){
+     lastSlowCanvasLog=now
+     RecoveryLog.add("Live canvas stages: panel=${if(inner)"inner" else "cover"}; lock=${(lockedAt-started)/1_000_000} ms; paint=${(paintedAt-lockedAt)/1_000_000} ms; readiness/post=${(postedAt-paintedAt)/1_000_000} ms")
+    }
    }
   }.onFailure{readinessGeneration++;readinessPending=false;RecoveryLog.add("Glass draw error: ${it.javaClass.simpleName}: ${it.message}")}
  }

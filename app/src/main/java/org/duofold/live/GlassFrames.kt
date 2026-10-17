@@ -12,10 +12,12 @@ internal object GlassFrames {
  private val executor=Executors.newSingleThreadExecutor()
  private val settingsExecutor=Executors.newSingleThreadExecutor()
  private var screenshotMode=false
+ private var liveMode=true
+ private var lastCaptureTrace=0L
  private fun targetCaptureDisplay()=if(screenshotMode&&LiveAngles.dualActive) IncomingAnimationFrame.captureDisplay else ScreenshotRenderPolicy.captureDisplay(LiveAngles.continuityNative,false,LiveAngles.dualActive)
  private var targetFps=120
  private var measuredStart=0L;private var measuredFrames=0;private var measuredFps=0f
- fun configure(context:android.content.Context){screenshotMode=context.getSharedPreferences("standalone",0).getBoolean("dual",false)&&context.getSharedPreferences("standalone",0).getBoolean("screenshot_camera_startup",false);targetFps=RenderQuality.fps(context.getSharedPreferences("standalone",0).getInt("content_fps",120))}
+ fun configure(context:android.content.Context){liveMode=!context.getSharedPreferences("standalone",0).getBoolean("dual",false);screenshotMode=context.getSharedPreferences("standalone",0).getBoolean("dual",false)&&context.getSharedPreferences("standalone",0).getBoolean("screenshot_camera_startup",false);targetFps=RenderQuality.fps(context.getSharedPreferences("standalone",0).getInt("content_fps",120))}
  private fun levels(bitmap:Bitmap):List<Bitmap>{val out=ArrayList<Bitmap>();var level=bitmap;repeat(7){level=Bitmap.createScaledBitmap(level,maxOf(1,level.width/2),maxOf(1,level.height/2),true);out.add(level)};return out}
  private var suspended=false
  private var recoveryStarted=0L
@@ -33,7 +35,7 @@ internal object GlassFrames {
   acquire();requestFreshCapture();urgentUntil=SystemClock.elapsedRealtime()+1500
   main.postDelayed({release()},1500)
  }
- private var clients=0;private var generation=0;private var pending=false
+ private var clients=0;@Volatile private var generation=0;private var pending=false
  private val surfaces=LinkedHashMap<Any,SurfaceControl>()
  fun surface(key:Any,sc:SurfaceControl?){if(sc==null)surfaces.remove(key) else surfaces[key]=sc}
  private fun resetMeasurement(){measuredStart=SystemClock.elapsedRealtime();measuredFrames=0;measuredFps=0f}
@@ -48,20 +50,38 @@ internal object GlassFrames {
  private fun retryDelay(normal:Long)=if(SystemClock.elapsedRealtime()<urgentUntil)16L else normal
  private val tick=object:Runnable{override fun run(){
   if(clients==0 || suspended)return
-  if(pending){main.postDelayed(this,retryDelay(50));return}
+  // The in-flight completion schedules the next live capture. Do not leave
+  // retry ticks competing with it after a remap invalidates its generation.
+  if(pending){if(!liveMode)main.postDelayed(this,retryDelay(50));return}
   val valid=surfaces.values.filter{it.isValid}.take(8)
   if(valid.isEmpty()){if(recoveryStarted>0L && recoveryFailure!="no exclusion surface"){recoveryFailure="no exclusion surface";RecoveryLog.add("Glass wake recovery waiting for exclusion surface")};frame=null;main.postDelayed(this,retryDelay(100));return}
-  val started=SystemClock.elapsedRealtimeNanos();val gen=generation;val captureDisplay=targetCaptureDisplay();pending=true
+  val started=SystemClock.elapsedRealtimeNanos();val gen=generation;val captureDisplay=targetCaptureDisplay();val liveCapture=liveMode;pending=true
   executor.execute{
+   val workerStarted=SystemClock.elapsedRealtimeNanos()
    var result:Bundle?=null;var error="Glass frame unavailable"
    val p=Parcel.obtain();val r=Parcel.obtain()
    try{val remote=LiveAngles.captureBinder();p.writeInterfaceToken(GlassCapture.TOKEN);p.writeInt(valid.size);valid.forEach{p.writeTypedObject(it,0)};p.writeInt(captureDisplay)
     remote.transact(1,p,r,0);r.readException();result=r.readBundle(Bitmap::class.java.classLoader);error=result?.getString("error")?:error
    }catch(e:Exception){error=e.message?:error}finally{p.recycle();r.recycle()}
+   val ipcDone=SystemClock.elapsedRealtimeNanos()
    val response=result;val message=error
    val capturedBitmap=response?.getParcelable("bitmap",Bitmap::class.java)
-   val pyramid=if(response?.getBoolean("ok")==true&&capturedBitmap!=null)runCatching{levels(capturedBitmap)}.getOrDefault(emptyList()) else emptyList()
-   main.post{pending=false;if(gen==generation && clients>0 && !suspended && captureDisplay==targetCaptureDisplay()){
+   val pyramid=if((!liveCapture || gen==generation)&&response?.getBoolean("ok")==true&&capturedBitmap!=null)runCatching{levels(capturedBitmap)}.getOrDefault(emptyList()) else emptyList()
+   val processingDone=SystemClock.elapsedRealtimeNanos()
+   main.post{
+    pending=false
+    val delivered=SystemClock.elapsedRealtimeNanos()
+    val accepted=gen==generation && clients>0 && !suspended && captureDisplay==targetCaptureDisplay()
+    if(liveCapture){
+     // Coalesce refresh ticks; this completion owns the next scheduled capture.
+     main.removeCallbacks(this)
+     val now=SystemClock.elapsedRealtime()
+     if(now<urgentUntil && now-lastCaptureTrace>=500){
+      lastCaptureTrace=now
+      RecoveryLog.add("Live capture stages: worker queue=${(workerStarted-started)/1_000_000} ms; IPC=${(ipcDone-workerStarted)/1_000_000} ms; blur preparation=${(processingDone-ipcDone)/1_000_000} ms; main delivery=${(delivered-processingDone)/1_000_000} ms; accepted=$accepted; generation=$gen/$generation; D$captureDisplay")
+     }
+    }
+    if(gen==generation && clients>0 && !suspended && captureDisplay==targetCaptureDisplay()){
     val bitmap=capturedBitmap
     if(response?.getBoolean("ok")==true && bitmap!=null){if(recoveryStarted>0L){RecoveryLog.add("Glass wake recovery first capture: D$captureDisplay ${response.getInt("width")}x${response.getInt("height")}; +${SystemClock.elapsedRealtime()-recoveryStarted} ms");recoveryStarted=0L;recoveryFailure=""};frame=GlassFrame(bitmap,response.getInt("width"),response.getInt("height"),response.getLong("stamp"),pyramid,physicalId=response.getString("physicalId")?:"unknown",displayId=captureDisplay,rotation=response.getInt("rotation"),exclusions=valid.joinToString(" | "));CoverStartupTrace.capture(frame!!);val now=SystemClock.elapsedRealtime();if(measuredStart==0L)measuredStart=now;measuredFrames++;if(now-measuredStart>=1000){measuredFps=measuredFrames*1000f/(now-measuredStart);measuredFrames=0;measuredStart=now};status="Content target $targetFps FPS · measured ${"%.1f".format(measuredFps)} captures/s · D$captureDisplay · ${response.getString("backend") ?: "layer capture"}"}
     else{frame=null;status="Glass unavailable; debug-style fallback: $message";if(recoveryStarted>0L && recoveryFailure!=message){recoveryFailure=message;RecoveryLog.add("Glass wake recovery capture failed: $message")}}
