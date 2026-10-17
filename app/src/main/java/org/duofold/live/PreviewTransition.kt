@@ -16,7 +16,8 @@ internal object PreviewTransition {
  @Volatile private var frostedReflection=true
  @Volatile private var rightPreviewReady=false
  fun previewReady(ready:Boolean){rightPreviewReady=ready}
- fun configure(context:android.content.Context){val p=context.getSharedPreferences("standalone",0);coverPrepareAngle=HandoffSettings.angle(p.getFloat("handoff_angle",85f))+30f;frostedReflection=p.getBoolean("frosted_reflection",true);blurStrength=RenderQuality.blur(p.getFloat("blur_strength",.3f));seamOffset=RenderQuality.seam(p.getFloat("seam_offset",.07f))}
+ private var settingsRevision=-1L
+ fun configure(context:android.content.Context){val p=RuntimeSettings.get(context);if(settingsRevision==p.revision())return;settingsRevision=p.revision();coverPrepareAngle=HandoffSettings.angle(p.getFloat("handoff_angle",85f))+30f;frostedReflection=p.getBoolean("frosted_reflection",true);blurStrength=RenderQuality.blur(p.getFloat("blur_strength",.3f));seamOffset=RenderQuality.seam(p.getFloat("seam_offset",.07f))}
  private var pending=false
  private var lastStamp=0L
  private var coverPrepareAngle=115f
