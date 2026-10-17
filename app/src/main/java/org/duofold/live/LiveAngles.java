@@ -66,6 +66,7 @@ public final class LiveAngles {
  private WindowManager secondaryWm;private View secondaryAnchor;private String anchorKey="",secondaryKey=""; private PrivilegedAccess.UserServiceArgs args;
  private volatile long lastPoll;
  private long secondaryRefreshAt,statusFormatAt;
+ private long lastSlowPollLog;
  public static volatile boolean effectAllowed=true;
  private boolean pollInFlight,urgentPoll;
  private long pollStarted;
@@ -102,7 +103,12 @@ public final class LiveAngles {
    binding.start();
   }catch(Exception e){status=e.getMessage();stop();}
  }
- private String key(Display d){return d.getDisplayId()+":"+d.getMode().getPhysicalWidth()+"x"+d.getMode().getPhysicalHeight();}
+ private String key(Display d){
+  // A 1px anchor belongs to a logical display; its WindowContext follows remaps.
+  // Retain it on the live path instead of doing remove/add window IPC at every switch.
+  if(!context.getSharedPreferences("standalone",0).getBoolean("dual",false))return "logical-D"+d.getDisplayId();
+  return d.getDisplayId()+":"+d.getMode().getPhysicalWidth()+"x"+d.getMode().getPhysicalHeight();
+ }
  private void ensureAnchors(){
   android.hardware.display.DisplayManager dm=context.getSystemService(android.hardware.display.DisplayManager.class);
   Display primary=dm.getDisplay(0);if(primary==null)return;
@@ -144,12 +150,32 @@ public final class LiveAngles {
   if(!running||pollInFlight)return;
   pollInFlight=true;pollStarted=SystemClock.elapsedRealtime();
   boolean on=context.getSystemService(PowerManager.class).isInteractive();
-  try{if(on){ensureAnchors();sendAngleCommand(anchor);sendAngleCommand(secondaryAnchor);}}
+  final boolean livePath=!context.getSharedPreferences("standalone",0).getBoolean("dual",false);
+  try{if(on){ensureAnchors();if(!livePath){sendAngleCommand(anchor);sendAngleCommand(secondaryAnchor);}}}
   catch(Exception e){fail(e);return;}
-  worker.post(()->{try{Bundle b=call(2);
+  // Snapshot View-owned tokens on main; only the synchronous Binder commands run on worker.
+  final IBinder primaryToken=on&&livePath&&anchor!=null?anchor.getWindowToken():null;
+  final IBinder secondaryToken=on&&livePath&&secondaryAnchor!=null?secondaryAnchor.getWindowToken():null;
+  final WallpaperManager primaryWallpaper=primaryToken==null?null:WallpaperManager.getInstance(anchor.getContext());
+  final WallpaperManager secondaryWallpaper=secondaryToken==null?null:WallpaperManager.getInstance(secondaryAnchor.getContext());
+  final long queued=SystemClock.elapsedRealtime();
+  worker.post(()->{try{
+   if(!running)return;
+   long commandAt=SystemClock.elapsedRealtime();
+   if(primaryWallpaper!=null)primaryWallpaper.sendWallpaperCommand(primaryToken,action,0,0,0,null);
+   if(secondaryWallpaper!=null)secondaryWallpaper.sendWallpaperCommand(secondaryToken,action,0,0,0,null);
+   long readAt=SystemClock.elapsedRealtime();
+   Bundle b=call(2);
+   long returnedAt=SystemClock.elapsedRealtime();
    if(ReaderRecovery.needsRestart(b.getString("state"))){main.post(()->{if(running){RecoveryLog.add("Expired wallpaper reader lease; paced recovery");stop();status="Reader lease expired — awaiting recovery";}});return;}
    main.post(()->{
    if(!running)return;
+   long deliveredAt=SystemClock.elapsedRealtime();
+   if(livePath && deliveredAt-lastSlowPollLog>=1000 &&
+      (queued-pollStarted>=32 || commandAt-queued>=32 || readAt-commandAt>=32 || returnedAt-readAt>=32 || deliveredAt-returnedAt>=32)){
+    lastSlowPollLog=deliveredAt;
+    RecoveryLog.add("Live poll stages: main setup="+(queued-pollStarted)+" ms; worker queue="+(commandAt-queued)+" ms; wallpaper IPC="+(readAt-commandAt)+" ms; reader IPC="+(returnedAt-readAt)+" ms; main delivery="+(deliveredAt-returnedAt)+" ms");
+   }
    String nextHandoff=b.getString("handoff", "Unknown display status");
    if(!nextHandoff.equals(handoffStatus))RecoveryLog.add(nextHandoff);
    handoffStatus=nextHandoff;continuityStatus=b.getString("continuityProbe","Continuity status unavailable");continuityTrace=b.getString("continuityTrace","");

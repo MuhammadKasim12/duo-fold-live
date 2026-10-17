@@ -401,7 +401,14 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     paintedEffect=true
     val f=frame
     val size=Point()
-    if(!preview && !frozen)display?.getRealSize(size)
+    if(!preview && !frozen)display?.let { current ->
+     current.getRealSize(size)
+     if(!context.getSharedPreferences("standalone",0).getBoolean("dual",false)){
+      val mode=current.mode
+      val resolved=LivePanelGeometry.resolve(mode.physicalWidth,mode.physicalHeight,current.rotation,size.x,size.y)
+      size.set(resolved[0],resolved[1])
+     }
+    }
     val fresh=f!=null && (preview || frozen || ((f.displayId<0||f.displayId==display?.displayId)&&f.rotation==rotation&&GlassFramePolicy.usable(f.stamp,SystemClock.elapsedRealtime(),f.width,f.height,size.x,size.y)))
     val shader=program
     if(fresh && shader!=null && f!=null){

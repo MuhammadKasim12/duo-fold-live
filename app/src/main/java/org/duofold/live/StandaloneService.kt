@@ -229,7 +229,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
             getSystemService(KeyguardManager::class.java).isKeyguardLocked)
         if(liveRetention && display.state!=Display.STATE_ON)return
         if(primaryHostKey(display)!=primaryKey){
-            val size=android.graphics.Point();display.getRealSize(size)
+            val size=primarySize(display)
             val screenshotRetain=settings().getBoolean("dual",false)&&settings().getBoolean("screenshot_camera_startup",false)&&LiveAngles.dualActive&&LiveAngles.fresh()&&usable()&&LiveAngles.effectAllowed
             val retain=screenshotRetain || liveRetention
             if(!retain){RecoveryLog.add("Primary physical panel changed; rebuilding overlay");restart();return}
@@ -248,7 +248,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
             return
         }
         val next=Configuration(windowContext!!.resources.configuration)
-        val bounds=if(retainedPrimaryHost){val size=android.graphics.Point();display.getRealSize(size);Rect(0,0,size.x,size.y)} else wm.currentWindowMetrics.bounds
+        val bounds=if(retainedPrimaryHost){val size=primarySize(display);Rect(0,0,size.x,size.y)} else wm.currentWindowMetrics.bounds
         if(screenWidth!=bounds.width()||screenHeight!=bounds.height()){
             screenWidth=bounds.width();screenHeight=bounds.height();generation++;pending=false;image=null;if(!retainedPrimaryHost)view?.alpha=0f
         }
@@ -340,6 +340,13 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
             lastDiagnosticState=state;diagnosticHistory.addLast("$now $event $state")
             while(diagnosticHistory.size>40)diagnosticHistory.removeFirst()
         }
+    }
+    private fun primarySize(display:Display):android.graphics.Point {
+        val reported=android.graphics.Point();display.getRealSize(reported)
+        if(settings().getBoolean("dual",false))return reported
+        val mode=display.mode
+        val resolved=LivePanelGeometry.resolve(mode.physicalWidth,mode.physicalHeight,display.rotation,reported.x,reported.y)
+        return android.graphics.Point(resolved[0],resolved[1])
     }
     private fun primaryHostKey(d:Display)=if(settings().getBoolean("dual",false))physicalKey(d) else "${displayIdentity(d)}:${physicalKey(d)}"
     private fun physicalKey(d:Display)="${d.displayId}:${d.mode.physicalWidth}x${d.mode.physicalHeight}"
