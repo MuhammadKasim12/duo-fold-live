@@ -10,6 +10,7 @@ import rikka.shizuku.Shizuku
 object ShizukuAccess {
  fun request(context: Context, code: Int): String = try {
   when {
+   PrivilegedAccess.rootSelected() -> PrivilegedAccess.report()
    !Shizuku.pingBinder() -> "Duo has not received Shizuku’s connection. Check that Shizuku says Running (pairing alone is not enough). Keep both apps in the same Android profile. If it is already running, restart Shizuku, then reopen Duo."
    Shizuku.isPreV11() -> "This Shizuku version is unsupported. Update official Shizuku."
    Shizuku.checkSelfPermission()==0 -> "Shizuku permission is granted. This does not verify the angle reader or required wallpaper."
@@ -25,6 +26,8 @@ object ShizukuAccess {
   append("${HelperBinding.report()}\n")
   append("Reader diagnostics: ${LiveAngles.readerDiagnostics}\n")
   append("Package: ${context.packageName}\n")
+  append(PrivilegedAccess.report()+"\n")
+  if(!PrivilegedAccess.rootSelected()){
   append("Official Shizuku installed in this profile: "+runCatching{context.packageManager.getPackageInfo("moe.shizuku.privileged.api",0);true}.getOrDefault(false)+"\n")
   val alive=runCatching{Shizuku.pingBinder()}.getOrDefault(false)
   append("Binder received and alive: $alive\n")
@@ -34,12 +37,14 @@ object ShizukuAccess {
    append("Permission: ${Shizuku.checkSelfPermission()} (0 = authorized)\n")
    append("Previously denied: ${Shizuku.shouldShowRequestPermissionRationale()}\n")
   }.onFailure{append("Connection check failed: ${it.javaClass.simpleName}: ${it.message}\n")}
+  }
   append("Wallpaper profile: ${runCatching{WallpaperProfile.resolve(Build.MODEL,context.getSharedPreferences("first_run",0).getString("wallpaper_profile",""))}.getOrDefault("Selection required")}\n")
   append("Wallpaper setup model/OS eligible: ${DeviceCompatibility.isEligible(Build.MODEL, Build.VERSION.SDK_INT)}\n")
   append("Wallpaper setup verified: ${context.getSharedPreferences("first_run",0).getBoolean("wallpaper_verified",false)}\n")
   append("Wireless and USB start the same Shizuku ADB service. An unsupported wallpaper profile is not an authorization failure.")
  }
  fun show(context: Context, message: String) {
+  if(PrivilegedAccess.rootSelected()){AlertDialog.Builder(context).setTitle("Root connection").setMessage(message).setPositiveButton("OK",null).setNeutralButton("Copy report"){_,_->copy(context)}.show();return}
   AlertDialog.Builder(context).setTitle("Shizuku connection").setMessage(message)
    .setPositiveButton("OK",null).setNeutralButton("Copy report"){_,_->copy(context)}
    .setNegativeButton("Open Shizuku"){_,_->

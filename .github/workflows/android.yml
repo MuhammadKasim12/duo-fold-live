@@ -43,8 +43,8 @@ jobs:
           import os, re
           from pathlib import Path
           p = Path('app/build.gradle.kts')
-          if not re.search(r'versionName\s*=\s*"(?:[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+|3\.5\.[01234])"', p.read_text()):
-              raise SystemExit('Release policy: only alpha versions and owner-approved 3.5.0/3.5.1/3.5.2/3.5.3/3.5.4 are allowed')
+          if not re.search(r'versionName\s*=\s*"(?:[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+|3\.5\.[012345])"', p.read_text()):
+              raise SystemExit('Release policy: only alpha versions and owner-approved 3.5.0/3.5.1/3.5.2/3.5.3/3.5.4/3.5.5 are allowed')
           current = int(re.search(r'\bversionCode\s*=\s*(\d+)', p.read_text()).group(1))
           code = max(current, 1000 + int(os.environ['GITHUB_RUN_NUMBER']))
           text, count = re.subn(r'\bversionCode\s*=\s*\d+', f'versionCode = {code}', p.read_text())
@@ -67,6 +67,7 @@ jobs:
       - name: Test and build unsigned release
         run: |
           python3 tools/check_inner_stretch.py
+          python3 tools/check_window_shading.py
           ./gradlew --no-daemon testReleaseUnitTest lintRelease assembleRelease
 
       - name: Sign and verify APK
@@ -91,6 +92,7 @@ jobs:
           if [ "$GITHUB_REF_NAME" = release/3.5.4 ] || [ "$GITHUB_REF_NAME" = main ]; then
             if grep -q 'versionName = "3.5.4"' app/build.gradle.kts; then apk="dist/Duo-Fold-Live-3.5.4.apk"; fi
           fi
+          if [ "$GITHUB_REF_NAME" = main ] && grep -q 'versionName = "3.5.5"' app/build.gradle.kts; then apk="dist/Duo-Fold-Live-3.5.5.apk"; fi
           tools="$ANDROID_HOME/build-tools/35.0.0"
           "$tools/zipalign" -f -P 16 4 \
             app/build/outputs/apk/release/app-release-unsigned.apk \
@@ -127,6 +129,11 @@ jobs:
           # Owner approved alpha.7 closure behavior and Smooth/Fast presets as stable 3.5.4.
           if [ "$version" = 3.5.4 ] && { [ "$GITHUB_REF_NAME" = release/3.5.4 ] || [ "$GITHUB_REF_NAME" = main ]; }; then
             tag="v3.5.4"
+            release_flags=(--latest)
+          fi
+          # Owner approved alpha.34 for stable 3.5.5.
+          if [ "$GITHUB_REF_NAME" = main ] && [ "$version" = 3.5.5 ]; then
+            tag="v3.5.5"
             release_flags=(--latest)
           fi
           gh release create "$tag" dist/*.apk dist/SHA256SUMS.txt \

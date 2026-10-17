@@ -26,8 +26,8 @@ internal object RotationMigration {
   val now=SystemClock.elapsedRealtime()
   if(pauseAt<0){pauseAt=now;status="Automatic rotation repair: waiting for previous hold to release";return}
   if(pending || now-pauseAt<1500 || now<nextAttempt)return
-  if(!runCatching{Shizuku.pingBinder()&&Shizuku.checkSelfPermission()==0}.getOrDefault(false)){
-   status="Automatic rotation repair: waiting for authorized Shizuku";return
+  if(!runCatching{PrivilegedAccess.pingBinder()&&PrivilegedAccess.checkSelfPermission()==0}.getOrDefault(false)){
+   status="Automatic rotation repair: waiting for authorized Shizuku or root";return
   }
   val app=context.applicationContext
   val install=app.packageManager.getPackageInfo(app.packageName,0).firstInstallTime.toString()

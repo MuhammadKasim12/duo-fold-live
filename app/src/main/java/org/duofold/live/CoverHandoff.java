@@ -12,6 +12,21 @@ final class CoverHandoff {
  private final ContinuityProbePolicy probe=new ContinuityProbePolicy();
  synchronized boolean probeHolding(){return probe.holding();}
  synchronized String probeStatus(){return probe.status+"\n"+nativeProbe.report();}
+ private final ClosingPrewarmPolicy prewarm=new ClosingPrewarmPolicy();
+ private Runnable prewarmTimer;
+ private void clearPrewarm(){if(delayHandler!=null && prewarmTimer!=null)delayHandler.removeCallbacks(prewarmTimer);prewarmTimer=null;}
+ private void prepareCover(){
+  changeState(true);
+  if(owned==null || !innerHeld)return;
+  final Object expected=owned;
+  event("PREWARM cover: inner remains primary; bounded "+ClosingPrewarmPolicy.HOLD_MS+" ms; not panel ON proof");
+  if(delayHandler==null){HandlerThread thread=new HandlerThread("Duo-closing-release");thread.start();delayHandler=new Handler(thread.getLooper());}
+  prewarmTimer=()->{synchronized(CoverHandoff.this){
+   if(owned!=expected || !innerHeld)return;
+   event("PREWARM expired without handoff; releasing preparation");releaseOwned();
+  }};
+  delayHandler.postDelayed(prewarmTimer,ClosingPrewarmPolicy.HOLD_MS);
+ }
  private float handoffAngle=HandoffSettings.DEFAULT;
  // Let Android complete closure; bound the cover request with the tested one-second fallback.
  private final ClosingReleaseDelay delay=new ClosingReleaseDelay();
@@ -71,10 +86,12 @@ final class CoverHandoff {
    event("CLOSE_DELAY ABORT: fresh="+fresh+" interactive="+interactive+" direct="+direct);releaseOwned();return;
   }
   if(delay.active() && angle>0)clearDelay("reopening; normal handoff resumed");
+  boolean prepare=prewarm.update(angle,fresh,interactive,direct&&probeRequest==0,openThreshold,this.handoffAngle);
   int test=probe.update(SystemClock.elapsedRealtime(),probeRequest,angle,fresh,interactive&&direct,owned!=null&&!innerHeld);
   nativeProbe.update(test==ContinuityProbePolicy.HOLD,angle,interactive);
   if(test==ContinuityProbePolicy.HOLD)return;
   if(test==ContinuityProbePolicy.FINISH){event("RELEASE reason=continuity test finished");releaseOwned();return;}
+  if(prepare && owned==null){prepareCover();return;}
   if(owned!=null){
    int next=DirectHandoffPolicy.next(innerHeld,angle,fresh,interactive,direct,openThreshold,this.handoffAngle);
    if(next==DirectHandoffPolicy.RELEASE){if(deferClosingRelease(angle,fresh,interactive,direct))return;event("RELEASE decision: fresh="+fresh+" interactive="+interactive+" direct="+direct+" open="+openThreshold);releaseOwned();return;}
@@ -88,32 +105,41 @@ final class CoverHandoff {
   changeState(false);
  }
  private void changeState(boolean toInner){
-  long identity=Binder.clearCallingIdentity();Object previous=owned;boolean previousInner=innerHeld;
+  clearPrewarm();
+  long identity=Binder.clearCallingIdentity();Object previous=owned;boolean previousInner=innerHeld;long decisionAt=SystemClock.elapsedRealtime();
   try{
    init();
    if(toInner && innerId<0)throw new IllegalStateException("Inner concurrent state missing");
-   IBinder binder=(IBinder)Class.forName("android.os.ServiceManager").getMethod("getService",String.class).invoke(null,"device_state");
-   Object service=Class.forName("android.hardware.devicestate.IDeviceStateManager$Stub").getMethod("asInterface",IBinder.class).invoke(null,binder);
-   Object info=Class.forName("android.hardware.devicestate.IDeviceStateManager").getMethod("getDeviceStateInfo").invoke(service);
-   Object current=info.getClass().getField("currentState").get(info),base=info.getClass().getField("baseState").get(info);
-   if(owned==null && !current.getClass().getMethod("getIdentifier").invoke(current).equals(base.getClass().getMethod("getIdentifier").invoke(base)))throw new IllegalStateException("Another display override is active");
-   event("REQUEST "+(toInner?"inner":"cover")+" id="+(toInner?innerId:coverId)+" current="+current.getClass().getMethod("getIdentifier").invoke(current)+" base="+base.getClass().getMethod("getIdentifier").invoke(base));
+   // Query ownership on acquisition only. Replacing our existing request needs no
+   // extra device-state round trip; Android still arbitrates the replacement.
+   if(owned==null){
+    IBinder binder=(IBinder)Class.forName("android.os.ServiceManager").getMethod("getService",String.class).invoke(null,"device_state");
+    Object service=Class.forName("android.hardware.devicestate.IDeviceStateManager$Stub").getMethod("asInterface",IBinder.class).invoke(null,binder);
+    Object info=Class.forName("android.hardware.devicestate.IDeviceStateManager").getMethod("getDeviceStateInfo").invoke(service);
+    Object current=info.getClass().getField("currentState").get(info),base=info.getClass().getField("baseState").get(info);
+    if(!current.getClass().getMethod("getIdentifier").invoke(current).equals(base.getClass().getMethod("getIdentifier").invoke(base)))throw new IllegalStateException("Another display override is active");
+   }
+   event("REQUEST "+(toInner?"inner":"cover")+" id="+(toInner?innerId:coverId)+" replacingOwned="+(owned!=null));
    Object builder=requestType.getMethod("newBuilder",int.class).invoke(null,toInner?innerId:coverId);
    Object next=builder.getClass().getMethod("build").invoke(builder);
    Object callback=Proxy.newProxyInstance(callbackType.getClassLoader(),new Class<?>[]{callbackType},(proxy,m,args)->{
     if(m.getName().equals("hashCode"))return System.identityHashCode(proxy);
     if(m.getName().equals("equals"))return proxy==args[0];
     if(m.getName().equals("toString"))return "DuoCoverHandoff";
-    if(m.getName().equals("onRequestCanceled")){synchronized(this){event("ANDROID CANCEL callback; current owned request="+(owned==next)+" request="+(toInner?"inner":"cover"));if(owned==next){clearDelay("Android canceled owned request");owned=null;innerHeld=false;status="Concurrent handoff request canceled by system";}}}return null;
+    if(m.getName().equals("onRequestActivated")){synchronized(this){event("REQUEST ACTIVE callback; request="+(toInner?"inner":"cover")+"; since decision="+(SystemClock.elapsedRealtime()-decisionAt)+" ms; not panel ON proof");}}
+    if(m.getName().equals("onRequestCanceled")){synchronized(this){event("ANDROID CANCEL callback; current owned request="+(owned==next)+" request="+(toInner?"inner":"cover"));if(owned==next){clearPrewarm();clearDelay("Android canceled owned request");owned=null;innerHeld=false;status="Concurrent handoff request canceled by system";}}}return null;
    });
-   owned=next;innerHeld=toInner;request.invoke(manager,next,(Executor)Runnable::run,callback);
+   owned=next;innerHeld=toInner;long submittedAt=SystemClock.elapsedRealtime();request.invoke(manager,next,(Executor)Runnable::run,callback);
+   event("REQUEST returned; preparation="+(submittedAt-decisionAt)+" ms; binder="+(SystemClock.elapsedRealtime()-submittedAt)+" ms; physical remap measured separately");
    status=toInner?"Direct concurrent handoff: inner primary; holding until fully open":"Cover held below handoff; switch at "+Math.round(handoffAngle)+"° or closed";
   }catch(Exception e){owned=previous;innerHeld=previousInner;releaseOwned();Throwable root=e;while(root.getCause()!=null)root=root.getCause();status="Handoff unavailable: "+root.getClass().getSimpleName()+": "+root.getMessage();}
   finally{Binder.restoreCallingIdentity(identity);}
  }
+ synchronized boolean innerActive(){return owned!=null && innerHeld;}
  synchronized boolean active(){return owned!=null && !innerHeld;}
- synchronized void release(){probe.abort();nativeProbe.update(false,0,false);releaseOwned();}
+ synchronized void release(){prewarm.reset();probe.abort();nativeProbe.update(false,0,false);releaseOwned();}
  private void releaseOwned(){
+  clearPrewarm();
   clearDelay("explicit release");policy.reset();if(owned==null)return;long identity=Binder.clearCallingIdentity();
   try{event("EXPLICIT cancelStateRequest; held="+(innerHeld?"inner":"cover"));cancel.invoke(manager);event("EXPLICIT cancelStateRequest returned");owned=null;innerHeld=false;status="Normal display control restored";}catch(Exception e){status="Display release pending";}finally{Binder.restoreCallingIdentity(identity);}
  }

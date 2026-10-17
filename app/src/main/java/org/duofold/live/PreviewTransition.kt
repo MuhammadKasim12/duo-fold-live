@@ -16,9 +16,14 @@ internal object PreviewTransition {
  @Volatile private var frostedReflection=true
  @Volatile private var rightPreviewReady=false
  fun previewReady(ready:Boolean){rightPreviewReady=ready}
- fun configure(context:android.content.Context){val p=context.getSharedPreferences("standalone",0);frostedReflection=p.getBoolean("frosted_reflection",true);blurStrength=RenderQuality.blur(p.getFloat("blur_strength",.3f));seamOffset=RenderQuality.seam(p.getFloat("seam_offset",.07f))}
+ private var settingsRevision=-1L
+ fun configure(context:android.content.Context){val p=RuntimeSettings.get(context);if(settingsRevision==p.revision())return;settingsRevision=p.revision();coverPrepareAngle=HandoffSettings.angle(p.getFloat("handoff_angle",85f))+30f;frostedReflection=p.getBoolean("frosted_reflection",true);blurStrength=RenderQuality.blur(p.getFloat("blur_strength",.3f));seamOffset=RenderQuality.seam(p.getFloat("seam_offset",.07f))}
  private var pending=false
  private var lastStamp=0L
+ private var coverPrepareAngle=115f
+ private var coverStamp=0L
+ private var coverPending=false
+ private var coverReadyStamp=0L
  private var wasCover=false
  private var active=false
  private var readySent=false
@@ -80,25 +85,38 @@ internal object PreviewTransition {
   try{
    p.writeInterfaceToken(PreviewExpansion.TOKEN)
    if(code==2)p.writeInt(if(endpoint)1 else 0)
-   if(frame!=null){blurred=frost(frame.bitmap);p.writeTypedObject(blurred,0);p.writeTypedObject(frame.bitmap,0);p.writeLong(frame.stamp);p.writeFloat(seamOffset);p.writeInt(if(frostedReflection)1 else 0);p.writeInt(if(rightPreviewReady)1 else 0);p.writeInt(frame.rotation)}
+   if(code==4 && frame!=null){p.writeLong(frame.stamp);p.writeString(frame.physicalId);p.writeInt(frame.rotation)}
+   if(code==5 && frame!=null){p.writeLong(frame.stamp);p.writeString(frame.physicalId);p.writeInt(frame.width);p.writeInt(frame.height);p.writeInt(frame.rotation)}
+   if(frame!=null && code==1){blurred=frost(frame.bitmap);p.writeTypedObject(blurred,0);p.writeTypedObject(frame.bitmap,0);p.writeLong(frame.stamp);p.writeFloat(seamOffset);p.writeInt(if(frostedReflection)1 else 0);p.writeInt(if(rightPreviewReady)1 else 0);p.writeInt(frame.rotation)}
    binder().transact(code,p,r,0);r.readException();return r.readString()?:"Expansion ready"
   }catch(e:Exception){remote=null;throw e}finally{blurred?.recycle();p.recycle();r.recycle()}
  }
  fun update(enabled:Boolean,primaryInner:Boolean){
-  if(!enabled){if(active){serial++;executor.execute{runCatching{send(3)}}};active=false;wasCover=false;readySent=false;return}
+  if(!enabled){if(active){serial++;executor.execute{runCatching{send(3)};runCatching{send(6)}}};active=false;wasCover=false;readySent=false;return}
   active=true
+  if(primaryInner)coverReadyStamp=0L
   val cover=LiveAngles.coverPreview && !primaryInner
   if(cover && !wasCover){lastStamp=0;readySent=false;executor.execute{runCatching{send(3)}}}
   wasCover=cover
   val frame=GlassFrames.frame?:return
   val now=SystemClock.elapsedRealtime()
   val isInner=minOf(frame.width,frame.height).toFloat()/maxOf(frame.width,frame.height)>.7f
+  if(primaryInner && isInner && LiveAngles.fresh() && LiveAngles.currentAngle()<=coverPrepareAngle && !coverPending && frame.stamp-coverStamp>=100 && CoverBridgePolicy.freshSource(now,frame.stamp)){
+   coverStamp=frame.stamp;coverPending=true
+   executor.execute{try{send(4,frame)}catch(e:Exception){main.post{RecoveryLog.add("Cover layer preparation: ${e.message}")}}finally{main.post{coverPending=false}}}
+  }
   if(!cover || isInner || pending || frame.stamp==lastStamp || !PreviewExpansionPolicy.fresh(frame.stamp,now))return
   lastStamp=frame.stamp;pending=true;val gen=serial
   executor.execute{
    val note=runCatching{send(1,frame)}.getOrElse{"Expansion preparation: ${it.message}"}
    main.post{pending=false;if(gen==serial)status=note}
   }
+ }
+ fun needsCoverCommit()=active && coverReadyStamp==0L
+ fun coverFrameCommitted(frame:GlassFrame){
+  if(!needsCoverCommit() || frame.stamp==coverReadyStamp || minOf(frame.width,frame.height).toFloat()/maxOf(frame.width,frame.height)>.7f)return
+  coverReadyStamp=frame.stamp
+  executor.execute{runCatching{send(5,frame)}}
  }
  fun innerFrameSubmitted(frame:GlassFrame?){
   if(!active || wasCover || readySent || frame==null)return

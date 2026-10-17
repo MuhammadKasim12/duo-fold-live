@@ -17,6 +17,20 @@ final class ConcurrentController {
  synchronized boolean secondaryHasNativeContent(){return owned!=null && !primaryInner && contentInner;}
  private FixedTaskRoute fixedRoute;private boolean taskRequested,taskVerified,routeUnlocked;private long routePollAt,restoreAt,panelsReadySince;private String fixedSecondary="";
  private boolean closingAppReturnEnabled,closingAppReturnAttempted;
+ // Screenshot mode has no mid-fold primary promotion.
+ private final ClosingReleaseDelay closingDelay=new ClosingReleaseDelay();
+ private Handler closingHandler;private Runnable closingTimer;
+ private void clearClosingDelay(){closingDelay.clear();if(closingHandler!=null&&closingTimer!=null)closingHandler.removeCallbacks(closingTimer);closingTimer=null;}
+ private boolean holdClosing(){
+  if(closingDelay.active())return true;
+  final Object expected=owned;if(!closingDelay.arm(expected,SystemClock.elapsedRealtime()))return false;
+  log("CLOSE_DELAY ARM: Android release with 1000 ms fallback; primary switch at endpoint");
+  windows.capture("closing hold armed");
+  if(closingHandler==null){HandlerThread t=new HandlerThread("screenshot-closing-release");t.start();closingHandler=new Handler(t.getLooper());}
+  closingTimer=()->{synchronized(ConcurrentController.this){if(owned!=expected||!closingDelay.matches(expected))return;long identity=Binder.clearCallingIdentity();try{log("CLOSE_DELAY TIMER: fallback release");deferEndpointReturn(SystemClock.elapsedRealtime());releaseInternal();}finally{Binder.restoreCallingIdentity(identity);}}};
+  closingHandler.postDelayed(closingTimer,ClosingReleaseDelay.DURATION_MS);return true;
+ }
+
  synchronized void closingAppReturnEnabled(boolean enabled){closingAppReturnEnabled=enabled;}
  private HandoffPowerOverride powerOverride;private boolean powerOverrideEnabled,powerOverrideArmed,powerCancellationSent;
  synchronized void powerOverrideEnabled(boolean enabled){if(powerOverrideEnabled&&!enabled&&powerOverride!=null)powerOverride.cancel("option disabled");powerOverrideEnabled=enabled;}
@@ -32,7 +46,7 @@ final class ConcurrentController {
 
  synchronized Bundle incomingHoldInfo(){
   Bundle b=new Bundle();b.putLong("session",started);b.putBoolean("active",owned!=null&&cameraSession);
-  b.putBoolean("closing",primaryInner);b.putInt("task",cameraSession&&fixedRoute!=null?fixedRoute.selectedTask():-1);
+  b.putInt("display",1);b.putBoolean("routed",taskRequested&&!closingAppReturnAttempted);b.putBoolean("closing",primaryInner);b.putInt("task",cameraSession&&fixedRoute!=null?fixedRoute.selectedTask():-1);
   b.putString("physical",fixedSecondary);b.putInt("width",destinationWidth);b.putInt("height",destinationHeight);return b;
  }
  private long readinessLostAt;
@@ -106,8 +120,9 @@ final class ConcurrentController {
   Object info=Class.forName("android.hardware.devicestate.IDeviceStateManager").getMethod("getDeviceStateInfo").invoke(service);
   Object current=info.getClass().getField("currentState").get(info),base=info.getClass().getField("baseState").get(info);
   if(!current.getClass().getMethod("getIdentifier").invoke(current).equals(base.getClass().getMethod("getIdentifier").invoke(base)))throw new IllegalStateException("Existing display override; stop other test apps first");
+  clearClosingDelay();
   if(cameraSession){readinessLostAt=0;closingAppReturnAttempted=false;taskRequested=false;taskVerified=false;routeCheckpoint=false;routeObservation="";panelsReadySince=0;routePollAt=0;fixedPrimary=physicalPrimary();fixedSecondary=physicalId(1);captureDestinationSize();capturedTasks=false;log("REQUEST after committed outgoing screenshot; retain physical primary="+fixedPrimary+"; source="+(inner?"inner":"cover"));samplePanels(Float.NaN,true,false,true);}
-  if(cameraSession&&powerOverrideEnabled){if(powerOverride==null)powerOverride=new HandoffPowerOverride();powerOverrideArmed=false;powerCancellationSent=false;powerOverride.newSession();}
+  if(cameraSession){powerOverrideArmed=false;powerCancellationSent=false;if(powerOverride!=null)powerOverride.newSession();}
   setConcurrent(inner,now); // Captured outgoing panel becomes the secondary Presentation.
  }
  private void setConcurrent(boolean inner,long now)throws Exception{
@@ -120,7 +135,7 @@ final class ConcurrentController {
     case "hashCode":return System.identityHashCode(proxy);
     case "equals":return proxy==args[0];
     case "toString":return "DuoConcurrentRequest";
-    case "onRequestCanceled":synchronized(this){if(owned==next){owned=null;blocked=true;status="Concurrent request canceled by Android";if(cameraSession){log(status);endpointPower.arm("Android canceled concurrent request");samplePanels(Float.NaN,false,false,true);afterReleaseAt=SystemClock.elapsedRealtime();afterReleaseStage=0;windows.capture("Android canceled");}}}
+    case "onRequestCanceled":synchronized(this){if(owned==next){clearClosingDelay();owned=null;blocked=true;status="Concurrent request canceled by Android";if(cameraSession){deferEndpointReturn(SystemClock.elapsedRealtime());log(status);endpointPower.arm("Android canceled concurrent request");samplePanels(Float.NaN,false,false,true);afterReleaseAt=SystemClock.elapsedRealtime();afterReleaseStage=0;windows.capture("Android canceled");}}}
    }return null;
   });
   request.invoke(manager,next,(Executor)Runnable::run,callback);
@@ -155,26 +170,24 @@ final class ConcurrentController {
   if(!observation.equals(endpointObservation)){endpointObservation=observation;log(observation);}
   return ready;
  }
+ private void deferEndpointReturn(long now){
+  if(cameraSession&&fixedRoute!=null&&fixedRoute.pending()&&!endpointReturnWaiting){
+   endpointReturnWaiting=true;endpointTarget=fixedSecondary;endpointObservation="";endpointReturnDeadline=now+1800;
+   log("ENDPOINT: retain exact app on D1 until incoming primary is ON and destination-sized; target="+endpointTarget);
+  }
+ }
  private void returnTask(){
   if(fixedRoute==null||!fixedRoute.pending())return;
   try{log(fixedRoute.restore(routeUnlocked));}catch(Exception e){log("Task return pending: "+e);}
  }
- synchronized void update(float angle,boolean fresh,boolean unlocked,boolean primaryIsInner,boolean secondaryReady,int frozenSource,float openThreshold,boolean cameraStartup,boolean windowPrepared){
+ synchronized void update(float angle,boolean fresh,boolean unlocked,boolean primaryIsInner,boolean secondaryReady,int frozenSource,float openThreshold,boolean cameraStartup,boolean windowPrepared,float handoffAngle){
   long token=Binder.clearCallingIdentity();long now=SystemClock.elapsedRealtime();
   try{
    routeUnlocked=unlocked;
    if(powerOverride!=null){
     if((!fresh||!cameraStartup)&&!powerCancellationSent){powerCancellationSent=true;powerOverride.cancel("stale angle or mode changed");}
     else if(!unlocked&&!powerCancellationSent){powerCancellationSent=true;powerOverride.cancelUnlessFoldSleep();}
-    else if(unlocked&&fresh&&cameraStartup&&!powerCancellationSent&&powerOverrideEnabled&&!powerOverrideArmed&&cameraSession&&owned!=null&&((primaryInner&&angle<=30f)||(!primaryInner&&angle>=150f))){powerOverrideArmed=true;endpointPower.arm("Samsung ON override boundary");powerOverride.arm();}
    }
-   if(ClosingAppReturnPolicy.shouldReturn(closingAppReturnEnabled,cameraSession&&cameraStartup,primaryInner,owned!=null,fresh,unlocked,closingAppReturnAttempted,angle)&&fixedRoute!=null&&fixedRoute.pending()){
-    closingAppReturnAttempted=true;
-    log("APP-FIRST CLOSING: early task return requested at angle="+angle+"; concurrency retained; sleep prevention unverified");
-    returnTask();
-    try{log("APP-FIRST CLOSING: "+fixedRoute.primaryFocusSummary());}catch(Exception e){log("APP-FIRST focus unavailable: "+e);}
-   }
-   if(closingAppReturnAttempted&&owned!=null&&(!closingAppReturnEnabled||(fresh&&angle>25))){log("APP-FIRST CLOSING: disabled or reopened; release test session");releaseInternal();blocked=true;return;}
    if(endpointReturnWaiting){
     if(owned!=null){releaseInternal();return;}
     boolean mapped=false;
@@ -207,14 +220,13 @@ final class ConcurrentController {
     return;
    }
    bootstrapping=false;
+   if(angle>0&&closingDelay.active()){log("CLOSE_DELAY END: reopened");clearClosingDelay();}
    if(FoldThreshold.endpoint(angle,openThreshold)){
+    if(cameraSession&&angle==0&&owned!=null&&holdClosing()){status="Screenshot closing hold: awaiting Android release (1000 ms fallback)";return;}
     if(endpointSince==0)endpointSince=now;
     if(angle>=FoldThreshold.sanitize(openThreshold) || now-endpointSince>=350){if(cameraSession&&owned!=null){
       log("RELEASE: endpoint angle="+angle);endpointPower.arm("Endpoint release angle="+angle);samplePanels(angle,windowPrepared,secondaryReady,true);
-      if(!primaryInner&&angle>=FoldThreshold.sanitize(openThreshold)&&fixedRoute!=null&&fixedRoute.pending()){
-       endpointReturnWaiting=true;endpointTarget=fixedSecondary;endpointObservation="";endpointReturnDeadline=now+1800;
-       log("ENDPOINT: retain app on D1 while canceling concurrency; target primary="+endpointTarget);
-      }
+      deferEndpointReturn(now);
      }releaseInternal();blocked=false;}return;
    }
    endpointSince=0;
@@ -229,6 +241,8 @@ final class ConcurrentController {
     }return;
    }
    if(cameraSession){
+    // Keep the outgoing physical panel primary for the whole gesture.
+    // Only the endpoint branch / Android close callback releases concurrency.
     if(now-started>=30000){log("RELEASE: 30-second limit");releaseInternal();blocked=true;status="Fixed-panel test reached time limit";return;}
     samplePanels(angle,windowPrepared,secondaryReady,false);
     if(!fixedPrimary.equals(physicalPrimary()))throw new IllegalStateException("Fixed primary changed during task route");
@@ -267,10 +281,11 @@ final class ConcurrentController {
    if(primaryIsInner!=primaryInner)throw new IllegalStateException("Primary physical display changed during session");
    // Hold one inner-primary session for the entire overlap; do not move tasks or swap at 90 degrees.
    status=secondaryReady?(primaryInner?"Inner live + frozen cover":"Cover live + frozen inner"):"Waiting for outgoing-panel freeze Presentation";
-  }catch(Exception e){Throwable root=e;while(root.getCause()!=null)root=root.getCause();if(cameraSession)log("RELEASE: "+root);releaseInternal();blocked=true;status="Concurrent mode error: "+root.getMessage();}
+  }catch(Exception e){Throwable root=e;while(root.getCause()!=null)root=root.getCause();if(cameraSession)log("RELEASE: "+root);if(powerOverride!=null)powerOverride.cancel("handoff error");releaseInternal();blocked=true;status="Concurrent mode error: "+root.getMessage();}
   finally{Binder.restoreCallingIdentity(token);}
  }
  private void releaseInternal(){
+  clearClosingDelay();
   if(!endpointReturnWaiting)returnTask();
   if(owned!=null){try{if(cameraSession){logNativeTasks();windows.capture("before release");afterReleaseAt=SystemClock.elapsedRealtime();afterReleaseStage=0;}cancel.invoke(manager);owned=null;status="Normal display control restored";}catch(Exception e){status="Display release pending";}}
  }

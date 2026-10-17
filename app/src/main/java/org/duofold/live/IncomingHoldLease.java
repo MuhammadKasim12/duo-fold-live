@@ -5,6 +5,6 @@ final class IncomingHoldLease {
  IncomingHoldLease(long now){prepared=now;}
  boolean handoff(long now){if(endpoint>=0||expired(now))return false;endpoint=now;return true;}
  boolean started(){return endpoint>=0;}
- long deadline(){return endpoint<0?prepared+10000:Math.min(endpoint+1800,prepared+11800);}
+ long deadline(){return endpoint<0?prepared+30000:Math.min(endpoint+1800,prepared+31800);}
  boolean expired(long now){return now>=deadline();}
 }

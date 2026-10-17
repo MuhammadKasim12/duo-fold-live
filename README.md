@@ -1,8 +1,8 @@
 ![DuoFold Live](docs/assets/duofold-live-logo.svg)
 
-# Duo Fold Live · 3.5.4
+# Duo Fold Live · 3.5.5
 
-**Current official release: 3.5.4.** Occasional unlock wallpaper flashing remains a known issue. For Keep Awake, disable Samsung’s “Lock when folded”; see troubleshooting. [Rollback baseline and release history](KNOWN_WORKING_BUILD.md).
+**Current official release: 3.5.5.** Occasional unlock wallpaper flashing remains a known issue. For Keep Awake, disable Samsung’s “Lock when folded”; see troubleshooting. [Rollback baseline and release history](KNOWN_WORKING_BUILD.md).
 
 ## 📺 Step-by-step installation tutorial
 **New here? [Watch the full setup walkthrough on YouTube](https://www.youtube.com/watch?v=8Ucm7ceBDN4).**
@@ -11,9 +11,16 @@ Created by a Duo Fold Live user—not by me. Huge thanks for putting this togeth
 
 An iPhone Duo-inspired folding animation for the **Samsung Galaxy Z Fold 8**, with windowed glass, live cover previews, and smooth black fades around Samsung’s display handoff. Free and open source. Runs over One UI and ordinary apps without replacing your launcher.
 
-**[Download 3.5.4](https://github.com/joeconsorti/duo-fold-live/releases/latest)** · [3.5.4 release notes](https://github.com/joeconsorti/duo-fold-live/releases/tag/v3.5.4) · [Report an issue](https://github.com/joeconsorti/duo-fold-live/issues)
+**[Download 3.5.5](https://github.com/joeconsorti/duo-fold-live/releases/latest)** · [3.5.5 release notes](https://github.com/joeconsorti/duo-fold-live/releases/tag/v3.5.5) · [Report an issue](https://github.com/joeconsorti/duo-fold-live/issues)
 
 **Only tested on the Z Fold 8 (SM-F971U).** Fold 8 Ultra, Fold 7, and other devices are unverified. Do not expect compatibility. Model recognition includes regional SM-F971, SM-F976, and SM-F966 families. Unknown models display a warning and may proceed. Android 17 and the existing Samsung wallpaper/API checks are still required. Recognition is not verified compatibility.
+
+## What's new in 3.5.5
+
+- **Smoother cover handoff:** a prepared black layer fades away over 300 ms after fresh cover content commits, with confirmed cleanup and bounded retries.
+- **Less repeated runtime work:** cached settings, coalesced preview refreshes, stale-capture rejection, and lighter diagnostic updates preserve the existing animation settings. APK shrinking remains disabled.
+- **New launcher icon:** matches the app's mint and periwinkle branding.
+- **Optional support reminders:** first eligible after 24 hours of working use, then 3 days after delivery, then weekly. Snooze for 7 days, pause for 21 days after opening Ko-fi, or stop permanently with “I already supported” or “Don't ask again.” Existing opt-outs remain respected.
 
 ## What's new in 3.5.4
 
@@ -163,10 +170,10 @@ Tips do not unlock features or promise fixes. Bug reports, testing, and pull req
 
 Install JDK 17, Android SDK platform 36, and Android build tools. Set `ANDROID_HOME` or a local `sdk.dir` in `local.properties`.
 
-The stable 3.5.4 source is tagged **v3.5.4**. Check out that tag to reproduce this release.
+The stable 3.5.5 source is tagged **v3.5.5**. Check out that tag to reproduce this release.
 
 ```sh
-git checkout v3.5.4
+git checkout v3.5.5
 ./gradlew testReleaseUnitTest assembleRelease
 ```
 

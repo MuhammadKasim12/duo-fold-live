@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 public final class DuoApplication extends Application {
  @Override public void onCreate(){
   super.onCreate();
+  PrivilegedAccess.init(this);
   registerActivityLifecycleCallbacks(new DeveloperShortcut());
   FoldAwakeDefault.persist(this);
   SharedPreferences prefs=getSharedPreferences("standalone",MODE_PRIVATE);
@@ -15,7 +16,7 @@ public final class DuoApplication extends Application {
   // Owner-requested 3.5.1 upgrade: apply only these two values once.
   // Runs before activities/services read their settings; later edits persist.
   if(!prefs.getBoolean("stretch_glass_defaults_351",false)){
-   prefs.edit().putFloat("end_stretch",1.25f).putFloat("intensity",1f)
+   prefs.edit().putFloat("end_stretch",1.25f).putFloat("intensity",.4f)
     .putBoolean("stretch_glass_defaults_351",true).apply();
   }
   // Owner-approved stable 3.5.4: select Smooth once on install/upgrade, then preserve choices.

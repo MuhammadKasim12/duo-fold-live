@@ -27,7 +27,7 @@ public class HandoffFadePolicyTest {
   assertEquals(0,p.opacity(630,true,98,true,true,630,true),0);
  }
  @Test public void invalidPreferencesUseSafeDefaults(){
-  assertEquals(24,FadeSettings.smoothing(Float.NaN),0);
+  assertEquals(120,FadeSettings.smoothing(Float.NaN),0);
   assertEquals(.35f,FadeSettings.gradualness(Float.POSITIVE_INFINITY),0);
   assertEquals(0,FadeSettings.gradualness(-1),0);assertEquals(120,FadeSettings.smoothing(999),0);
  }

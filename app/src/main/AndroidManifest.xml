@@ -9,7 +9,7 @@
  <uses-feature android:name="android.hardware.sensor.hinge_angle" android:required="false"/>
  <queries><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/></intent><package android:name="moe.shizuku.privileged.api"/><intent><action android:name="android.service.wallpaper.WallpaperService"/></intent><package android:name="com.samsung.android.wallpaper.live"/><package android:name="com.samsung.android.wallpaper.res"/></queries>
  <uses-permission android:name="android.permission.WAKE_LOCK" />
- <application android:name=".DuoApplication" android:label="Duo Fold Live" android:icon="@drawable/icon" android:theme="@style/Theme.Standalone" android:allowBackup="false" android:hardwareAccelerated="true">
+ <application android:name=".DuoApplication" android:label="Duo Fold Live" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/Theme.Standalone" android:allowBackup="false" android:hardwareAccelerated="true">
   <provider android:name="androidx.core.content.FileProvider" android:authorities="org.duofold.live.files" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/export_paths"/></provider>
   <meta-data android:name="moe.shizuku.client.V3_SUPPORT" android:value="true"/>
   <provider android:name="rikka.shizuku.ShizukuProvider" android:authorities="org.duofold.live.shizuku" android:exported="true" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL"/>
@@ -27,6 +27,7 @@
    <intent-filter><action android:name="android.service.wallpaper.WallpaperService"/></intent-filter>
    <meta-data android:name="android.service.wallpaper" android:resource="@xml/photo_wallpaper"/>
   </service>
+  <activity android:name=".WallpaperStudioActivity" android:exported="false" android:resizeableActivity="true" android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|density"/>
   <activity android:name=".WallpaperTestActivity" android:exported="false"/>
   <activity android:name=".SetupActivity" android:exported="false" android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|density"/>
   <activity android:name=".FoldBridgeActivity" android:exported="false" android:theme="@style/Theme.Duo.FoldBridge" android:taskAffinity="org.duofold.live.foldbridge" android:excludeFromRecents="true" android:noHistory="true" android:resizeableActivity="true" android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|density"/>

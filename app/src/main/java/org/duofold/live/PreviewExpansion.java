@@ -12,6 +12,10 @@ final class PreviewExpansion extends Binder {
  private final int owner;
  private final HandlerThread thread=new HandlerThread("duo-preview-expansion");
  private final Handler handler;
+ private final PreparedCoverLayer cover;
+ boolean coverBeforeSwitch(){return cover.beforeSwitch();}
+ void coverControl(boolean enabled,float angle,float handoff){cover.control(enabled,angle,handoff);}
+ String report(){return trace+"\n"+cover.report();}
  private Object dm,wm;private java.lang.reflect.Method displayInfo,keyguard;
  private SurfaceControl layer,backdrop,seam;private Bitmap seamHardware;private HardwareBuffer seamBuffer;private int seamPixels;private Bitmap hardware,cleanHardware;private HardwareBuffer buffer,cleanBuffer;
  private boolean frostedLeft,rightPreviewReady;
@@ -54,7 +58,7 @@ final class PreviewExpansion extends Binder {
  }
  private synchronized void event(String text){trace=(trace+" | "+SystemClock.elapsedRealtime()+": "+text);if(trace.length()>6000)trace=trace.substring(trace.length()-6000);}
  volatile String status="Expansion idle";
- PreviewExpansion(int owner){this.owner=owner;thread.start();handler=new Handler(thread.getLooper());attachInterface(null,TOKEN);}
+ PreviewExpansion(int owner){this.owner=owner;thread.start();handler=new Handler(thread.getLooper());cover=new PreparedCoverLayer(handler);attachInterface(null,TOKEN);}
  void enabled(boolean value){boolean changed=enabled!=value;enabled=value;lastLease=SystemClock.elapsedRealtime();if(!value && changed)handler.post(()->clear("Expansion disabled"));if(value&&changed){PreviewReleaseGate old=releaseGate;if(old!=null)old.abort("new enabled session");releaseGate=null;}}
  protected boolean onTransact(int code,Parcel data,Parcel reply,int flags)throws RemoteException{
   if(closed)throw new IllegalStateException("Expansion helper closed");
@@ -67,6 +71,9 @@ final class PreviewExpansion extends Binder {
    handler.post(()->{try{prepare(bitmap,clean,captured,seamOffset,frosted,rightReady,rotation);}catch(Exception e){clear("Expansion prepare failed: "+root(e));}finally{bitmap.recycle();clean.recycle();}});
   }else if(code==2){boolean endpoint=data.dataAvail()>=4&&data.readInt()!=0;handler.post(()->{if(layer!=null){pendingReady=true;event(endpoint?"Fully-open clear frame committed":"Fresh inner glass frame committed");if(start>0 && ready<0){ready=SystemClock.elapsedRealtime()-start;status=endpoint?"Fully open; expansion fading":"Inner glass committed; expansion fading";}}});}
   else if(code==3){handler.post(()->{completed=false;clear("Expansion reset");});}
+  else if(code==4){cover.prepare(data.readLong(),data.readString(),data.readInt());}
+  else if(code==5){cover.freshCover(data.readLong(),data.readString(),data.readInt(),data.readInt(),data.readInt());}
+  else if(code==6){cover.reset();}
   else throw new IllegalArgumentException("Unknown bridge operation");
   reply.writeNoException();reply.writeString(status);return true;
  }
@@ -238,5 +245,5 @@ final class PreviewExpansion extends Binder {
   if(buffer!=null){buffer.close();buffer=null;}if(hardware!=null){hardware.recycle();hardware=null;}status=message;
   if(!enabled)completed=false;
  }
- void close(){closed=true;enabled=false;handler.post(()->{clear("Expansion stopped");thread.quitSafely();});}
+ void close(){closed=true;enabled=false;cover.close();handler.post(()->{clear("Expansion stopped");thread.quitSafely();});}
 }

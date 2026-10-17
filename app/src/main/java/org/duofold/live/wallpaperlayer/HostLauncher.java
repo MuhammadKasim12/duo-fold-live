@@ -31,6 +31,7 @@ public class HostLauncher extends Binder {
  }
  synchronized String transitionReport(){return "\nTransition events:\n"+transitions+"\nLatest wallpaper window snapshot:\n"+windowSnapshot;}
  int owner=-1;
+ public synchronized void closeRoot(){active=false;if(test!=null)test.destroy();if(logs!=null)logs.destroy();main.removeCallbacksAndMessages(null);}
  public HostLauncher(){attachInterface(null,TOKEN);main.postDelayed(()->{if(!active)System.exit(0);},180000);}
  protected boolean onTransact(int code,Parcel in,Parcel out,int flags)throws RemoteException{
   if(code==INTERFACE_TRANSACTION){out.writeString(TOKEN);return true;}
@@ -49,7 +50,7 @@ public class HostLauncher extends Binder {
   new Thread(()->{
    java.lang.Process observer=null;
    try{
-    if(android.os.Process.myUid()!=2000)throw new IllegalStateException("Shizuku ADB mode required");
+    if(android.os.Process.myUid()!=2000 && android.os.Process.myUid()!=0)throw new IllegalStateException("Shizuku ADB mode required");
     observer=startObserver();
     test=new ProcessBuilder("am","instrument","-w","-r","--no-restart","--no-hidden-api-checks","org.duofold.live/org.duofold.live.wallpaperlayer.PhotoInstrumentation").redirectErrorStream(true).start();
     try(BufferedReader r=new BufferedReader(new InputStreamReader(test.getInputStream()))){String line;while((line=r.readLine())!=null){

@@ -22,12 +22,15 @@ public class PhotoInstrumentation extends Instrumentation {
   if(unlockTrace!=null)unlockTrace.event(text);
   if(transitionHistory.size()>=80)transitionHistory.removeFirst();transitionHistory.addLast(event);
   if(text.contains("SCREEN_OFF")||UnlockTrace.capturing())return;
+  boolean wakeTest=WakePreparationTest.enabled(getTargetContext());
+  if(wakeTest&&!(text.startsWith("Screen event")||text.contains("submittedWhileLocked=true")||text.contains("atomic Home handoff")||text.contains("bounded Home readiness timeout")))return;
   if(traceWorker.isShutdown()||automation==null||captureBusy||SystemClock.elapsedRealtime()-lastCapture<150)return;
   captureBusy=true;lastCapture=SystemClock.elapsedRealtime();
   traceWorker.execute(()->{String snapshot;try{
    ParcelFileDescriptor fd=automation.executeShellCommand("dumpsys -t 2 window windows");
-   try(InputStream in=new ParcelFileDescriptor.AutoCloseInputStream(fd)){snapshot=WindowTraceFilter.read(new InputStreamReader(in,StandardCharsets.UTF_8));}
+   try(InputStream in=new ParcelFileDescriptor.AutoCloseInputStream(fd)){snapshot=WindowTraceFilter.read(new InputStreamReader(in,StandardCharsets.UTF_8),wakeTest);}
   }catch(Throwable e){snapshot="Window snapshot failed: "+e;}
+  if(wakeTest)WakePreparationTest.snapshot(event,snapshot);
   synchronized(PhotoInstrumentation.this){if(windowSnapshots.size()>=4)windowSnapshots.removeFirst();windowSnapshots.addLast("Triggered by "+event+"\n"+snapshot);captureBusy=false;}
   });
  }
@@ -59,6 +62,7 @@ public class PhotoInstrumentation extends Instrumentation {
     try {host.start(ParcelFileDescriptor.open(new File(getTargetContext().getFilesDir(),"photo.jpg"),ParcelFileDescriptor.MODE_READ_ONLY));}
     catch(Exception e){host.recordFailure(e);host.stop("Photo startup failed: "+e);}
    });
+   try{PanelPhotos initial=PanelPhotos.load(getTargetContext());runOnMainSync(()->host.updateAlbum(initial));}catch(Exception e){transition("Album unavailable; original photo retained: "+e);}
    if(!new File(getTargetContext().getFilesDir(),"legacy-renderer").exists()&&host.running){
     try{
      String hierarchy;
@@ -79,11 +83,11 @@ public class PhotoInstrumentation extends Instrumentation {
        host.main.post(()->{if(host.homePhoto!=null)host.homePhoto.windowChanged();});
       }
      });
-     host.homePhoto.requestRefresh();
+     host.homePhoto.album=host.album;host.homePhoto.requestRefresh();
     }catch(Throwable e){host.trace("Home transition photo unavailable; existing wallpaper retained: "+LayerHost.reason(e));}
    });
    File photo=new File(getTargetContext().getFilesDir(),"photo.jpg");
-   long photoVersion=photo.lastModified(),nextReport=0;
+   long photoVersion=photo.lastModified(),nextReport=0;String albumVersion=PanelPhotos.version(getTargetContext());
    while(true){
     if(!host.running || SystemClock.elapsedRealtime()>=nextReport){
      runOnMainSync(()->lastReport=host.report());publish(lastReport);nextReport=SystemClock.elapsedRealtime()+3000;
@@ -95,6 +99,8 @@ public class PhotoInstrumentation extends Instrumentation {
      Bitmap replacement=BitmapFactory.decodeFile(photo.getAbsolutePath());
      if(replacement!=null){runOnMainSync(()->{host.updatePhoto(replacement);host.journal.phase("Custom photo updated");});photoVersion=changed;}
     }
+    String nextAlbumVersion=PanelPhotos.version(getTargetContext());
+    if(!nextAlbumVersion.equals(albumVersion)){try{PanelPhotos next=PanelPhotos.load(getTargetContext());runOnMainSync(()->host.updateAlbum(next));albumVersion=nextAlbumVersion;}catch(Exception e){transition("Album update deferred; previous photos retained: "+e);albumVersion=nextAlbumVersion;}}
     if(stop.exists()||!WallpaperRestore.enabled(getTargetContext())){
      runOnMainSync(()->host.stop("Custom wallpaper disabled; original wallpaper unchanged"));
      continue;

@@ -86,6 +86,13 @@ internal object DuoGlassShader {
   return x-stretch;
  }
 
+ // Shade in physical panel coordinates, independently of the stretched texture.
+ float windowShadeEdge(float axis,float isInner,float isFallback){
+  return clamp(isInner>0.5 ? (isFallback>0.5 ? 1.0-axis : 1.0-2.0*axis) : axis,0.0,1.0);
+ }
+ float windowShadeAmount(float motion,float edge,float strength){
+  return min(1.0,2.0*motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35)*strength);
+ }
  half4 main(float2 p) {
   float2 uv=(p-origin)/extent;
   if(any(lessThan(uv,float2(0))) || any(greaterThan(uv,float2(1)))) return half4(0);
@@ -164,8 +171,9 @@ internal object DuoGlassShader {
   float shaderProgress=inner>0.5 ? clamp(a/1.570796327,0.0,1.0) : clamp((3.141592654-a)/1.570796327,0.0,1.0);
   float motion=smoothstep(0.0,1.0,shaderProgress);
   // Keep the 72 source-pixel reference radius, including the image's black margins.
-  float blurEdge=edge;
-  if(inner>0.5 && fallback<0.5)blurEdge=(edge+2.0*seamOffset)/(1.0+2.0*seamOffset);
+  float shadeEdge=windowReveal>0.5 ? windowShadeEdge(axis,inner,fallback) : edge;
+  float blurEdge=shadeEdge;
+  if(inner>0.5 && fallback<0.5)blurEdge=(shadeEdge+2.0*seamOffset)/(1.0+2.0*seamOffset);
   if(reflectedCover>0.5)blurEdge=max(blurEdge,(2.0*seamOffset-axis)/(1.0+2.0*seamOffset));
   float radius=72.0*motion*pow(clamp(blurEdge,0.0,1.0),1.35);
   radius*=blurStrength*(inner>0.5?1.25:1.0);
@@ -185,24 +193,26 @@ internal object DuoGlassShader {
    }
   }
   }
-  float effect=motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35);
-  color*=half(1.0-min(1.0,effect*2.0*intensity));
+  float darkening=windowShadeAmount(motion,shadeEdge,intensity);
+  color*=half(1.0-darkening);
   float alpha=opaqueContent>0.5?1.0:smoothstep(0.0,(windowReveal>0.5 && startupEasing>0.5)?0.015:0.035,progress);
   if(inner>0.5 && fallback<0.5 && axis>=0.5)alpha*=seamMask;
   return half4(color*half(alpha),half(alpha));
  }
  """.trimIndent()
 }
-@Composable internal fun DuoGlassSurface(angle:Float,amount:Float,intensity:Float,inner:Boolean,rotation:Int,frozenFrame:GlassFrame?=null,reflectedCover:Boolean=false,opaqueContent:Boolean=false){
- val frame=frozenFrame ?: GlassFrames.frame
+@Composable internal fun DuoGlassSurface(angle:Float,amount:Float,intensity:Float,inner:Boolean,rotation:Int,frozenFrame:GlassFrame?=null,reflectedCover:Boolean=false,opaqueContent:Boolean=false,liveFrame:GlassFrame?=null){
+ // Incoming screenshot-mode content uses the same live SurfaceView as normal mode.
+ // Outgoing content and the bounded incoming remap hold use a window-buffer composite.
+ val frame=frozenFrame ?: liveFrame ?: GlassFrames.frame
  val running=frozenFrame==null && amount>.003f && LiveAngles.fresh()
  val context=androidx.compose.ui.platform.LocalContext.current
  DisposableEffect(running){GlassFrames.configure(context);if(running)GlassFrames.acquire();onDispose{if(running)GlassFrames.release()}}
  if(opaqueContent && frozenFrame!=null){
-  AndroidView(factory={IncomingGlassView(it)},modifier=Modifier.fillMaxSize(),update={it.configure(frozenFrame,amount,intensity,inner,rotation,angle)})
+  AndroidView(factory={ScreenshotGlassView(it)},modifier=Modifier.fillMaxSize(),update={it.configure(frozenFrame,amount,intensity,inner,rotation,angle)})
   return
  }
- AndroidView(factory={FrostSurface(it,reflectedCover=reflectedCover)},modifier=Modifier.fillMaxSize(),update={it.configure(frame,amount,intensity,inner,rotation,frozenFrame!=null,angle,opaqueContent)})
+ AndroidView(factory={FrostSurface(it,reflectedCover=reflectedCover)},modifier=Modifier.fillMaxSize(),update={it.configure(frame,amount,intensity,inner,rotation,frozenFrame!=null,angle,opaqueContent,if(liveFrame!=null)IncomingGhostDiagnostic.mode else 0)})
 }
 internal class FrostSurface(context:Context,private val preview:Boolean=false,private val reflectedCover:Boolean=false):SurfaceView(context),SurfaceHolder.Callback {
  private var hingeAngle=Float.NaN
@@ -212,7 +222,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private var angleListening=false
  private var paintedEffect=false
  private var fallbackReason=""
- private fun fallback(reason:String){if(reason!=fallbackReason){if(reason.isNotEmpty() || fallbackReason.isNotEmpty())RecoveryLog.add("Glass fallback ${if(inner) "inner" else "cover"}: ${reason.ifEmpty{"cleared"}}; angle=$targetAngle; amount=$amount");fallbackReason=reason}}
+ private fun fallback(reason:String){if(reason!=fallbackReason){if(!inner)CoverStartupTrace.event("FALLBACK ${reason.ifEmpty{"cleared"}}; angle=$targetAngle; amount=$amount");if(reason.isNotEmpty() || fallbackReason.isNotEmpty())RecoveryLog.add("Glass fallback ${if(inner) "inner" else "cover"}: ${reason.ifEmpty{"cleared"}}; angle=$targetAngle; amount=$amount");fallbackReason=reason}}
  private val clearGuard=object:Runnable{override fun run(){
   if(!holder.surface.isValid)return
   if(paintedEffect && (!LiveAngles.fresh() || !LiveAngles.effectAllowed || (!inner && targetAngle<=0f))){
@@ -235,8 +245,9 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private val angleListener=LiveAngles.Listener { value,_ ->
   if(value.isFinite() && value!=targetAngle){targetAngle=value;requestDraw()}
  }
+ private var diagnosticMode=0
  private var opaqueContent=false
- private var frozen=false;private var frame:GlassFrame?=null;private var amount=0f;private var intensity=1f;private var inner=false;private var rotation=0
+ private var frozen=false;private var frame:GlassFrame?=null;private var amount=0f;private var intensity=.4f;private var inner=false;private var rotation=0
  private val basePaint=Paint(Paint.FILTER_BITMAP_FLAG)
  private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
  private var program:RuntimeShader?=null
@@ -264,7 +275,20 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private var lastReadyEndpoint=-1L
  /** Tie readiness to this SurfaceView's next buffer, not its parent UI draw. */
  private fun trackReadyFrame(rendered:GlassFrame?,endpoint:Boolean){
-  if(preview || frozen || !inner || readinessPending)return
+  if(preview || frozen || readinessPending)return
+  if(!inner){
+   if((!CoverStartupTrace.needsCommit() && !PreviewTransition.needsCoverCommit()) || reflectedCover || display?.displayId!=0 || rendered==null || rendered.stamp==lastReadyCapture || rendered.physicalId!=CoverBridge.identity(display) || rendered.width!=width || rendered.height!=height)return
+   val gen=readinessGeneration;val episode=CoverStartupTrace.episode
+   val note="capture=${rendered.stamp}; size=${rendered.width}x${rendered.height}; view=${width}x${height}; angle=$targetAngle; visual=$renderedAngle; amount=$amount; smoothing=$smoothingMs"
+   readinessPending=true
+   try{SurfaceControl.Transaction().use { transaction ->
+    transaction.addTransactionCommittedListener(context.mainExecutor){
+     if(gen==readinessGeneration && holder.surface.isValid && rendered.physicalId==CoverBridge.identity(display)){readinessPending=false;lastReadyCapture=rendered.stamp;CoverStartupTrace.commit(episode,note);PreviewTransition.coverFrameCommitted(rendered)}
+    }
+    applyTransactionToFrame(transaction)
+   }}catch(e:Exception){readinessPending=false;CoverStartupTrace.event("COMMIT unavailable: ${e.javaClass.simpleName}")}
+   return
+  }
   val now=SystemClock.elapsedRealtime()
   if(endpoint){if(now-lastReadyEndpoint<50)return}
   else if(rendered==null || rendered.stamp==lastReadyCapture)return
@@ -283,6 +307,27 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     applyTransactionToFrame(transaction)
    }
   }catch(e:Exception){readinessPending=false;RecoveryLog.add("Glass frame readiness unavailable: ${e.javaClass.simpleName}")}
+ }
+ private var bridgeDiagnosticEpisode=0
+ private var diagnosticEpisode=0
+ private fun startupFrame(rendered:GlassFrame?,endpoint:Boolean,id:Int){
+  if(preview || frozen || reflectedCover || display?.displayId!=0)return
+  if(rendered!=null && !HandoffStartupTrace.matches(id,rendered)){HandoffStartupTrace.event("OUTGOING_DRAW","physical=${rendered.physicalId}; not destination readiness",id=id);return}
+  HandoffStartupTrace.event(if(rendered!=null)"GLASS_DRAW" else if(endpoint)"ENDPOINT_CLEAR" else if(paintedEffect)"FALLBACK_DRAW" else "CLEAR_DRAW",
+   "rendererInner=$inner; view=${width}x${height}; amount=$amount; intensity=$intensity; angle=$targetAngle; visual=$renderedAngle; alpha=$alpha; shown=$isShown; reason=$fallbackReason",id=id)
+  if(rendered==null || diagnosticEpisode==id || id==0 || !HandoffStartupTrace.matches(id,rendered))return
+  diagnosticEpisode=id
+  val generation=readinessGeneration
+  val frameNote="capture=${rendered.stamp}; physical=${rendered.physicalId}; rendererInner=$inner; view=${width}x${height}; amount=$amount; callback time, not photons"
+  try{SurfaceControl.Transaction().use { t ->
+   t.addTransactionCommittedListener(context.mainExecutor){
+    val valid=generation==readinessGeneration && holder.surface.isValid && HandoffStartupTrace.matches(id,rendered)
+    if(!valid && diagnosticEpisode==id)diagnosticEpisode=0
+    HandoffStartupTrace.event(if(valid)"GLASS_COMMIT" else "GLASS_COMMIT_INVALIDATED",
+     frameNote,id=id)
+   }
+   applyTransactionToFrame(t)
+  }}catch(e:Exception){diagnosticEpisode=0;HandoffStartupTrace.event("DIAGNOSTIC_COMMIT_ERROR",e.javaClass.simpleName,id=id)}
  }
  private var frameQueued=false
  private var dirty=true
@@ -313,13 +358,18 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  init{setZOrderOnTop(true);holder.setFormat(PixelFormat.TRANSLUCENT);holder.addCallback(this);importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
   try{classic=ScreenshotRenderPolicy.classic(context.getSharedPreferences("standalone",0).getString("animation_style","duo"),context.getSharedPreferences("standalone",0).getString("animation_mode","windowed"),context.getSharedPreferences("standalone",0).getBoolean("dual",false));program=RuntimeShader(if(classic)ClassicGlassShader.source else DuoGlassShader.source)}catch(e:Exception){RecoveryLog.add("Glass shader compilation failed: ${e.message}")}
  }
- fun configure(next:GlassFrame?,amount:Float,intensity:Float,inner:Boolean,rotation:Int,frozen:Boolean=false,angle:Float=Float.NaN,opaqueContent:Boolean=false){this.opaqueContent=opaqueContent;this.hingeAngle=angle;this.frozen=frozen;frame=next;this.amount=amount;this.intensity=intensity;this.inner=inner;this.rotation=rotation
+ fun configure(next:GlassFrame?,amount:Float,intensity:Float,inner:Boolean,rotation:Int,frozen:Boolean=false,angle:Float=Float.NaN,opaqueContent:Boolean=false,diagnosticMode:Int=0){if(this.inner!=inner){
+   readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1
+   bitmap=null
+  }
+  this.diagnosticMode=diagnosticMode;this.opaqueContent=opaqueContent;this.hingeAngle=angle;this.frozen=frozen;frame=next;this.amount=amount;this.intensity=intensity;this.inner=inner;this.rotation=rotation
   smoothingMs=FrameSmoothing.sanitize(context.getSharedPreferences("standalone",0).getFloat("smoothing_ms",FrameSmoothing.DEFAULT_MS))
   openThreshold=context.getSharedPreferences("standalone",0).getFloat("open_threshold",172f)
   val selected=ScreenshotRenderPolicy.classic(context.getSharedPreferences("standalone",0).getString("animation_style","duo"),context.getSharedPreferences("standalone",0).getString("animation_mode","windowed"),context.getSharedPreferences("standalone",0).getBoolean("dual",false))
   if(selected!=classic){classic=selected;bitmap=null;program=runCatching{RuntimeShader(if(classic)ClassicGlassShader.source else DuoGlassShader.source)}.getOrElse{RecoveryLog.add("Glass shader compilation failed: ${it.message}");null}}
   requestDraw()}
  override fun surfaceCreated(h:SurfaceHolder){
+  if(!preview && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event("SURFACE_CREATED","view=${width}x${height}; inner=$inner")
   if(!preview){
    GlassFrames.surface(this,surfaceControl)
    if(!reflectedCover)GlassFrames.requestFreshCapture()
@@ -331,21 +381,33 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
   updateBufferSize();preferFastRefresh();requestDraw()
   if(!preview){removeCallbacks(clearGuard);postDelayed(clearGuard,100)}
  }
- override fun surfaceChanged(h:SurfaceHolder,format:Int,w:Int,height:Int){readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(!preview){GlassFrames.surface(this,surfaceControl);if(!reflectedCover)GlassFrames.requestFreshCapture();if(!reflectedCover && context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true))PreviewTransition.markAnimation(surfaceControl)};preferFastRefresh();requestDraw()}
- override fun surfaceDestroyed(h:SurfaceHolder){removeCallbacks(clearGuard);paintedEffect=false;fallback("");readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
+ override fun surfaceChanged(h:SurfaceHolder,format:Int,w:Int,height:Int){if(!preview && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event("SURFACE_CHANGED","buffer=${w}x${height}; inner=$inner",false);readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(!preview){GlassFrames.surface(this,surfaceControl);if(!reflectedCover)GlassFrames.requestFreshCapture();if(!reflectedCover && context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true) && !context.getSharedPreferences("standalone",0).getBoolean("dual",false))PreviewTransition.markAnimation(surfaceControl)};preferFastRefresh();requestDraw()}
+ override fun surfaceDestroyed(h:SurfaceHolder){if(!preview && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event("SURFACE_DESTROYED","inner=$inner",false);removeCallbacks(clearGuard);paintedEffect=false;fallback("");readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
  /** Reuse the exact shader painter in a normal window View, without attaching this SurfaceView. */
  fun drawEmbedded(canvas:Canvas){drawFrame(canvas)}
  private fun drawFrame(windowCanvas:Canvas?=null){
   if((windowCanvas==null && !holder.surface.isValid) || width<=0 || height<=0)return
   runCatching{
    val started=SystemClock.elapsedRealtimeNanos()
+   val traceId=HandoffStartupTrace.token()
    val canvas=windowCanvas ?: holder.lockHardwareCanvas()
+   val lockedAt=SystemClock.elapsedRealtimeNanos()
    val windowSave=if(windowCanvas!=null)canvas.saveLayer(0f,0f,width.toFloat(),height.toFloat(),null) else -1
    var rendered:GlassFrame?=null
    var endpoint=false
+   var bridgeDraw=false
    try{
     canvas.drawColor(Color.TRANSPARENT,PorterDuff.Mode.CLEAR)
     if(windowCanvas==null)canvas.scale(canvas.width.toFloat()/width,canvas.height.toFloat()/height)
+    if(diagnosticMode!=0 && windowCanvas==null && !preview && !frozen && display?.displayId==IncomingAnimationFrame.captureDisplay){
+     val captured=frame;val current=Point();display?.getRealSize(current)
+     if(captured!=null && captured.displayId==display?.displayId && captured.rotation==rotation && LiveAngles.fresh() && LiveAngles.effectAllowed && GlassFramePolicy.usable(captured.stamp,SystemClock.elapsedRealtime(),captured.width,captured.height,current.x,current.y)){
+      val seam=RenderQuality.seam(context.getSharedPreferences("standalone",0).getFloat("seam_offset",.07f))
+      IncomingGhostDiagnostic.draw(canvas,captured,width,height,inner,rotation,seam,diagnosticMode)
+     }
+     // No shader or normal handoff readiness callbacks in diagnostic draws.
+     return@runCatching
+    }
     if(reflectedCover){
      canvas.translate(width.toFloat(),0f);canvas.scale(-1f,1f)
      frame?.let{cover->if(PreviewExpansionPolicy.fresh(cover.stamp,SystemClock.elapsedRealtime()))canvas.drawBitmap(cover.bitmap,null,RectF(0f,0f,width.toFloat(),height.toFloat()),basePaint)}
@@ -362,10 +424,13 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      return@runCatching
     }
     paintedEffect=true
-    val f=frame
     val size=Point()
-    if(!preview && !frozen)display?.getRealSize(size)
-    val fresh=f!=null && (preview || frozen || ((f.displayId<0||f.displayId==display?.displayId)&&GlassFramePolicy.usable(f.stamp,SystemClock.elapsedRealtime(),f.width,f.height,size.x,size.y)))
+    if(!preview && !frozen)CoverBridge.size(display,size)
+    val live=frame
+    val liveValid=live!=null && (preview || frozen || ((live.displayId<0||live.displayId==display?.displayId)&&live.physicalId==CoverBridge.identity(display)&&live.rotation==rotation&&GlassFramePolicy.usable(live.stamp,SystemClock.elapsedRealtime(),live.width,live.height,size.x,size.y)))
+    val bridge=if(!liveValid && !preview && !frozen && !inner && !reflectedCover && display?.displayId==0 && !context.getSharedPreferences("standalone",0).getBoolean("dual",false))CoverBridge.forDisplay(display) else null
+    val f=if(liveValid)live else bridge
+    val fresh=liveValid || bridge!=null
     val shader=program
     if(fresh && shader!=null && f!=null){
      fallback("")
@@ -415,7 +480,11 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      shader.setFloatUniform("horizontal",if(rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_270)1f else 0f)
      shader.setFloatUniform("reverse",if(rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_180)1f else 0f)
      paint.shader=shader;drawGlass(canvas,aaMode,RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)))
-     if(!preview && !frozen && f.width==size.x && f.height==size.y)rendered=f
+     if(bridge!=null){
+      bridgeDraw=true
+      HandoffStartupTrace.event("BRIDGE_DRAW","outgoing=${bridge.physicalId}; cover view=${width}x${height}; temporary projected glass")
+     }
+     if(bridge==null && !preview && !frozen && f.width==size.x && f.height==size.y && (inner || (width==size.x && height==size.y)))rendered=f
     }else{
      fallback(if(shader==null)"shader unavailable" else if(f==null)"capture missing" else "capture stale or wrong display size")
      // Honest, live black-fade fallback; never leave stale captured content visible.
@@ -429,7 +498,24 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     // Only successful glass rendering or a deliberate fully-open clear qualifies.
     // Attach before posting this buffer. A fallback draw never sends readiness.
     if(windowCanvas==null){
-     try{if(rendered!=null || endpoint)trackReadyFrame(rendered,endpoint)}finally{holder.unlockCanvasAndPost(canvas)}
+     try{
+      if(bridgeDraw && bridgeDiagnosticEpisode!=traceId){
+       bridgeDiagnosticEpisode=traceId
+       val bridgeGeneration=readinessGeneration
+       try{SurfaceControl.Transaction().use { t ->
+        t.addTransactionCommittedListener(context.mainExecutor){
+         val valid=bridgeGeneration==readinessGeneration && holder.surface.isValid && HandoffStartupTrace.token()==traceId
+         if(!valid && bridgeDiagnosticEpisode==traceId)bridgeDiagnosticEpisode=0
+         HandoffStartupTrace.event(if(valid)"BRIDGE_COMMIT" else "BRIDGE_INVALIDATED","temporary outgoing projection; not fresh destination content",id=traceId)
+        }
+        applyTransactionToFrame(t)
+       }}catch(e:Exception){bridgeDiagnosticEpisode=0;HandoffStartupTrace.event("BRIDGE_COMMIT_ERROR",e.javaClass.simpleName,id=traceId)}
+      }
+      if(!bridgeDraw)startupFrame(rendered,endpoint,traceId);if(rendered!=null || endpoint)trackReadyFrame(rendered,endpoint)}finally{
+      val posting=SystemClock.elapsedRealtimeNanos()
+      holder.unlockCanvasAndPost(canvas)
+      if(!preview && !frozen && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event(if(bridgeDraw)"BRIDGE_POST" else if(rendered!=null && HandoffStartupTrace.matches(traceId,rendered))"GLASS_POST" else "NON_GLASS_POST","lockMs=${(lockedAt-started)/1000000}; drawAndReadinessMs=${(posting-lockedAt)/1000000}; postMs=${(SystemClock.elapsedRealtimeNanos()-posting)/1000000}",id=traceId)
+     }
     }else canvas.restoreToCount(windowSave)
     if(!preview)FrameTelemetry.record(inner,SystemClock.elapsedRealtimeNanos(),SystemClock.elapsedRealtimeNanos()-started,appliedRate)
    }
@@ -437,25 +523,40 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  }
 }
 
-/** The incoming effect is recorded into the overlay window's buffer. No child surface,
- * separate compositor alpha, or SurfaceView hole can expose a duplicate app layer.
- * The detached painter only shares shader code; it is never added to a window. */
-internal class IncomingGlassView(context:Context):View(context){
+/** Draw a complete captured backdrop before the effect. Shader cutouts, the clean
+ * inner half and a zero-effect frame must reveal this capture, never the live app.
+ * Black also covers any letterbox or transparent pixels in the captured bitmap. */
+internal fun drawScreenshotBackdrop(canvas:Canvas,frame:GlassFrame,width:Int,height:Int){
+ canvas.drawColor(Color.BLACK)
+ val scale=minOf(width.toFloat()/frame.bitmap.width,height.toFloat()/frame.bitmap.height)
+ val w=frame.bitmap.width*scale;val h=frame.bitmap.height*scale
+ canvas.drawBitmap(frame.bitmap,null,RectF((width-w)/2f,(height-h)/2f,(width+w)/2f,(height+h)/2f),screenshotBackdropPaint)
+}
+private val screenshotBackdropPaint=Paint(Paint.FILTER_BITMAP_FLAG)
+
+/** The outgoing screenshot uses one opaque window buffer: captured backdrop and
+ * distorted content come from the same frame. The detached shader painter's CLEAR
+ * and cutouts are isolated in its saveLayer, so they cannot erase the backdrop.
+ * No child SurfaceView is attached to this window. Normal live mode is unchanged. */
+internal class ScreenshotGlassView(context:Context):View(context){
  private val painter=FrostSurface(context)
+ private var frame:GlassFrame?=null
  private var stamp=0L
  private var loggedStamp=0L
+ private var loggedAt=0L
  private val freshness=object:Runnable{override fun run(){invalidate();postDelayed(this,100)}}
  init{importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS}
  fun configure(frame:GlassFrame,amount:Float,intensity:Float,inner:Boolean,rotation:Int,angle:Float){
-  stamp=frame.stamp
+  this.frame=frame;stamp=frame.stamp
   painter.configure(frame,amount,intensity,inner,rotation,true,angle,true)
   postInvalidateOnAnimation()
  }
  override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){super.onSizeChanged(w,h,oldw,oldh);painter.layout(0,0,w,h)}
  override fun onDraw(canvas:Canvas){
   super.onDraw(canvas)
+  frame?.let{drawScreenshotBackdrop(canvas,it,width,height)}
   painter.drawEmbedded(canvas)
-  if(stamp!=loggedStamp){loggedStamp=stamp;RecoveryLog.add("Incoming animation drawn in window buffer; D${display?.displayId}; size=${width}x$height; capture=$stamp; hardware=${canvas.isHardwareAccelerated}")}
+  if(stamp!=loggedStamp && (loggedAt==0L || SystemClock.elapsedRealtime()-loggedAt>=1000L)){loggedStamp=stamp;loggedAt=SystemClock.elapsedRealtime();RecoveryLog.add("Screenshot composite drawn; opaque backdrop + effect in one buffer; D${display?.displayId}; size=${width}x$height; capture=$stamp; hardware=${canvas.isHardwareAccelerated}")}
  }
  override fun onAttachedToWindow(){super.onAttachedToWindow();post(freshness)}
  override fun onDetachedFromWindow(){removeCallbacks(freshness);super.onDetachedFromWindow()}
