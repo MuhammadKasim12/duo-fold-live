@@ -95,8 +95,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
         else if(i.action==Intent.ACTION_USER_PRESENT){
             // Recreate the composition after unlock: old window IDs and stopped frame clocks are invalid.
             handler.postDelayed({if(instance===this@StandaloneService && settings().getBoolean("enabled",false)){restart();RecoveryLog.add("Overlay rebuilt after unlock")}},150)
-        } else {HandoffStartupTrace.event("MAIN_DISPLAY_UPDATE","callback=$observed; queue=${started-observed}ms; hostAlpha=${view?.alpha}")
-            updateDisplay();resumeIfUsable()}
+        } else {updateDisplay();resumeIfUsable()}
     }}
     private fun usable()=::displays.isInitialized && displays.getDisplay(Display.DEFAULT_DISPLAY)?.state==Display.STATE_ON && !getSystemService(KeyguardManager::class.java).isKeyguardLocked()
     private fun previewMode()=AnimationModePolicy.mirrors(settings().getString("animation_mode",AnimationModePolicy.DEFAULT)) && LiveAngles.effectAllowed && settings().getBoolean("cover_preview",true) && !settings().getBoolean("dual",false)
