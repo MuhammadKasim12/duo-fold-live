@@ -10,7 +10,6 @@ internal object GlassFrames {
  var status by mutableStateOf("Glass renderer ready");private set
  private val main=Handler(Looper.getMainLooper())
  private val executor=Executors.newSingleThreadExecutor()
- private val readinessExecutor=Executors.newSingleThreadExecutor()
  private val settingsExecutor=Executors.newSingleThreadExecutor()
  private var screenshotMode=false
  private fun targetCaptureDisplay()=if(screenshotMode&&LiveAngles.dualActive) IncomingAnimationFrame.captureDisplay else ScreenshotRenderPolicy.captureDisplay(LiveAngles.continuityNative,false,LiveAngles.dualActive)
@@ -115,7 +114,7 @@ internal object GlassFrames {
    val f=frame;val message=note;main.post{done(f,message)}
   }
  }
- fun incomingReady(task:Int,physical:String,width:Int,height:Int,done:(Boolean,String)->Unit){readinessExecutor.execute{
+ fun incomingReady(task:Int,physical:String,width:Int,height:Int,done:(Boolean,String)->Unit){settingsExecutor.execute{
   val p=Parcel.obtain();val r=Parcel.obtain();var ready=false;var note="Unavailable"
   try{p.writeInterfaceToken(GlassCapture.TOKEN);p.writeInt(task);p.writeString(physical);p.writeInt(width);p.writeInt(height);LiveAngles.captureBinder().transact(4,p,r,0);r.readException();val b=r.readBundle();ready=b?.getBoolean("ok")==true;note=b?.getString("error")?:note}
   catch(e:Exception){note=e.message?:note}finally{p.recycle();r.recycle()}

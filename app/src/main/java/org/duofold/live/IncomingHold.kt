@@ -19,7 +19,7 @@ internal object IncomingHold {
  private var engaged=false
  private var lease:IncomingHoldLease?=null
  private var revealAt=0L
- private var revealDuration=160L
+ private var revealDuration=292L
  private var targetWidth=0
  private var targetHeight=0
  private var context:Context?=null
@@ -29,7 +29,7 @@ internal object IncomingHold {
  private var physical=""
  private var closing=false
  private var pendingReady=false
- private var handoffAt=0L
+ private var readyCount=0
  private var checkAt=0L
  private var lastNote=""
  private var desiredAlpha=0f
@@ -38,7 +38,7 @@ internal object IncomingHold {
  private fun log(s:String){events.addLast("${SystemClock.elapsedRealtime()}: $s");while(events.size>30)events.removeFirst();RecoveryLog.add("Screenshot endpoint fade: $s")}
  @JvmStatic fun report()="Screenshot endpoint fade: final 12°; endpoint-only primary handoff; opacity=$opacity; active=$engaged\nSoftware readiness/commit evidence, not optical proof:\n"+events.joinToString("\n")
  @JvmStatic fun clear(reason:String){
-  generation++;main.removeCallbacks(tick);windows.forEach{it.close()};windows.clear();pendingReady=false;handoffAt=0L;lease=null;revealAt=0;opacity=0f;desiredAlpha=0f
+  generation++;main.removeCallbacks(tick);windows.forEach{it.close()};windows.clear();pendingReady=false;readyCount=0;lease=null;revealAt=0;opacity=0f;desiredAlpha=0f
   if(engaged)log("RELEASE $reason; session=$session")
   engaged=false
  }
@@ -57,7 +57,7 @@ internal object IncomingHold {
    val service=StandaloneService.instance?:return
    attempted=true;task=info.getInt("task",-1);physical=target;closing=info.getBoolean("closing")
    targetWidth=info.getInt("width");targetHeight=info.getInt("height")
-   revealDuration=160L
+   revealDuration=FadeSettings.reveal(prefs.getFloat("fade_gradualness",FadeSettings.DEFAULT_GRADUALNESS)).coerceIn(180L,450L)
    engaged=true;lease=IncomingHoldLease(now);checkAt=0;lastNote="";fadeNoted=false;generation++;lastTick=now
    try{
     val dm=ctx.getSystemService(DisplayManager::class.java)
@@ -71,8 +71,8 @@ internal object IncomingHold {
   if((closing&&angle<=FoldThreshold.sanitizeClosed(closed))||(!closing&&angle>=FoldThreshold.sanitize(open)))handoff(now,"hinge endpoint")
   else if(!info.getBoolean("active"))handoff(now,"Android/concurrent release")
  }
- private fun handoff(now:Long,reason:String){if(lease?.handoff(now)==true){handoffAt=now;desiredAlpha=1f;opacity=1f;windows.forEach{it.refresh(1f)};log("HANDOFF $reason; bounded reveal deadline=${lease?.deadline()}")}}
- private fun reveal(now:Long,reason:String){if(revealAt==0L){revealAt=now;log("REVEAL $reason; duration=$revealDuration ms; handoff-to-reveal=${now-handoffAt} ms")}}
+ private fun handoff(now:Long,reason:String){if(lease?.handoff(now)==true){desiredAlpha=1f;opacity=1f;windows.forEach{it.refresh(1f)};log("HANDOFF $reason; bounded reveal deadline=${lease?.deadline()}")}}
+ private fun reveal(now:Long,reason:String){if(revealAt==0L){revealAt=now;log("REVEAL $reason; duration=$revealDuration ms")}}
  private val tick=object:Runnable{override fun run(){
   if(!engaged)return
   val ctx=context?:return;val now=SystemClock.elapsedRealtime();val hold=lease?:return
@@ -93,10 +93,10 @@ internal object IncomingHold {
   }
   lastTick=now;windows.forEach{it.refresh(opacity)}
   if(hold.started()&&revealAt==0L&&targetWidth>0&&targetHeight>0&&primary!=null&&identity(primary)==physical&&primary.state==Display.STATE_ON&&!pendingReady&&now>=checkAt){
-   pendingReady=true;checkAt=now+32;val epoch=generation
+   pendingReady=true;checkAt=now+150;val epoch=generation
    val done:(Boolean,String)->Unit={ready,note->
-    if(epoch==generation){pendingReady=false;if(note!=lastNote){lastNote=note;log("D0 readiness: $note")}
-     if(ready)reveal(SystemClock.elapsedRealtime(),"incoming destination verified ready")
+    if(epoch==generation){pendingReady=false;if(note!=lastNote){lastNote=note;log("D0 readiness: $note")};readyCount=if(ready)readyCount+1 else 0
+     if(readyCount>=2)main.postDelayed({if(epoch==generation&&engaged)reveal(SystemClock.elapsedRealtime(),"incoming app ready twice")},64)
     }
    }
    if(task>=0)GlassFrames.incomingReady(task,physical,targetWidth,targetHeight,done)

@@ -225,7 +225,7 @@ final class ConcurrentController {
     if(cameraSession&&angle==0&&owned!=null&&holdClosing()){status="Screenshot closing hold: awaiting Android release (1000 ms fallback)";return;}
     if(endpointSince==0)endpointSince=now;
     if(angle>=FoldThreshold.sanitize(openThreshold) || now-endpointSince>=350){if(cameraSession&&owned!=null){
-      log("RELEASE: endpoint angle="+angle);endpointPower.arm("Endpoint release angle="+angle);
+      log("RELEASE: endpoint angle="+angle);endpointPower.arm("Endpoint release angle="+angle);samplePanels(angle,windowPrepared,secondaryReady,true);
       deferEndpointReturn(now);
      }releaseInternal();blocked=false;}return;
    }
@@ -287,7 +287,7 @@ final class ConcurrentController {
  private void releaseInternal(){
   clearClosingDelay();
   if(!endpointReturnWaiting)returnTask();
-  if(owned!=null){try{long releaseStart=SystemClock.elapsedRealtime();cancel.invoke(manager);owned=null;status="Normal display control restored";if(cameraSession){afterReleaseAt=SystemClock.elapsedRealtime();afterReleaseStage=0;log("ENDPOINT cancel submitted in "+(afterReleaseAt-releaseStart)+" ms; diagnostics deferred until after release");windows.capture("after release request");}}catch(Exception e){status="Display release pending";}}
+  if(owned!=null){try{if(cameraSession){logNativeTasks();windows.capture("before release");afterReleaseAt=SystemClock.elapsedRealtime();afterReleaseStage=0;}cancel.invoke(manager);owned=null;status="Normal display control restored";}catch(Exception e){status="Display release pending";}}
  }
  synchronized void release(){if(powerOverride!=null)powerOverride.cancel("controller stopped");endpointReturnWaiting=false;long token=Binder.clearCallingIdentity();try{if(cameraSession&&owned!=null)log("RELEASE: controller disabled or stopped");releaseInternal();blocked=false;bootstrapUsed=false;bootstrapping=false;}finally{Binder.restoreCallingIdentity(token);}}
 }

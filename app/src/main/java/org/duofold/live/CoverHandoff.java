@@ -88,25 +88,31 @@ final class CoverHandoff {
   changeState(false);
  }
  private void changeState(boolean toInner){
-  long identity=Binder.clearCallingIdentity();Object previous=owned;boolean previousInner=innerHeld;
+  long identity=Binder.clearCallingIdentity();Object previous=owned;boolean previousInner=innerHeld;long decisionAt=SystemClock.elapsedRealtime();
   try{
    init();
    if(toInner && innerId<0)throw new IllegalStateException("Inner concurrent state missing");
-   IBinder binder=(IBinder)Class.forName("android.os.ServiceManager").getMethod("getService",String.class).invoke(null,"device_state");
-   Object service=Class.forName("android.hardware.devicestate.IDeviceStateManager$Stub").getMethod("asInterface",IBinder.class).invoke(null,binder);
-   Object info=Class.forName("android.hardware.devicestate.IDeviceStateManager").getMethod("getDeviceStateInfo").invoke(service);
-   Object current=info.getClass().getField("currentState").get(info),base=info.getClass().getField("baseState").get(info);
-   if(owned==null && !current.getClass().getMethod("getIdentifier").invoke(current).equals(base.getClass().getMethod("getIdentifier").invoke(base)))throw new IllegalStateException("Another display override is active");
-   event("REQUEST "+(toInner?"inner":"cover")+" id="+(toInner?innerId:coverId)+" current="+current.getClass().getMethod("getIdentifier").invoke(current)+" base="+base.getClass().getMethod("getIdentifier").invoke(base));
+   // Query ownership on acquisition only. Replacing our existing request needs no
+   // extra device-state round trip; Android still arbitrates the replacement.
+   if(owned==null){
+    IBinder binder=(IBinder)Class.forName("android.os.ServiceManager").getMethod("getService",String.class).invoke(null,"device_state");
+    Object service=Class.forName("android.hardware.devicestate.IDeviceStateManager$Stub").getMethod("asInterface",IBinder.class).invoke(null,binder);
+    Object info=Class.forName("android.hardware.devicestate.IDeviceStateManager").getMethod("getDeviceStateInfo").invoke(service);
+    Object current=info.getClass().getField("currentState").get(info),base=info.getClass().getField("baseState").get(info);
+    if(!current.getClass().getMethod("getIdentifier").invoke(current).equals(base.getClass().getMethod("getIdentifier").invoke(base)))throw new IllegalStateException("Another display override is active");
+   }
+   event("REQUEST "+(toInner?"inner":"cover")+" id="+(toInner?innerId:coverId)+" replacingOwned="+(owned!=null));
    Object builder=requestType.getMethod("newBuilder",int.class).invoke(null,toInner?innerId:coverId);
    Object next=builder.getClass().getMethod("build").invoke(builder);
    Object callback=Proxy.newProxyInstance(callbackType.getClassLoader(),new Class<?>[]{callbackType},(proxy,m,args)->{
     if(m.getName().equals("hashCode"))return System.identityHashCode(proxy);
     if(m.getName().equals("equals"))return proxy==args[0];
     if(m.getName().equals("toString"))return "DuoCoverHandoff";
+    if(m.getName().equals("onRequestActivated")){synchronized(this){event("REQUEST ACTIVE callback; request="+(toInner?"inner":"cover")+"; since decision="+(SystemClock.elapsedRealtime()-decisionAt)+" ms; not panel ON proof");}}
     if(m.getName().equals("onRequestCanceled")){synchronized(this){event("ANDROID CANCEL callback; current owned request="+(owned==next)+" request="+(toInner?"inner":"cover"));if(owned==next){clearDelay("Android canceled owned request");owned=null;innerHeld=false;status="Concurrent handoff request canceled by system";}}}return null;
    });
-   owned=next;innerHeld=toInner;request.invoke(manager,next,(Executor)Runnable::run,callback);
+   owned=next;innerHeld=toInner;long submittedAt=SystemClock.elapsedRealtime();request.invoke(manager,next,(Executor)Runnable::run,callback);
+   event("REQUEST returned; preparation="+(submittedAt-decisionAt)+" ms; binder="+(SystemClock.elapsedRealtime()-submittedAt)+" ms; physical remap measured separately");
    status=toInner?"Direct concurrent handoff: inner primary; holding until fully open":"Cover held below handoff; switch at "+Math.round(handoffAngle)+"° or closed";
   }catch(Exception e){owned=previous;innerHeld=previousInner;releaseOwned();Throwable root=e;while(root.getCause()!=null)root=root.getCause();status="Handoff unavailable: "+root.getClass().getSimpleName()+": "+root.getMessage();}
   finally{Binder.restoreCallingIdentity(identity);}
