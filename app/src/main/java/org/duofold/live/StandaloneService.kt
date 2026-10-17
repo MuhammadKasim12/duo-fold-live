@@ -76,6 +76,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
     private var frameBounds by mutableStateOf(Rect())
     private var capturedWindow=-1
     private val liveVeil=true
+    private var transientOffStarted=0L
     private var sourceWasFresh=false
     private var active=false
     private var strength=0f
@@ -194,7 +195,23 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
     override fun onMovement(){requestCapture()}
     override fun onFrame(active:Boolean,strength:Float){
         val changed=this.active!=active;this.active=active;this.strength=strength
-        if(!usable() || !LiveAngles.fresh() || !LiveAngles.effectAllowed){hide();this.strength=0f;return}
+        if(!usable() || !LiveAngles.fresh() || !LiveAngles.effectAllowed){
+            val now=SystemClock.elapsedRealtime()
+            val transientOff=active && view?.alpha==1f && !settings().getBoolean("dual",false) &&
+                LiveAngles.fresh() && LiveAngles.effectAllowed &&
+                getSystemService(PowerManager::class.java).isInteractive &&
+                !getSystemService(KeyguardManager::class.java).isKeyguardLocked &&
+                displays.getDisplay(0)?.state==Display.STATE_OFF
+            if(transientOff){
+                if(transientOffStarted==0L)transientOffStarted=now
+                if(CoverBridgePolicy.active(now,transientOffStarted)){
+                    HandoffStartupTrace.event("HOST_RETAIN_TRANSIENT_OFF","alpha retained; bounded 600ms; interactive and unlocked")
+                    return
+                }
+            }
+            hide();this.strength=0f;return
+        }
+        transientOffStarted=0L
         val inner=minOf(screenWidth,screenHeight).toFloat()/maxOf(screenWidth,screenHeight)>.7f
         val held=settings().getBoolean("dual",false)&&settings().getBoolean("screenshot_camera_startup",false)&&HandoffFrames.forPanel(inner)!=null
         view?.alpha=if(held || active && (liveVeil || image!=null))1f else 0f
@@ -205,6 +222,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
         if(active)requestCapture()
     }
     fun clearUnavailableEffect(){
+        CoverBridge.clear();transientOffStarted=0L
         closeScreenshotWindow();dismissSecondary();hide();strength=0f;generation++;pending=false;image=null
     }
     private val sourceGuard=object:Runnable {override fun run(){
@@ -232,7 +250,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
             getSystemService(KeyguardManager::class.java).isKeyguardLocked)
         if(liveRetention && display.state!=Display.STATE_ON)return
         if(primaryHostKey(display)!=primaryKey){
-            val size=android.graphics.Point();display.getRealSize(size)
+            val size=android.graphics.Point();CoverBridge.size(display,size)
             val screenshotRetain=settings().getBoolean("dual",false)&&settings().getBoolean("screenshot_camera_startup",false)&&LiveAngles.dualActive&&LiveAngles.fresh()&&usable()&&LiveAngles.effectAllowed
             val retain=screenshotRetain || liveRetention
             if(!retain){RecoveryLog.add("Primary physical panel changed; rebuilding overlay");restart();return}
@@ -244,6 +262,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
             HandoffStartupTrace.event("HOST_REMAP","realSize=${size.x}x${size.y}; mode=${display.mode.physicalWidth}x${display.mode.physicalHeight}; alpha=${view?.alpha}")
             primaryKey=primaryHostKey(display)
             retainedPrimaryHost=true
+            if(liveRetention)CoverBridge.prepare(display)
             screenWidth=size.x;screenHeight=size.y
             config=Configuration(windowContext!!.resources.configuration)
             GlassFrames.requestFreshCapture()
@@ -252,7 +271,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
             return
         }
         val next=Configuration(windowContext!!.resources.configuration)
-        val bounds=if(retainedPrimaryHost){val size=android.graphics.Point();display.getRealSize(size);Rect(0,0,size.x,size.y)} else wm.currentWindowMetrics.bounds
+        val bounds=if(retainedPrimaryHost){val size=android.graphics.Point();CoverBridge.size(display,size);Rect(0,0,size.x,size.y)} else wm.currentWindowMetrics.bounds
         if(screenWidth!=bounds.width()||screenHeight!=bounds.height()){
             screenWidth=bounds.width();screenHeight=bounds.height();generation++;pending=false;image=null;if(!retainedPrimaryHost)view?.alpha=0f
         }

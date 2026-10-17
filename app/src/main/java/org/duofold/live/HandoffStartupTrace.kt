@@ -25,6 +25,7 @@ internal object HandoffStartupTrace {
   val next="state=${d.state}; mode=${mode.physicalWidth}x${mode.physicalHeight}; rotation=${d.rotation}"
   if(next!=snapshot){snapshot=next;event("DISPLAY",next,false)}
  }
+ @Synchronized fun matches(id:Int,f:GlassFrame)=current?.let{it.id==id && it.physical==f.physicalId}==true
  @Synchronized fun token()=current?.id ?: 0
  @Synchronized fun event(stage:String,note:String,once:Boolean=true,id:Int=token()){
   val e=history.firstOrNull{it.id==id}?:return

@@ -308,22 +308,26 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
    }
   }catch(e:Exception){readinessPending=false;RecoveryLog.add("Glass frame readiness unavailable: ${e.javaClass.simpleName}")}
  }
+ private var bridgeDiagnosticEpisode=0
  private var diagnosticEpisode=0
  private fun startupFrame(rendered:GlassFrame?,endpoint:Boolean,id:Int){
   if(preview || frozen || reflectedCover || display?.displayId!=0)return
+  if(rendered!=null && !HandoffStartupTrace.matches(id,rendered)){HandoffStartupTrace.event("OUTGOING_DRAW","physical=${rendered.physicalId}; not destination readiness",id=id);return}
   HandoffStartupTrace.event(if(rendered!=null)"GLASS_DRAW" else if(endpoint)"ENDPOINT_CLEAR" else if(paintedEffect)"FALLBACK_DRAW" else "CLEAR_DRAW",
    "rendererInner=$inner; view=${width}x${height}; amount=$amount; intensity=$intensity; angle=$targetAngle; visual=$renderedAngle; alpha=$alpha; shown=$isShown; reason=$fallbackReason",id=id)
-  if(rendered==null || diagnosticEpisode==id || id==0)return
+  if(rendered==null || diagnosticEpisode==id || id==0 || !HandoffStartupTrace.matches(id,rendered))return
   diagnosticEpisode=id
   val generation=readinessGeneration
   val frameNote="capture=${rendered.stamp}; physical=${rendered.physicalId}; rendererInner=$inner; view=${width}x${height}; amount=$amount; callback time, not photons"
   try{SurfaceControl.Transaction().use { t ->
    t.addTransactionCommittedListener(context.mainExecutor){
-    HandoffStartupTrace.event(if(generation==readinessGeneration && holder.surface.isValid)"GLASS_COMMIT" else "GLASS_COMMIT_INVALIDATED",
+    val valid=generation==readinessGeneration && holder.surface.isValid && HandoffStartupTrace.matches(id,rendered)
+    if(!valid && diagnosticEpisode==id)diagnosticEpisode=0
+    HandoffStartupTrace.event(if(valid)"GLASS_COMMIT" else "GLASS_COMMIT_INVALIDATED",
      frameNote,id=id)
    }
    applyTransactionToFrame(t)
-  }}catch(e:Exception){HandoffStartupTrace.event("DIAGNOSTIC_COMMIT_ERROR",e.javaClass.simpleName,id=id)}
+  }}catch(e:Exception){diagnosticEpisode=0;HandoffStartupTrace.event("DIAGNOSTIC_COMMIT_ERROR",e.javaClass.simpleName,id=id)}
  }
  private var frameQueued=false
  private var dirty=true
@@ -391,6 +395,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
    val windowSave=if(windowCanvas!=null)canvas.saveLayer(0f,0f,width.toFloat(),height.toFloat(),null) else -1
    var rendered:GlassFrame?=null
    var endpoint=false
+   var bridgeDraw=false
    try{
     canvas.drawColor(Color.TRANSPARENT,PorterDuff.Mode.CLEAR)
     if(windowCanvas==null)canvas.scale(canvas.width.toFloat()/width,canvas.height.toFloat()/height)
@@ -419,10 +424,17 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      return@runCatching
     }
     paintedEffect=true
-    val f=frame
     val size=Point()
-    if(!preview && !frozen)display?.getRealSize(size)
-    val fresh=f!=null && (preview || frozen || ((f.displayId<0||f.displayId==display?.displayId)&&f.rotation==rotation&&GlassFramePolicy.usable(f.stamp,SystemClock.elapsedRealtime(),f.width,f.height,size.x,size.y)))
+    if(!preview && !frozen)CoverBridge.size(display,size)
+    val live=frame
+    val liveValid=live!=null && (preview || frozen || ((live.displayId<0||live.displayId==display?.displayId)&&live.physicalId==CoverBridge.identity(display)&&live.rotation==rotation&&GlassFramePolicy.usable(live.stamp,SystemClock.elapsedRealtime(),live.width,live.height,size.x,size.y)))
+    val bridge=if(!liveValid && !preview && !frozen && !inner && !reflectedCover && display?.displayId==0 && !context.getSharedPreferences("standalone",0).getBoolean("dual",false))CoverBridge.forDisplay(display) else null
+    val f=if(liveValid)live else bridge
+    val fresh=liveValid || bridge!=null
+    if(bridge!=null){
+     bridgeDraw=true
+     HandoffStartupTrace.event("BRIDGE_DRAW","outgoing=${bridge.physicalId}; cover view=${width}x${height}; temporary projected glass")
+    }
     val shader=program
     if(fresh && shader!=null && f!=null){
      fallback("")
@@ -472,7 +484,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      shader.setFloatUniform("horizontal",if(rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_270)1f else 0f)
      shader.setFloatUniform("reverse",if(rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_180)1f else 0f)
      paint.shader=shader;drawGlass(canvas,aaMode,RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)))
-     if(!preview && !frozen && f.width==size.x && f.height==size.y && (inner || (width==size.x && height==size.y)))rendered=f
+     if(bridge==null && !preview && !frozen && f.width==size.x && f.height==size.y && (inner || (width==size.x && height==size.y)))rendered=f
     }else{
      fallback(if(shader==null)"shader unavailable" else if(f==null)"capture missing" else "capture stale or wrong display size")
      // Honest, live black-fade fallback; never leave stale captured content visible.
@@ -486,10 +498,23 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     // Only successful glass rendering or a deliberate fully-open clear qualifies.
     // Attach before posting this buffer. A fallback draw never sends readiness.
     if(windowCanvas==null){
-     try{startupFrame(rendered,endpoint,traceId);if(rendered!=null || endpoint)trackReadyFrame(rendered,endpoint)}finally{
+     try{
+      if(bridgeDraw && bridgeDiagnosticEpisode!=traceId){
+       bridgeDiagnosticEpisode=traceId
+       val bridgeGeneration=readinessGeneration
+       try{SurfaceControl.Transaction().use { t ->
+        t.addTransactionCommittedListener(context.mainExecutor){
+         val valid=bridgeGeneration==readinessGeneration && holder.surface.isValid && HandoffStartupTrace.token()==traceId
+         if(!valid && bridgeDiagnosticEpisode==traceId)bridgeDiagnosticEpisode=0
+         HandoffStartupTrace.event(if(valid)"BRIDGE_COMMIT" else "BRIDGE_INVALIDATED","temporary outgoing projection; not fresh destination content",id=traceId)
+        }
+        applyTransactionToFrame(t)
+       }}catch(e:Exception){bridgeDiagnosticEpisode=0;HandoffStartupTrace.event("BRIDGE_COMMIT_ERROR",e.javaClass.simpleName,id=traceId)}
+      }
+      if(!bridgeDraw)startupFrame(rendered,endpoint,traceId);if(rendered!=null || endpoint)trackReadyFrame(rendered,endpoint)}finally{
       val posting=SystemClock.elapsedRealtimeNanos()
       holder.unlockCanvasAndPost(canvas)
-      if(!preview && !frozen && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event(if(rendered!=null)"GLASS_POST" else "NON_GLASS_POST","lockMs=${(lockedAt-started)/1000000}; drawAndReadinessMs=${(posting-lockedAt)/1000000}; postMs=${(SystemClock.elapsedRealtimeNanos()-posting)/1000000}",id=traceId)
+      if(!preview && !frozen && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event(if(bridgeDraw)"BRIDGE_POST" else if(rendered!=null && HandoffStartupTrace.matches(traceId,rendered))"GLASS_POST" else "NON_GLASS_POST","lockMs=${(lockedAt-started)/1000000}; drawAndReadinessMs=${(posting-lockedAt)/1000000}; postMs=${(SystemClock.elapsedRealtimeNanos()-posting)/1000000}",id=traceId)
      }
     }else canvas.restoreToCount(windowSave)
     if(!preview)FrameTelemetry.record(inner,SystemClock.elapsedRealtimeNanos(),SystemClock.elapsedRealtimeNanos()-started,appliedRate)
