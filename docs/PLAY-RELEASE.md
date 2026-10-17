@@ -34,7 +34,7 @@ Both APKs deliberately have the same application ID/signing certificate and repl
 
 ## Declaration drafts (verify against the final build)
 
-Accessibility: Used to host non-interactive fold-transition overlays on supported Samsung foldables. No window-content retrieval, accessibility screenshots, gestures or autonomous actions. Separate prominent disclosure and affirmative consent precede use. Shizuku/root screen capture is separately disclosed and is not an accessibility API function.
+Accessibility: Used to host non-interactive fold-transition overlays on supported Samsung foldables. The animation service does not retrieve window content, take accessibility screenshots, perform gestures or automate actions. Separately, the optional wallpaper instrumentation helper uses UiAutomation window events, root package names, focus and geometry for Home/lock-screen photo placement; disclose this use too. Separate prominent disclosure and affirmative consent precede use. Shizuku/root screen capture is separately disclosed and is not an accessibility API function.
 
 Foreground service specialUse: User-enabled continuous hinge/wallpaper supervision supports animation while other apps are foreground. Deferral would miss physical fold events. An ongoing status notification provides Stop all; all work is disabled when no selected feature needs it. Optional keep-awake and wallpaper are user-controlled. Include a demonstrable video; declaration text alone is insufficient.
 
