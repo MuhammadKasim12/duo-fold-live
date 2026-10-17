@@ -5,7 +5,7 @@ import android.hardware.HardwareBuffer;
 import android.os.*;
 import android.view.SurfaceControl;
 
-/** Helper-owned cover buffer. Never resizes with the app's primary SurfaceView. */
+/** Helper-owned black cover reveal buffer. Never resizes with the app's primary SurfaceView. */
 final class PreparedCoverLayer {
  private final Handler handler;
  private Object dm,wm,power;
@@ -48,7 +48,7 @@ final class PreparedCoverLayer {
  private String id(Object o)throws Exception{return (String)o.getClass().getField("uniqueId").get(o);}
  private boolean inner(Object o)throws Exception{return Math.min(n(o,"logicalWidth"),n(o,"logicalHeight"))/(float)Math.max(n(o,"logicalWidth"),n(o,"logicalHeight"))>.7f;}
  private boolean allowed()throws Exception{return enabled && SystemClock.elapsedRealtime()-lease<750 && !(boolean)locked.invoke(wm) && (boolean)interactive.invoke(power);}
- void prepare(Bitmap bitmap,long captured,String source,int sourceRotation){
+ void prepare(long captured,String source,int sourceRotation){
   handler.post(()->{Bitmap projected=null,next=null;HardwareBuffer nextBuffer=null;try{
    init();long now=SystemClock.elapsedRealtime();
    if(!allowed() || start>0 || !CoverBridgePolicy.freshSource(now,captured))return;
@@ -56,12 +56,11 @@ final class PreparedCoverLayer {
    if(primary==null||secondary==null||!inner(primary)||inner(secondary)||!id(primary).equals(source)||n(primary,"rotation")!=sourceRotation||n(secondary,"rotation")!=sourceRotation)return;
    int w=n(secondary,"logicalWidth"),h=n(secondary,"logicalHeight");String physical=id(secondary);
    if(layer!=null && (!target.equals(physical)||width!=w||height!=h||rotation!=sourceRotation))clear("preparation geometry changed");
+   if(layer!=null){stamp=captured;return;}
    projected=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
-   Canvas canvas=new Canvas(projected);float scale=Math.max(w/(float)bitmap.getWidth(),h/(float)bitmap.getHeight());
-   Matrix matrix=new Matrix();matrix.setScale(scale,scale);matrix.postTranslate((w-bitmap.getWidth()*scale)/2f,(h-bitmap.getHeight()*scale)/2f);
-   canvas.drawBitmap(bitmap,matrix,new Paint(Paint.FILTER_BITMAP_FLAG));
+   projected.eraseColor(Color.BLACK);
    next=projected.copy(Bitmap.Config.HARDWARE,false);projected.recycle();nextBuffer=next.getHardwareBuffer();
-   if(layer==null){layer=new SurfaceControl.Builder().setName("Duo prepared cover blur").setBufferSize(w,h).setOpaque(true).setHidden(true).build();event("PREPARE physical="+physical+" buffer="+w+"x"+h+"; hidden, outgoing projection");}
+   if(layer==null){layer=new SurfaceControl.Builder().setName("Duo prepared cover black reveal").setBufferSize(w,h).setOpaque(true).setHidden(true).build();event("PREPARE physical="+physical+" buffer="+w+"x"+h+"; hidden, solid black");}
    try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
     SurfaceControl.Transaction.class.getMethod("setSkipScreenshot",SurfaceControl.class,boolean.class).invoke(t,layer,true);
     SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,layer,n(secondary,"layerStack"));
@@ -70,7 +69,7 @@ final class PreparedCoverLayer {
    if(buffer!=null)buffer.close();if(hardware!=null)hardware.recycle();hardware=next;buffer=nextBuffer;
    target=physical;width=w;height=h;rotation=sourceRotation;stamp=captured;
    handler.removeCallbacks(tick);handler.post(tick);
-  }catch(Exception e){clear("prepare failed: "+e.getClass().getSimpleName()+": "+e.getMessage());}finally{if(projected!=null&&!projected.isRecycled())projected.recycle();if(nextBuffer!=null&&nextBuffer!=buffer)nextBuffer.close();if(next!=null&&next!=hardware)next.recycle();bitmap.recycle();}});
+  }catch(Exception e){clear("prepare failed: "+e.getClass().getSimpleName()+": "+e.getMessage());}finally{if(projected!=null&&!projected.isRecycled())projected.recycle();if(nextBuffer!=null&&nextBuffer!=buffer)nextBuffer.close();if(next!=null&&next!=hardware)next.recycle();}});
  }
  boolean beforeSwitch(){
   if(!enabled)return true;
@@ -81,7 +80,7 @@ final class PreparedCoverLayer {
     if(gate!=requested || !requested.maySubmit(SystemClock.elapsedRealtime()))return;
     if(!allowed()||layer==null||!CoverBridgePolicy.freshSource(SystemClock.elapsedRealtime(),stamp)){requested.abort("no fresh prepared cover buffer");event("ARM "+requested.outcome());return;}
     start=SystemClock.elapsedRealtime();ready=0;final int gen=generation;
-    event("ARM before cover request; sourceAge="+(start-stamp)+"ms; buffer="+width+"x"+height+"; maxHold=600ms");
+    event("ARM before cover request; sourceAge="+(start-stamp)+"ms; buffer="+width+"x"+height+"; blackWait=900ms; reveal=300ms; maxTotal=1200ms");
     Object secondary=info.invoke(dm,1);
     if(secondary==null||!target.equals(id(secondary))||n(secondary,"rotation")!=rotation){clear("arm identity changed");return;}
     stack=n(secondary,"layerStack");
@@ -97,7 +96,7 @@ final class PreparedCoverLayer {
  }
  void freshCover(long captured,String physical,int w,int h,int r){handler.post(()->{
   if(ready==0 && PreparedCoverPolicy.accepts(SystemClock.elapsedRealtime(),start,captured,target,physical,width,height,rotation,w,h,r)){
-   ready=SystemClock.elapsedRealtime();event("FRESH_COVER_COMMIT capture="+captured+"; held="+(ready-start)+"ms; fade=80ms");
+   ready=SystemClock.elapsedRealtime();event("FRESH_COVER_COMMIT capture="+captured+"; held="+(ready-start)+"ms; fade=300ms");
   }
  });}
  private final Runnable tick=new Runnable(){public void run(){try{
@@ -105,12 +104,12 @@ final class PreparedCoverLayer {
   long now=SystemClock.elapsedRealtime();
   if(!allowed()){clear("locked, inactive or lease expired");return;}
   if(start==0){if(!CoverBridgePolicy.freshSource(now,stamp)){clear("prepared source expired");return;}handler.postDelayed(this,16);return;}
-  if(now-start>=600 || angle<=0 || angle>=HandoffSettings.angle(handoff)){clear("timeout or endpoint/reversal");return;}
+  if(angle<=0 || angle>=HandoffSettings.angle(handoff)){clear("endpoint/reversal");return;}
   Object p=info.invoke(dm,0),s=info.invoke(dm,1);Object destination=p!=null&&target.equals(id(p))?p:s!=null&&target.equals(id(s))?s:null;
   if(destination==null || n(destination,"rotation")!=rotation){clear("physical mapping missing or rotated");return;}
-  int next=n(destination,"layerStack");float alpha=ready==0?1f:Math.max(0f,1f-(now-ready)/80f);
-  if(alpha<=0){clear("fresh cover takeover");return;}
-  if(next!=stack || ready>0){
+  int next=n(destination,"layerStack");float alpha=BlackRevealPolicy.opacity(now,start,ready);
+  if(alpha<=0){clear(ready>0?"black reveal complete":"fallback black reveal complete");return;}
+  if(next!=stack || alpha<1f){
    final int gen=generation,submittedStack=next;
    try(SurfaceControl.Transaction t=new SurfaceControl.Transaction()){
     SurfaceControl.Transaction.class.getMethod("setLayerStack",SurfaceControl.class,int.class).invoke(t,layer,next);

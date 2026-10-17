@@ -84,7 +84,7 @@ internal object PreviewTransition {
   try{
    p.writeInterfaceToken(PreviewExpansion.TOKEN)
    if(code==2)p.writeInt(if(endpoint)1 else 0)
-   if(code==4 && frame!=null){blurred=frost(frame.bitmap);p.writeTypedObject(blurred,0);p.writeLong(frame.stamp);p.writeString(frame.physicalId);p.writeInt(frame.rotation)}
+   if(code==4 && frame!=null){p.writeLong(frame.stamp);p.writeString(frame.physicalId);p.writeInt(frame.rotation)}
    if(code==5 && frame!=null){p.writeLong(frame.stamp);p.writeString(frame.physicalId);p.writeInt(frame.width);p.writeInt(frame.height);p.writeInt(frame.rotation)}
    if(frame!=null && code==1){blurred=frost(frame.bitmap);p.writeTypedObject(blurred,0);p.writeTypedObject(frame.bitmap,0);p.writeLong(frame.stamp);p.writeFloat(seamOffset);p.writeInt(if(frostedReflection)1 else 0);p.writeInt(if(rightPreviewReady)1 else 0);p.writeInt(frame.rotation)}
    binder().transact(code,p,r,0);r.readException();return r.readString()?:"Expansion ready"
