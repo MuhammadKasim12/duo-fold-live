@@ -431,10 +431,6 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     val bridge=if(!liveValid && !preview && !frozen && !inner && !reflectedCover && display?.displayId==0 && !context.getSharedPreferences("standalone",0).getBoolean("dual",false))CoverBridge.forDisplay(display) else null
     val f=if(liveValid)live else bridge
     val fresh=liveValid || bridge!=null
-    if(bridge!=null){
-     bridgeDraw=true
-     HandoffStartupTrace.event("BRIDGE_DRAW","outgoing=${bridge.physicalId}; cover view=${width}x${height}; temporary projected glass")
-    }
     val shader=program
     if(fresh && shader!=null && f!=null){
      fallback("")
@@ -484,6 +480,10 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      shader.setFloatUniform("horizontal",if(rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_270)1f else 0f)
      shader.setFloatUniform("reverse",if(rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_180)1f else 0f)
      paint.shader=shader;drawGlass(canvas,aaMode,RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)))
+     if(bridge!=null){
+      bridgeDraw=true
+      HandoffStartupTrace.event("BRIDGE_DRAW","outgoing=${bridge.physicalId}; cover view=${width}x${height}; temporary projected glass")
+     }
      if(bridge==null && !preview && !frozen && f.width==size.x && f.height==size.y && (inner || (width==size.x && height==size.y)))rendered=f
     }else{
      fallback(if(shader==null)"shader unavailable" else if(f==null)"capture missing" else "capture stale or wrong display size")
