@@ -13,11 +13,6 @@ final class SupportPrompts {
   if(!working(c)||c.getSharedPreferences("first_run",0).getInt("state",0)==1)return;
   SharedPreferences p=prefs(c);if(p.getLong("first_use",0)==0)p.edit().putLong("first_use",System.currentTimeMillis()).apply();
  }
- static boolean notificationsEnabled(Context c){return prefs(c).getBoolean("notifications_enabled",true);}
- static synchronized void setNotificationsEnabled(Context c,boolean enabled){
-  prefs(c).edit().putBoolean("notifications_enabled",enabled).apply();
-  if(!enabled)c.getSystemService(NotificationManager.class).cancel(ID);
- }
  static boolean enabled(Context c){return !prefs(c).getBoolean("retired_weekly",false);}
  static void stop(Context c){prefs(c).edit().putBoolean("retired_weekly",true).apply();c.getSystemService(NotificationManager.class).cancel(ID);}
  static void snooze(Context c){prefs(c).edit().putLong("snooze_until",System.currentTimeMillis()+3*SupportPromptPolicy.WEEK).apply();c.getSystemService(NotificationManager.class).cancel(ID);}
@@ -43,7 +38,8 @@ final class SupportPrompts {
  private static PendingIntent action(Context c,String action,int request){return PendingIntent.getBroadcast(c,request,new Intent(c,SupportReminderReceiver.class).setAction(action),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);}
  static synchronized void tick(Context c){if(due(c)&&notify(c))seen(c);}
  static synchronized boolean notify(Context c){
-  if(!notificationsEnabled(c))return false;
+  // The former app toggle no longer gates delivery. Android permission/channel
+  // settings and the existing invitation schedule remain authoritative.
   NotificationManager nm=c.getSystemService(NotificationManager.class);
   if(!nm.areNotificationsEnabled())return false;
   nm.createNotificationChannel(new NotificationChannel(CHANNEL,"Support the Project",NotificationManager.IMPORTANCE_DEFAULT));
