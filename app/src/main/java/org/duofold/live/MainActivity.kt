@@ -171,7 +171,8 @@ class MainActivity:ComponentActivity(){
        SettingsCard("Enjoying Duo Fold Live?","Your support helps fund more updates. Always optional."){
         Button(onClick={SupportPrompts.open(this@MainActivity);supportBanner=false}){Text("Yes, support on Ko-fi")}
         TextButton(onClick={supportBanner=false}){Text("Not today")}
-        TextButton(onClick={SupportPrompts.snooze(this@MainActivity);supportBanner=false}){Text("Snooze for 3 weeks")}
+        TextButton(onClick={SupportPrompts.snooze(this@MainActivity);supportBanner=false}){Text("Snooze for 7 days")}
+        TextButton(onClick={supportBanner=false;SupportPrompts.stop(this@MainActivity)}){Text("I already supported")}
         TextButton(onClick={supportBanner=false;SupportPrompts.stop(this@MainActivity)}){Text("Don’t ask again")}
        }
       }
