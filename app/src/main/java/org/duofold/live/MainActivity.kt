@@ -217,6 +217,11 @@ class MainActivity:ComponentActivity(){
       }
       ShizukuHelp()
       if(mode=="plain_fade")PlainFadeControls(prefs){restart()}
+      SettingsCard("Make it yours","Two screens. A world of possibilities."){
+       WallpaperInvitation()
+       Button(onClick={startActivity(Intent(this@MainActivity,WallpaperStudioActivity::class.java))},modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text("Choose Custom Wallpaper")}
+       Text("Choose a photo for each screen. Frame it just right. Keep it across updates.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+      }
       SettingsCard("Fine-tune your animation","Duo Classic uses its own stronger glass and blur preset. Other styles use your saved glass settings."){
 
        InfoLabel("Motion smoothness · ${smoothing.roundToInt()} ms","Higher values smooth hinge motion but add delay. This does not increase FPS. Default: Smooth (120 ms).")
@@ -244,11 +249,6 @@ class MainActivity:ComponentActivity(){
        Toggle("Full-resolution glass · higher GPU cost",fullResolution,help="Off uses half-resolution rendering to reduce GPU work. Content and handoff angles are unchanged."){fullResolution=it;booleanSetting("full_resolution_glass",it)}
 
        Text("Fully open at ${threshold.roundToInt()}°. Adjust this in Advanced.",style=MaterialTheme.typography.bodySmall)
-      }
-      SettingsCard("Make it yours","Two screens. A world of possibilities."){
-       WallpaperInvitation()
-       Button(onClick={startActivity(Intent(this@MainActivity,WallpaperStudioActivity::class.java))},modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text("Choose Custom Wallpaper")}
-       Text("Choose a photo for each screen. Frame it just right. Keep it across updates.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
       }
       SettingsCard("Connection & setup","Shizuku or existing root access and accessibility keep the effect running."){
        TextButton(onClick={setup=!setup}){Text(if(setup)"Hide setup" else "Show setup")}
