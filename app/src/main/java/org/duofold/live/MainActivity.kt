@@ -168,10 +168,6 @@ class MainActivity:ComponentActivity(){
         Text("Allow up to 35 seconds. If the helpers still time out, stop and start Shizuku, then return here.",style=MaterialTheme.typography.bodySmall)
        }
       }
-      SettingsCard("Privacy & controls","Review access, choose keep-awake, or stop background work."){
-       Button(onClick={startActivity(Intent(this@MainActivity,PrivacyActivity::class.java))}){Text("Privacy & controls")}
-       OutlinedButton(onClick={RuntimeControls.stopAll(this@MainActivity);enabled=false}){Text("Stop all")}
-      }
       DeviceProfileChoice{startActivity(Intent(this@MainActivity,SetupActivity::class.java).putExtra("repair",true))}
       if(supportBanner){
        SettingsCard("Enjoying Duo Fold Live?","Your support helps fund more updates. Always optional."){
@@ -270,6 +266,10 @@ class MainActivity:ComponentActivity(){
         Text("Keep Samsung’s interactive wallpaper on both screens. Stop any older fold helper. If accessibility is blocked: App info → ⋮ → Allow restricted settings.",style=MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick={startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:$packageName")))}){Text("App & battery settings")}
        }
+      }
+      SettingsCard("Privacy & controls","Review access, choose keep-awake, or stop background work."){
+       Button(onClick={startActivity(Intent(this@MainActivity,PrivacyActivity::class.java))}){Text("Privacy & controls")}
+       OutlinedButton(onClick={RuntimeControls.stopAll(this@MainActivity);enabled=false}){Text("Stop all")}
       }
       SettingsCard("Advanced","Display thresholds, fold behavior, and diagnostics."){
        TextButton(onClick={advanced=!advanced}){Text(if(advanced)"Hide advanced settings" else "Show advanced settings")}
