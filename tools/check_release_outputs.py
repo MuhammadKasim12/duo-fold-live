@@ -1,9 +1,13 @@
 """CI audit of both merged release manifests and test results."""
 from pathlib import Path
 import xml.etree.ElementTree as ET
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("--variant", choices=("github", "play"), action="append")
+variants = parser.parse_args().variant or ["github", "play"]
 root = Path('app/build')
 a = '{http://schemas.android.com/apk/res/android}'
-for variant in ('github', 'play'):
+for variant in variants:
     task = variant + 'Release'
     paths = list((root / 'intermediates/merged_manifests' / task).rglob('AndroidManifest.xml'))
     assert paths, f'No merged manifest for {task}'
@@ -19,4 +23,4 @@ for variant in ('github', 'play'):
     print(task, counts)
     assert counts['failures'] == counts['errors'] == 0
 assert Path('PRIVACY.md').read_text() == Path('app/src/main/assets/privacy.txt').read_text()
-print('PASS: both distributions audited; embedded privacy policy matches published source')
+print('PASS:', ', '.join(variants), 'audited; embedded privacy policy matches published source')

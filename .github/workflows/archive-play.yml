@@ -1,0 +1,23 @@
+name: Restrict existing Play candidate downloads
+on:
+  workflow_dispatch:
+  push:
+    branches: ['play-preparation/3.5.7-alpha.1']
+    paths: ['tools/archive_play_assets.py', '.github/workflows/archive-play.yml']
+permissions:
+  contents: write
+concurrency:
+  group: archive-play-candidates
+  cancel-in-progress: false
+jobs:
+  archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Preserve private copies before removing public Play assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/archive_play_assets.py
