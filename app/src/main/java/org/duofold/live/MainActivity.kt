@@ -182,10 +182,8 @@ class MainActivity:ComponentActivity(){
         TextButton(onClick={supportBanner=false;SupportPrompts.stop(this@MainActivity)}){Text("Don’t ask again")}
        }
       }
-      SettingsCard("Make it yours","Two screens. A world of possibilities."){
-       WallpaperInvitation()
-       Button(onClick={startActivity(Intent(this@MainActivity,WallpaperStudioActivity::class.java))},modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text("Choose Custom Wallpaper")}
-       Text("Choose a photo for each screen. Frame it just right. Keep it across updates.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+      SettingsCard("Make it yours",""){
+       WallpaperInvitation{startActivity(Intent(this@MainActivity,WallpaperStudioActivity::class.java))}
       }
       SettingsCard("Folding Animation Style","Choose how your Fold moves between screens."){
        listOf("windowed" to "Inspired by iPhone Duo with even more windowed glass. Default.","duo_classic" to "1-for-1 recreation of the iPhone Duo animation, with a gentler stretch and stronger blur.","plain_fade" to "").forEach{(id,description)->
@@ -492,7 +490,7 @@ class MainActivity:ComponentActivity(){
 @Composable internal fun SettingsCard(title:String,subtitle:String,content:@Composable ColumnScope.()->Unit){
  Card(shape=RoundedCornerShape(28.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface),border=androidx.compose.foundation.BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant.copy(alpha=.5f)),modifier=Modifier.fillMaxWidth()){
   Column(Modifier.padding(22.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-   Text(title,style=MaterialTheme.typography.titleLarge);Text(subtitle,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant);content()
+   Text(title,style=MaterialTheme.typography.titleLarge);if(subtitle.isNotEmpty())Text(subtitle,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant);content()
   }
  }
 }
