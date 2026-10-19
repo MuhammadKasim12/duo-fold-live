@@ -20,6 +20,7 @@ internal object ClassicGlassShader {
  uniform float2 extent;
  uniform float2 sampleScale;
  uniform float2 sampleOffset;
+ uniform float2 motionOffset;
  uniform float progress;
  uniform float classicPreset;
  uniform float verticalCompression;
@@ -149,7 +150,7 @@ internal object ClassicGlassShader {
    if(horizontal>0.5)sourceUV.x=uv.x+(sourceUV.x-uv.x)*compression;
    else sourceUV.y=uv.y+(sourceUV.y-uv.y)*compression;
   }
-  sourceUV=sourceUV*sampleScale+sampleOffset;
+  sourceUV=sourceUV*sampleScale+sampleOffset+motionOffset*smoothstep(0.0,0.15,progress);
   float blurEdge=edge;
   if(inner>0.5 && fallback<0.5)blurEdge=(edge+2.0*seamOffset)/(1.0+2.0*seamOffset);
   if(reflectedCover>0.5)blurEdge=max(blurEdge,(2.0*seamOffset-axis)/(1.0+2.0*seamOffset));
