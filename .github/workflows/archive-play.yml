@@ -1,41 +1,20 @@
-name: One-time private Play signing setup
+name: Restrict existing Play candidate downloads
 on:
-  push:
-    branches: ['play-preparation/3.5.7-alpha.1']
-    paths: ['.github/workflows/archive-play.yml']
-permissions: {}
+  workflow_dispatch:
+permissions:
+  contents: write
 concurrency:
-  group: private-play-secret-transfer
+  group: archive-play-candidates
   cancel-in-progress: false
 jobs:
-  transfer:
-    if: github.repository == 'joeconsorti/duo-fold-live' && github.run_attempt == 1
+  archive:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - name: Copy signing secrets directly to the private repository
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Preserve private copies before removing public Play assets
         env:
-          GH_TOKEN: ${{ secrets.PLAY_SECRETS_TRANSFER_TOKEN }}
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          set +x
-          destination=joeconsorti/duo-fold-live-play-builds
-          : "${GH_TOKEN:?Transfer token is missing}"
-          test "$(gh api "repos/$destination" --jq '.private')" = true
-          names=(ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD)
-          for name in "${names[@]}"; do
-            if [[ -z "${!name}" ]]; then
-              echo "Missing required source secret: $name"
-              exit 1
-            fi
-          done
-          for name in "${names[@]}"; do
-            printf '%s' "${!name}" | gh secret set "$name" --repo "$destination"
-            gh api "repos/$destination/actions/secrets/$name" --jq '.name'
-          done
-          echo 'Verified all four destination secret entries; no secret values emitted.'
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/archive_play_assets.py
