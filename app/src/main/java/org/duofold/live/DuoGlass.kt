@@ -347,12 +347,13 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     if(!renderedAngle.isFinite() && !inner && targetAngle<=12f && context.getSharedPreferences("standalone",0).getBoolean("window_reveal_v2",true) && context.getSharedPreferences("standalone",0).getBoolean("startup_easing",true))renderedAngle=0f
     renderedAngle=FrameSmoothing.step(renderedAngle,targetAngle,dt,smoothingMs)
     hingeAngle=renderedAngle
-    amount=if(inner && targetAngle>=FoldThreshold.sanitize(openThreshold))0f
-      else DuoShadeCurve.progress(renderedAngle,inner,openThreshold)
+    val normal=DuoShadeCurve.progress(renderedAngle,inner,openThreshold)
+    amount=if(inner && !frozen && !reflectedCover)MotionGlass.innerAmount(normal,targetAngle>=FoldThreshold.sanitize(openThreshold),record=true)
+      else if(inner && targetAngle>=FoldThreshold.sanitize(openThreshold))0f else normal
    }
    lastFrameNanos=now
    drawFrame()
-   if(!preview && LiveAngles.fresh() && targetAngle.isFinite() && kotlin.math.abs(renderedAngle-targetAngle)>=.01f)requestDraw()
+   if(!preview && LiveAngles.fresh() && targetAngle.isFinite() && (kotlin.math.abs(renderedAngle-targetAngle)>=.01f || inner && MotionGlass.returning()))requestDraw()
   }
  }
  private fun requestDraw(){dirty=true;if(!frameQueued && holder.surface.isValid){frameQueued=true;choreographer.postFrameCallback(vsync)}}

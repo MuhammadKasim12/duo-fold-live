@@ -28,17 +28,28 @@ internal object MotionGlass : SensorEventListener {
  private val delta=FloatArray(3)
  private val listeners=mutableSetOf<()->Unit>()
  private var state="Off"
+ private val innerReturn=InnerMotionReturn()
+ private var lastReturn="none"
+ private var returnOpen=172f
  fun add(listener:()->Unit){listeners.add(listener)}
  fun remove(listener:()->Unit){listeners.remove(listener)}
  fun angle(value:Float){angle=value}
  fun refresh(context:Context,usable:Boolean){
   val p=RuntimeSettings.get(context)
   val enabled=p.getBoolean("motion_glass",false)
-  val wanted=enabled && usable && p.getBoolean("enabled",false) && !p.getBoolean("dual",false) && LiveAngles.fresh() && LiveAngles.effectAllowed && angle.isFinite() && angle>p.getFloat("closed_threshold",2f) && angle<FoldThreshold.sanitize(p.getFloat("open_threshold",172f))
+  val allowed=enabled && usable && p.getBoolean("enabled",false) && !p.getBoolean("dual",false) && LiveAngles.fresh() && LiveAngles.effectAllowed && angle.isFinite()
+  val open=FoldThreshold.sanitize(p.getFloat("open_threshold",172f));returnOpen=open
+  val wanted=allowed && angle>p.getFloat("closed_threshold",2f) && angle<open
   strength=MotionGlassMath.safe(p.getFloat("motion_glass_projection_strength",1f),1f,0f,2f)
   smoothing=MotionGlassMath.safe(p.getFloat("motion_glass_smoothing",90f),90f,0f,300f)
   invert=p.getBoolean("motion_glass_invert",false)
+  if(allowed && angle>=open && running && baseline){
+   beginReturn()
+   if(innerReturn.pending && !innerReturn.finished(SystemClock.elapsedRealtime())){state="Returning inner glass to neutral";return}
+   if(innerReturn.pending){lastReturn="completed 300 ms";RecoveryLog.add("Motion inner return complete; 300 ms")}
+  }
   if(!wanted){stop();state=if(enabled)"Waiting for live fold (Live Screen only)" else "Off";return}
+  if(innerReturn.pending){innerReturn.cancel(SystemClock.elapsedRealtime());lastReturn="interrupted by refold";RecoveryLog.add("Motion inner return interrupted by refold")}
   if(running)return
   if(manager==null){manager=context.applicationContext.getSystemService(SensorManager::class.java);sensor=manager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR,false) ?: manager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR,false)}
   val s=sensor
@@ -47,10 +58,21 @@ internal object MotionGlass : SensorEventListener {
   running=runCatching{manager!!.registerListener(this,s,16_667,0)}.getOrDefault(false)
   state=if(running)"Active: ${s.name}" else "Sensor registration failed"
  }
- fun recenter(){baseline=false;lastNs=0L;x=0f;y=0f;listeners.forEach{it()}}
- fun stop(){if(running)manager?.unregisterListener(this);running=false;state="Stopped";baseline=false;lastNs=0L;if(x!=0f||y!=0f){x=0f;y=0f;listeners.forEach{it()}}}
+ private fun beginReturn(){if(innerReturn.begin(SystemClock.elapsedRealtime())){lastReturn="started";RecoveryLog.add("Motion inner return start; amount=${innerReturn.lastAmount}; duration=300 ms")}}
+ fun returning()=innerReturn.pending && !innerReturn.finished(SystemClock.elapsedRealtime())
+ fun innerAmount(normal:Float,atOpen:Boolean,record:Boolean=false):Float {
+  if(!running || !baseline)return if(atOpen)0f else normal
+  val endpoint=if(angle.isFinite())angle>=returnOpen else atOpen
+  if(endpoint){beginReturn();return if(innerReturn.pending)innerReturn.amount(SystemClock.elapsedRealtime()) else 0f}
+  if(innerReturn.pending)innerReturn.cancel(SystemClock.elapsedRealtime())
+  if(record)innerReturn.observe(normal)
+  return normal
+ }
+ fun recenter(){innerReturn.clear();baseline=false;lastNs=0L;x=0f;y=0f;listeners.forEach{it()}}
+ fun stop(){innerReturn.clear();if(running)manager?.unregisterListener(this);running=false;state="Stopped";baseline=false;lastNs=0L;if(x!=0f||y!=0f){x=0f;y=0f;listeners.forEach{it()}}}
  override fun onAccuracyChanged(sensor:Sensor?,accuracy:Int)=Unit
  override fun onSensorChanged(event:SensorEvent){
+  if(innerReturn.pending)return
   if(!running || event.timestamp<startNs || event.timestamp<=lastNs)return
   if(event.values.any{!it.isFinite()})return
   SensorManager.getRotationMatrixFromVector(matrix,event.values)
@@ -66,10 +88,10 @@ internal object MotionGlass : SensorEventListener {
   listeners.forEach{it()}
  }
  fun offset(rotation:Int,out:FloatArray){
-  if(!running || lastNs==0L || SystemClock.elapsedRealtimeNanos()-lastNs>500_000_000L){out[0]=0f;out[1]=0f;return}
+  if(!running || lastNs==0L || (!innerReturn.pending && SystemClock.elapsedRealtimeNanos()-lastNs>500_000_000L)){out[0]=0f;out[1]=0f;return}
   MotionGlassMath.rotate(x,y,rotation,out)
  }
- fun report()="Motion glass: anchored projection; $state; response=${(strength*100).toInt()}%; smoothing=${smoothing.toInt()} ms; inverted=$invert; baseline=$baseline; sensor age=${if(lastNs==0L)-1 else (SystemClock.elapsedRealtimeNanos()-lastNs)/1_000_000} ms"
+ fun report()="Motion glass: anchored projection; $state; response=${(strength*100).toInt()}%; smoothing=${smoothing.toInt()} ms; inverted=$invert; baseline=$baseline; inner return=$lastReturn; returning=${returning()}; sensor age=${if(lastNs==0L)-1 else (SystemClock.elapsedRealtimeNanos()-lastNs)/1_000_000} ms"
 }
 
 internal object MotionGlassMath {

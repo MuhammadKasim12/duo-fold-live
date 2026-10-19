@@ -1,4 +1,4 @@
-# Motion glass experiment — 3.5.7-alpha.6
+# Motion glass experiment — 3.5.7-alpha.7
 
 Developer settings → Motion glass → Motion-driven glass. Off by default. Live Screen only; screenshot mode and static settings previews retain their previous behavior.
 
@@ -17,3 +17,5 @@ Handset acceptance: use a detailed wallpaper or grid, enable motion, partially o
 Existing Repair auto-rotate resolved the owner's rotation issue. No rotation-policy patch is included. Main/stable and Play remain unchanged. The separate stock-handoff diagnostic app remains deferred until this experiment is tested.
 
 Alpha.6: actual cover motion mapping is reversed independently; primary inner and reflected inner glass keep their alpha.5 mapping. Reverse motion direction now defaults OFF, with a one-time direction-only reset on upgrade. Sensitivity/smoothing are preserved. Tilt remains linear beyond 30 degrees and clamps at 60 degrees instead; sensitivity near neutral is unchanged. At default response the maximum cover scale becomes 2x/0.5x; at 200% it is 4x/0.25x. Anchors remain unchanged.
+
+Alpha.7: on reaching fully open with live inner motion glass, retain the last rendered distortion and ease the shared geometry amount to zero over 300 ms. The renderer and host use the same clock; gyro samples are held during the return instead of immediately zeroed. Full-open display-policy release remains unchanged. Screen-off/lock, disable, stale hinge input and service cleanup still clear immediately. Refolding cancels the return and resumes sensing. Reports record return start/completion/interruption. Test fast and slow reopen from a strongly squashed inner view, then refold during the return and test lock/disable. Main/stable and Play remain unchanged.
