@@ -392,7 +392,7 @@ class MainActivity:ComponentActivity(){
          SettingsCard("Developer settings","Diagnostics and experimental controls. Normal use does not require these."){
         Text("Motion glass · experimental",style=MaterialTheme.typography.titleMedium)
         Toggle("Motion-driven glass",motionGlass){motionGlass=it;prefs.edit().putBoolean("motion_glass",it).apply();if(!it)MotionGlass.stop()}
-        Text("Live Screen only. Tilt the phone during a partial fold to expand, contract, and skew the whole glass projection. Horizontal stretch is the main response; vertical skew is gentler. The left edge stays anchored; the clean right inner preview stays fixed. The first sensor sample of each fold sets the neutral position. This is simulated depth, not head tracking; it does not change the hinge angle or auto-rotate settings.",style=MaterialTheme.typography.bodySmall)
+        Text("Live Screen only. Tilt the phone during a partial fold to expand, contract, and skew the whole glass projection. Horizontal stretch is the main response; vertical skew is gentler. The cover anchors at its left edge; inner glass anchors beside the clean right preview, leaving its left edge free. The first sensor sample of each fold sets the neutral position. This is simulated depth, not head tracking; it does not change the hinge angle or auto-rotate settings.",style=MaterialTheme.typography.bodySmall)
         if(motionGlass){
          Toggle("Reverse motion direction",motionInvert){motionInvert=it;prefs.edit().putBoolean("motion_glass_invert",it).apply();MotionGlass.recenter()}
          Text("Projection response · ${(motionStrength*100).roundToInt()}% (100% = gentle default)")

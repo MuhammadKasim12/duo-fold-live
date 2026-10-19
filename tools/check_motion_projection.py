@@ -18,25 +18,30 @@ float2 motionOffset(0,0);
 bool near(float a,float b){return std::abs(a-b)<0.00001f;}
 float2 point(float axis,float across){float a=mix(axis,1-axis,reverse);float2 uv=horizontal>.5?float2(across,a):float2(a,across);if(reflectedCover>.5)uv.x=1-uv.x;return uv;}
 int main(){
- for(int reflected=0;reflected<2;reflected++)for(int r=0;r<4;r++)for(int panel=0;panel<2;panel++){
-  reflectedCover=reflected;horizontal=r%2;reverse=(r==1||r==2);inner=panel;
+ for(int reflected=0;reflected<2;reflected++)for(int r=0;r<4;r++)for(int panel=0;panel<2;panel++)for(int fb=0;fb<2;fb++){
+  reflectedCover=reflected;horizontal=r%2;reverse=(r==1||r==2);inner=panel;fallback=fb;
+  float anchor=panel?(fb?1.f:.5f):(reflected?1.f:0.f);
   for(int a=0;a<=100;a++)for(int b=0;b<=10;b++){
    auto uv=point(a/100.f,b/10.f);motionOffset={0,0};auto same=motionWarp(uv);
    assert(near(uv.x,same.x)&&near(uv.y,same.y));
   }
   for(int tx=-2;tx<=2;tx++)for(int ty=-2;ty<=2;ty++)for(int b=0;b<=10;b++){
-   motionOffset={(float)tx,(float)ty};auto uv=point(0,b/10.f);auto fixed=motionWarp(uv);
+   motionOffset={(float)tx,(float)ty};auto uv=point(anchor,b/10.f);auto fixed=motionWarp(uv);
    assert(near(uv.x,fixed.x)&&near(uv.y,fixed.y));
-   if(panel)for(int a=50;a<=100;a++){uv=point(a/100.f,b/10.f);fixed=motionWarp(uv);assert(near(uv.x,fixed.x)&&near(uv.y,fixed.y));}
+   if(panel&&!fb)for(int a=50;a<=100;a++){uv=point(a/100.f,b/10.f);fixed=motionWarp(uv);assert(near(uv.x,fixed.x)&&near(uv.y,fixed.y));}
   }
  }
  for(float gain: {0.25f,0.5f,1.f,2.f,4.f}){
-  float previous=-1;
-  for(int i=0;i<=500;i++){float x=i/1000.f;float y=motionAxis(x,gain,.5,1);assert(std::isfinite(y)&&y>=previous&&y>=0&&y<=.5);previous=y;}
+  float previous=-2;
+  for(int i=0;i<=500;i++){float x=i/1000.f;float y=motionAxis(x,gain,.5,1);assert(std::isfinite(y)&&y>=previous&&y>=-1.5&&y<=.5);previous=y;}
   assert(near(motionAxis(0,gain,.5,0),0));
+  assert(near(motionAxis(.5,gain,.5,1),.5));
+  if(gain!=1)assert(!near(motionAxis(0,gain,.5,1),0));
+  assert(near(motionLever(.5,.5,1),0));
+  assert(!near(motionLever(0,.5,1),0));
  }
  assert(motionAxis(.25,2,.5,0)<.25);assert(motionAxis(.25,.5,.5,0)>.25);
- puts("PASS: zero-tilt identity, pinned left edge and clean inner half across rotations/reflection, bounded monotonic inner projection, bidirectional stretch");
+ puts("PASS: zero-tilt identity, cover left anchor, inner seam anchor and free left edge, clean inner half across rotations/reflection/fallback, finite monotonic projection, bidirectional stretch");
 }
 '''
 code=code.replace('#include <cstdio>','#include <cstdio>\n#include <initializer_list>')

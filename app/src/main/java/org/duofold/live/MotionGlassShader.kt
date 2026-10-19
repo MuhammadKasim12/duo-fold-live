@@ -6,12 +6,12 @@ internal object MotionGlassShader {
  float motionAxis(float x,float gain,float span,float pinnedSeam){
   if(pinnedSeam>0.5){
    if(x>=span)return x;
-   return x/(gain+(1.0-gain)*x/span);
+   return span+(x-span)/gain;
   }
   return x/gain;
  }
  float motionLever(float x,float span,float pinnedSeam){
-  if(pinnedSeam>0.5)return x<span ? x*(1.0-x/span) : 0.0;
+  if(pinnedSeam>0.5)return x<span ? x-span : 0.0;
   return x;
  }
  float2 motionWarp(float2 uv){
@@ -27,10 +27,13 @@ internal object MotionGlassShader {
   float y=mix(screen.y,screen.x,horizontal);
   float along=mix(tilt.x,tilt.y,horizontal)*(1.0-2.0*reverse);
   float across=mix(tilt.y,tilt.x,horizontal);
-  float pinnedSeam=inner>0.5 && fallback<0.5 ? 1.0 : 0.0;
+  // Inner glass (including the reflected cover on the inner panel) pivots
+  // at the clean-content seam; only the actual cover pins its left edge.
+  float pinnedSeam=inner>0.5 || reflectedCover>0.5 ? 1.0 : 0.0;
+  float span=inner>0.5 && fallback<0.5 ? 0.5 : 1.0;
   float gain=exp2(clamp(along,-2.0,2.0));
-  float warped=motionAxis(x,gain,0.5,pinnedSeam);
-  y-=0.125*across*motionLever(x,0.5,pinnedSeam);
+  float warped=motionAxis(x,gain,span,pinnedSeam);
+  y-=0.125*across*motionLever(x,span,pinnedSeam);
   warped=mix(warped,1.0-warped,reverse);
   screen=horizontal>0.5 ? float2(y,warped) : float2(warped,y);
   if(reflectedCover>0.5)screen.x=1.0-screen.x;
