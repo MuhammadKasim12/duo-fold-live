@@ -32,7 +32,7 @@ internal object MotionGlass : SensorEventListener {
  fun remove(listener:()->Unit){listeners.remove(listener)}
  fun angle(value:Float){angle=value}
  fun refresh(context:Context,usable:Boolean){
-  val p=context.getSharedPreferences("standalone",0)
+  val p=RuntimeSettings.get(context)
   val enabled=p.getBoolean("motion_glass",false)
   val wanted=enabled && usable && p.getBoolean("enabled",false) && !p.getBoolean("dual",false) && LiveAngles.fresh() && LiveAngles.effectAllowed && angle.isFinite() && angle>p.getFloat("closed_threshold",2f) && angle<FoldThreshold.sanitize(p.getFloat("open_threshold",172f))
   strength=MotionGlassMath.safe(p.getFloat("motion_glass_strength",.035f),.035f,0f,.1f)
