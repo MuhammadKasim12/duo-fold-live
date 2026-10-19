@@ -30,7 +30,7 @@ internal object MotionGlassShader {
   float pinnedSeam=inner>0.5 && fallback<0.5 ? 1.0 : 0.0;
   float gain=exp2(clamp(along,-2.0,2.0));
   float warped=motionAxis(x,gain,0.5,pinnedSeam);
-  y-=0.25*across*motionLever(x,0.5,pinnedSeam);
+  y-=0.125*across*motionLever(x,0.5,pinnedSeam);
   warped=mix(warped,1.0-warped,reverse);
   screen=horizontal>0.5 ? float2(y,warped) : float2(warped,y);
   if(reflectedCover>0.5)screen.x=1.0-screen.x;

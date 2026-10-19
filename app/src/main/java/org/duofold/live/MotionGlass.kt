@@ -20,7 +20,7 @@ internal object MotionGlass : SensorEventListener {
  private var angle=Float.NaN
  private var strength=1f
  private var smoothing=90f
- private var invert=false
+ private var invert=true
  private var x=0f
  private var y=0f
  private val matrix=FloatArray(9)
@@ -37,7 +37,7 @@ internal object MotionGlass : SensorEventListener {
   val wanted=enabled && usable && p.getBoolean("enabled",false) && !p.getBoolean("dual",false) && LiveAngles.fresh() && LiveAngles.effectAllowed && angle.isFinite() && angle>p.getFloat("closed_threshold",2f) && angle<FoldThreshold.sanitize(p.getFloat("open_threshold",172f))
   strength=MotionGlassMath.safe(p.getFloat("motion_glass_projection_strength",1f),1f,0f,2f)
   smoothing=MotionGlassMath.safe(p.getFloat("motion_glass_smoothing",90f),90f,0f,300f)
-  invert=p.getBoolean("motion_glass_invert",false)
+  invert=p.getBoolean("motion_glass_invert",true)
   if(!wanted){stop();state=if(enabled)"Waiting for live fold (Live Screen only)" else "Off";return}
   if(running)return
   if(manager==null){manager=context.applicationContext.getSystemService(SensorManager::class.java);sensor=manager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR,false) ?: manager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR,false)}
@@ -61,8 +61,8 @@ internal object MotionGlass : SensorEventListener {
   if(!delta[1].isFinite() || !delta[2].isFinite())return
   val dt=((event.timestamp-lastNs)/1_000_000f).coerceIn(1f,100f);lastNs=event.timestamp
   val sign=if(invert)-1f else 1f
-  x=MotionGlassMath.smooth(x,MotionGlassMath.offset(delta[2],strength)*sign,dt,smoothing)
-  y=MotionGlassMath.smooth(y,-MotionGlassMath.offset(delta[1],strength)*sign,dt,smoothing)
+  x=MotionGlassMath.smooth(x,MotionGlassMath.offset(delta[2],strength*.5f)*sign,dt,smoothing)
+  y=MotionGlassMath.smooth(y,-MotionGlassMath.offset(delta[1],strength*.5f)*sign,dt,smoothing)
   listeners.forEach{it()}
  }
  fun offset(rotation:Int,out:FloatArray){
