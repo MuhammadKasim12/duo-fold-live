@@ -69,9 +69,11 @@ internal object ClassicGlassShader {
  // Zero slope at both ends avoids the old late stretch surge.
  float classicCoverScale(float p){return 1.0+0.28*smoothstep(0.0,1.0,p);}
  float classicInnerWidth(float p){return mix(1.0,0.16,smoothstep(0.0,1.0,p));}
+ ${MotionGlassShader.source}
  half4 main(float2 p) {
   float2 uv=(p-origin)/extent;
   if(any(lessThan(uv,float2(0))) || any(greaterThan(uv,float2(1)))) return half4(0);
+  uv=motionWarp(uv);
   float axis=mix(uv.x,uv.y,horizontal);
   axis=mix(axis,1.0-axis,reverse);
   float edge=inner>0.5 ? (fallback>0.5 ? 1.0-axis : 1.0-2.0*axis) : axis;
@@ -150,7 +152,7 @@ internal object ClassicGlassShader {
    if(horizontal>0.5)sourceUV.x=uv.x+(sourceUV.x-uv.x)*compression;
    else sourceUV.y=uv.y+(sourceUV.y-uv.y)*compression;
   }
-  sourceUV=sourceUV*sampleScale+sampleOffset+motionOffset*smoothstep(0.0,0.15,progress);
+  sourceUV=sourceUV*sampleScale+sampleOffset;
   float blurEdge=edge;
   if(inner>0.5 && fallback<0.5)blurEdge=(edge+2.0*seamOffset)/(1.0+2.0*seamOffset);
   if(reflectedCover>0.5)blurEdge=max(blurEdge,(2.0*seamOffset-axis)/(1.0+2.0*seamOffset));

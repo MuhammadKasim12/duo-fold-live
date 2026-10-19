@@ -67,7 +67,7 @@ class MainActivity:ComponentActivity(){
     var behavior by remember{mutableStateOf(AnimationModePolicy.behavior(prefs.getString("animation_behavior",AnimationModePolicy.BOTH)))}
     var motionGlass by remember{mutableStateOf(prefs.getBoolean("motion_glass",false))}
     var motionInvert by remember{mutableStateOf(prefs.getBoolean("motion_glass_invert",false))}
-    var motionStrength by remember{mutableStateOf(prefs.getFloat("motion_glass_strength",.035f))}
+    var motionStrength by remember{mutableStateOf(prefs.getFloat("motion_glass_projection_strength",1f))}
     var motionSmoothing by remember{mutableStateOf(prefs.getFloat("motion_glass_smoothing",90f))}
     var legacy by remember{mutableStateOf(false)}
     var supportBanner by remember{mutableStateOf(false)}
@@ -392,15 +392,15 @@ class MainActivity:ComponentActivity(){
          SettingsCard("Developer settings","Diagnostics and experimental controls. Normal use does not require these."){
         Text("Motion glass · experimental",style=MaterialTheme.typography.titleMedium)
         Toggle("Motion-driven glass",motionGlass){motionGlass=it;prefs.edit().putBoolean("motion_glass",it).apply();if(!it)MotionGlass.stop()}
-        Text("Live Screen only. Tilt the phone while holding a partial fold to shift the glass refraction. The first sensor sample of each fold sets the neutral position. This is simulated depth, not head tracking; it does not change the hinge angle or auto-rotate settings.",style=MaterialTheme.typography.bodySmall)
+        Text("Live Screen only. Tilt the phone during a partial fold to expand, contract, and skew the whole glass projection. The left edge stays anchored; the clean right inner preview stays fixed. The first sensor sample of each fold sets the neutral position. This is simulated depth, not head tracking; it does not change the hinge angle or auto-rotate settings.",style=MaterialTheme.typography.bodySmall)
         if(motionGlass){
          Toggle("Reverse motion direction",motionInvert){motionInvert=it;prefs.edit().putBoolean("motion_glass_invert",it).apply();MotionGlass.recenter()}
-         Text("Motion strength · ${(motionStrength*100).roundToInt()}% maximum shift")
-         Slider(value=motionStrength,onValueChange={motionStrength=it},valueRange=0f..0.1f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_strength",motionStrength).apply()})
+         Text("Projection response · ${(motionStrength*100).roundToInt()}%")
+         Slider(value=motionStrength,onValueChange={motionStrength=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_projection_strength",motionStrength).apply()})
          Text("Motion smoothing · ${motionSmoothing.roundToInt()} ms")
          Slider(value=motionSmoothing,onValueChange={motionSmoothing=it},valueRange=0f..300f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_smoothing",motionSmoothing).apply()})
          OutlinedButton(onClick={MotionGlass.recenter()}){Text("Recenter motion")}
-         TextButton(onClick={motionStrength=.035f;motionSmoothing=90f;motionInvert=false;prefs.edit().putFloat("motion_glass_strength",.035f).putFloat("motion_glass_smoothing",90f).putBoolean("motion_glass_invert",false).apply();MotionGlass.recenter()}){Text("Reset motion tuning")}
+         TextButton(onClick={motionStrength=1f;motionSmoothing=90f;motionInvert=false;prefs.edit().putFloat("motion_glass_projection_strength",1f).putFloat("motion_glass_smoothing",90f).putBoolean("motion_glass_invert",false).apply();MotionGlass.recenter()}){Text("Reset motion tuning")}
         }
         HorizontalDivider()
 

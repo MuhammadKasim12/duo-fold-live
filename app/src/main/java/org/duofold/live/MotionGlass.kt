@@ -18,7 +18,7 @@ internal object MotionGlass : SensorEventListener {
  private var startNs=0L
  private var lastNs=0L
  private var angle=Float.NaN
- private var strength=.035f
+ private var strength=1f
  private var smoothing=90f
  private var invert=false
  private var x=0f
@@ -35,7 +35,7 @@ internal object MotionGlass : SensorEventListener {
   val p=RuntimeSettings.get(context)
   val enabled=p.getBoolean("motion_glass",false)
   val wanted=enabled && usable && p.getBoolean("enabled",false) && !p.getBoolean("dual",false) && LiveAngles.fresh() && LiveAngles.effectAllowed && angle.isFinite() && angle>p.getFloat("closed_threshold",2f) && angle<FoldThreshold.sanitize(p.getFloat("open_threshold",172f))
-  strength=MotionGlassMath.safe(p.getFloat("motion_glass_strength",.035f),.035f,0f,.1f)
+  strength=MotionGlassMath.safe(p.getFloat("motion_glass_projection_strength",1f),1f,0f,2f)
   smoothing=MotionGlassMath.safe(p.getFloat("motion_glass_smoothing",90f),90f,0f,300f)
   invert=p.getBoolean("motion_glass_invert",false)
   if(!wanted){stop();state=if(enabled)"Waiting for live fold (Live Screen only)" else "Off";return}
@@ -69,7 +69,7 @@ internal object MotionGlass : SensorEventListener {
   if(!running || lastNs==0L || SystemClock.elapsedRealtimeNanos()-lastNs>500_000_000L){out[0]=0f;out[1]=0f;return}
   MotionGlassMath.rotate(x,y,rotation,out)
  }
- fun report()="Motion glass: $state; strength=${(strength*100).toInt()}%; smoothing=${smoothing.toInt()} ms; inverted=$invert; baseline=$baseline; sensor age=${if(lastNs==0L)-1 else (SystemClock.elapsedRealtimeNanos()-lastNs)/1_000_000} ms"
+ fun report()="Motion glass: anchored projection; $state; response=${(strength*100).toInt()}%; smoothing=${smoothing.toInt()} ms; inverted=$invert; baseline=$baseline; sensor age=${if(lastNs==0L)-1 else (SystemClock.elapsedRealtimeNanos()-lastNs)/1_000_000} ms"
 }
 
 internal object MotionGlassMath {

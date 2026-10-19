@@ -94,9 +94,11 @@ internal object DuoGlassShader {
  float windowShadeAmount(float motion,float edge,float strength){
   return min(1.0,2.0*motion*pow(clamp((edge-0.2)/0.8,0.0,1.0),1.35)*strength);
  }
+ ${MotionGlassShader.source}
  half4 main(float2 p) {
   float2 uv=(p-origin)/extent;
   if(any(lessThan(uv,float2(0))) || any(greaterThan(uv,float2(1)))) return half4(0);
+  uv=motionWarp(uv);
   float axis=mix(uv.x,uv.y,horizontal);
   axis=mix(axis,1.0-axis,reverse);
   // Project the folded physical panel through the reference's fixed eye at z=40.
@@ -168,7 +170,7 @@ internal object DuoGlassShader {
    if(horizontal>0.5)sourceUV.x=uv.x+(sourceUV.x-uv.x)*amount;
    else sourceUV.y=uv.y+(sourceUV.y-uv.y)*amount;
   }
-  sourceUV=sourceUV*sampleScale+sampleOffset+motionOffset*smoothstep(0.0,0.15,progress);
+  sourceUV=sourceUV*sampleScale+sampleOffset;
   float shaderProgress=inner>0.5 ? clamp(a/1.570796327,0.0,1.0) : clamp((3.141592654-a)/1.570796327,0.0,1.0);
   float motion=smoothstep(0.0,1.0,shaderProgress);
   // Keep the 72 source-pixel reference radius, including the image's black margins.
