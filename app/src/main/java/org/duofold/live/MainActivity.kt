@@ -182,6 +182,11 @@ class MainActivity:ComponentActivity(){
         TextButton(onClick={supportBanner=false;SupportPrompts.stop(this@MainActivity)}){Text("Don’t ask again")}
        }
       }
+      SettingsCard("Make it yours","Two screens. A world of possibilities."){
+       WallpaperInvitation()
+       Button(onClick={startActivity(Intent(this@MainActivity,WallpaperStudioActivity::class.java))},modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text("Choose Custom Wallpaper")}
+       Text("Choose a photo for each screen. Frame it just right. Keep it across updates.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+      }
       SettingsCard("Folding Animation Style","Choose how your Fold moves between screens."){
        listOf("windowed" to "Inspired by iPhone Duo with even more windowed glass. Default.","duo_classic" to "1-for-1 recreation of the iPhone Duo animation, with a gentler stretch and stronger blur.","plain_fade" to "").forEach{(id,description)->
         Surface(onClick={selectMode(id)},shape=RoundedCornerShape(20.dp),color=if(mode==id)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,modifier=Modifier.fillMaxWidth()){
@@ -223,11 +228,6 @@ class MainActivity:ComponentActivity(){
       }
       ShizukuHelp()
       if(mode=="plain_fade")PlainFadeControls(prefs){restart()}
-      SettingsCard("Make it yours","Two screens. A world of possibilities."){
-       WallpaperInvitation()
-       Button(onClick={startActivity(Intent(this@MainActivity,WallpaperStudioActivity::class.java))},modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text("Choose Custom Wallpaper")}
-       Text("Choose a photo for each screen. Frame it just right. Keep it across updates.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-      }
       SettingsCard("Fine-tune your animation","Duo Classic uses its own stronger glass and blur preset. Other styles use your saved glass settings."){
 
        InfoLabel("Motion smoothness · ${smoothing.roundToInt()} ms","Higher values smooth hinge motion but add delay. This does not increase FPS. Default: Smooth (120 ms).")
@@ -253,6 +253,16 @@ class MainActivity:ComponentActivity(){
        Slider(value=intensity,onValueChange={intensity=it},valueRange=.3f..1.5f,onValueChangeFinished={prefs.edit().putFloat("intensity",intensity).apply();restart()})
        TextButton(onClick={intensity=.4f;prefs.edit().putFloat("intensity",.4f).apply();restart()}){Text("Reset glass strength")}
        Toggle("Full-resolution glass · higher GPU cost",fullResolution,help="Off uses half-resolution rendering to reduce GPU work. Content and handoff angles are unchanged."){fullResolution=it;booleanSetting("full_resolution_glass",it)}
+       Toggle("Motion-Tracked Glass",motionGlass,help="Tilt your phone to move the glass. Live Screen only."){motionGlass=it;prefs.edit().putBoolean("motion_glass",it).apply();if(!it)MotionGlass.stop()}
+       if(motionGlass){
+        Toggle("Reverse direction",motionInvert){motionInvert=it;prefs.edit().putBoolean("motion_glass_invert",it).apply();MotionGlass.recenter()}
+        Text("Sensitivity · ${(motionStrength*100).roundToInt()}%")
+        Slider(value=motionStrength,onValueChange={motionStrength=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_projection_strength",motionStrength).apply()})
+        Text("Smoothing · ${motionSmoothing.roundToInt()} ms")
+        Slider(value=motionSmoothing,onValueChange={motionSmoothing=it},valueRange=0f..300f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_smoothing",motionSmoothing).apply()})
+        OutlinedButton(onClick={MotionGlass.recenter()}){Text("Recenter")}
+        TextButton(onClick={motionStrength=1f;motionSmoothing=90f;motionInvert=false;prefs.edit().putFloat("motion_glass_projection_strength",1f).putFloat("motion_glass_smoothing",90f).putBoolean("motion_glass_invert",false).apply();MotionGlass.recenter()}){Text("Reset motion settings")}
+       }
 
        Text("Fully open at ${threshold.roundToInt()}°. Adjust this in Advanced.",style=MaterialTheme.typography.bodySmall)
       }
@@ -390,20 +400,6 @@ class MainActivity:ComponentActivity(){
         Text("Shortcut: tap with four fingers anywhere in the app.",style=MaterialTheme.typography.bodySmall)
         if(developer){
          SettingsCard("Developer settings","Diagnostics and experimental controls. Normal use does not require these."){
-        Text("Motion glass · experimental",style=MaterialTheme.typography.titleMedium)
-        Toggle("Motion-driven glass",motionGlass){motionGlass=it;prefs.edit().putBoolean("motion_glass",it).apply();if(!it)MotionGlass.stop()}
-        Text("Live Screen only. Tilt the phone during a partial fold to expand, contract, and skew the whole glass projection. Horizontal stretch is the main response; vertical skew is gentler. The cover anchors at its left edge; inner glass anchors beside the clean right preview, leaving its left edge free. The first sensor sample of each fold sets the neutral position. This is simulated depth, not head tracking; it does not change the hinge angle or auto-rotate settings.",style=MaterialTheme.typography.bodySmall)
-        if(motionGlass){
-         Toggle("Reverse motion direction",motionInvert){motionInvert=it;prefs.edit().putBoolean("motion_glass_invert",it).apply();MotionGlass.recenter()}
-         Text("Projection response · ${(motionStrength*100).roundToInt()}% (100% = gentle default)")
-         Slider(value=motionStrength,onValueChange={motionStrength=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_projection_strength",motionStrength).apply()})
-         Text("Motion smoothing · ${motionSmoothing.roundToInt()} ms")
-         Slider(value=motionSmoothing,onValueChange={motionSmoothing=it},valueRange=0f..300f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_smoothing",motionSmoothing).apply()})
-         OutlinedButton(onClick={MotionGlass.recenter()}){Text("Recenter motion")}
-         TextButton(onClick={motionStrength=1f;motionSmoothing=90f;motionInvert=false;prefs.edit().putFloat("motion_glass_projection_strength",1f).putFloat("motion_glass_smoothing",90f).putBoolean("motion_glass_invert",false).apply();MotionGlass.recenter()}){Text("Reset motion tuning")}
-        }
-        HorizontalDivider()
-
         Toggle("Closed-hinge jitter protection",jitterProtection){jitterProtection=it;booleanSetting("closed_hinge_jitter_protection",it)}
         Text("On by default. Starts at ${(ClosedHingeGate.startAngle(closedThreshold)).roundToInt()}°; once started, follows the hinge until it returns to ${closedThreshold.roundToInt()}° or less. Filters tiny closed-phone readings before the animation and cover preview start. Turn off to restore the original threshold behavior.",style=MaterialTheme.typography.bodySmall)
         HorizontalDivider()
