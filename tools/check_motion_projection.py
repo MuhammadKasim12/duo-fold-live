@@ -31,6 +31,11 @@ int main(){
    if(panel&&!fb)for(int a=50;a<=100;a++){uv=point(a/100.f,b/10.f);fixed=motionWarp(uv);assert(near(uv.x,fixed.x)&&near(uv.y,fixed.y));}
   }
  }
+ // Positive tilt reverses only the actual cover, not inner or reflected glass.
+ horizontal=0;reverse=0;fallback=0;motionOffset={.5f,0};
+ inner=0;reflectedCover=0;auto cover=motionWarp({.25f,.5f});assert(cover.x>.25f);
+ inner=1;auto in=motionWarp({.25f,.5f});assert(in.x>.25f);
+ inner=0;reflectedCover=1;auto reflected=motionWarp({.75f,.5f});assert(reflected.x<.75f);
  for(float gain: {0.25f,0.5f,1.f,2.f,4.f}){
   float previous=-2;
   for(int i=0;i<=500;i++){float x=i/1000.f;float y=motionAxis(x,gain,.5,1);assert(std::isfinite(y)&&y>=previous&&y>=-1.5&&y<=.5);previous=y;}

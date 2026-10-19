@@ -7,9 +7,12 @@ class MotionGlassMathTest {
   assertEquals(0f,MotionGlassMath.offset(0f,.035f),0f)
   assertEquals(0f,MotionGlassMath.offset(Float.NaN,.035f),0f)
  }
- @Test fun largeTiltIsBoundedAtSelectedStrength(){
-  assertEquals(.1f,MotionGlassMath.offset(10f,.1f),.00001f)
-  assertEquals(-.1f,MotionGlassMath.offset(-10f,.1f),.00001f)
+ @Test fun tiltContinuesPastThirtyDegreesAndStopsAtSixty(){
+  assertEquals(.1f,MotionGlassMath.offset(.5235988f,.1f),.00001f)
+  assertEquals(.15f,MotionGlassMath.offset(.7853982f,.1f),.00001f)
+  assertEquals(.2f,MotionGlassMath.offset(1.0471976f,.1f),.00001f)
+  assertEquals(.2f,MotionGlassMath.offset(10f,.1f),.00001f)
+  assertEquals(-.2f,MotionGlassMath.offset(-10f,.1f),.00001f)
  }
  @Test fun axesFollowAllFourDisplayRotations(){
   val out=FloatArray(2)

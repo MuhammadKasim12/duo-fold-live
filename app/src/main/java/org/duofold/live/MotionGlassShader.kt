@@ -30,6 +30,8 @@ internal object MotionGlassShader {
   // Inner glass (including the reflected cover on the inner panel) pivots
   // at the clean-content seam; only the actual cover pins its left edge.
   float pinnedSeam=inner>0.5 || reflectedCover>0.5 ? 1.0 : 0.0;
+  // Cover faces the opposite way; inner/reflected glass keeps its direction.
+  if(pinnedSeam<0.5){along=-along;across=-across;}
   float span=inner>0.5 && fallback<0.5 ? 0.5 : 1.0;
   float gain=exp2(clamp(along,-2.0,2.0));
   float warped=motionAxis(x,gain,span,pinnedSeam);

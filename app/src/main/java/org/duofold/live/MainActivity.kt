@@ -66,7 +66,7 @@ class MainActivity:ComponentActivity(){
     var mode by remember{mutableStateOf(AnimationModePolicy.sanitize(prefs.getString("animation_mode",AnimationModePolicy.DEFAULT)))}
     var behavior by remember{mutableStateOf(AnimationModePolicy.behavior(prefs.getString("animation_behavior",AnimationModePolicy.BOTH)))}
     var motionGlass by remember{mutableStateOf(prefs.getBoolean("motion_glass",false))}
-    var motionInvert by remember{mutableStateOf(prefs.getBoolean("motion_glass_invert",true))}
+    var motionInvert by remember{mutableStateOf(prefs.getBoolean("motion_glass_invert",false))}
     var motionStrength by remember{mutableStateOf(prefs.getFloat("motion_glass_projection_strength",1f))}
     var motionSmoothing by remember{mutableStateOf(prefs.getFloat("motion_glass_smoothing",90f))}
     var legacy by remember{mutableStateOf(false)}
@@ -400,7 +400,7 @@ class MainActivity:ComponentActivity(){
          Text("Motion smoothing · ${motionSmoothing.roundToInt()} ms")
          Slider(value=motionSmoothing,onValueChange={motionSmoothing=it},valueRange=0f..300f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_smoothing",motionSmoothing).apply()})
          OutlinedButton(onClick={MotionGlass.recenter()}){Text("Recenter motion")}
-         TextButton(onClick={motionStrength=1f;motionSmoothing=90f;motionInvert=true;prefs.edit().putFloat("motion_glass_projection_strength",1f).putFloat("motion_glass_smoothing",90f).putBoolean("motion_glass_invert",true).apply();MotionGlass.recenter()}){Text("Reset motion tuning")}
+         TextButton(onClick={motionStrength=1f;motionSmoothing=90f;motionInvert=false;prefs.edit().putFloat("motion_glass_projection_strength",1f).putFloat("motion_glass_smoothing",90f).putBoolean("motion_glass_invert",false).apply();MotionGlass.recenter()}){Text("Reset motion tuning")}
         }
         HorizontalDivider()
 

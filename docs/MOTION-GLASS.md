@@ -1,4 +1,4 @@
-# Motion glass experiment — 3.5.7-alpha.5
+# Motion glass experiment — 3.5.7-alpha.6
 
 Developer settings → Motion glass → Motion-driven glass. Off by default. Live Screen only; screenshot mode and static settings previews retain their previous behavior.
 
@@ -15,3 +15,5 @@ Validation: tools/check_motion_projection.py compiles the actual shared shader w
 Handset acceptance: use a detailed wallpaper or grid, enable motion, partially open and hold the hinge still, then tilt left/right and up/down. Check that the cover left edge stays fixed and the inner left edge moves freely around its fixed seam. Check the clean right preview stays still, including through handoff. Repeat while closing, in each display rotation, with reflected preview enabled. Test reverse direction, response zero/max, smoothing zero/max, recenter, full endpoints, and lock/stop. Share the usage report. Automated checks do not establish physical sensor direction, visual quality, or handset handoff latency.
 
 Existing Repair auto-rotate resolved the owner's rotation issue. No rotation-policy patch is included. Main/stable and Play remain unchanged. The separate stock-handoff diagnostic app remains deferred until this experiment is tested.
+
+Alpha.6: actual cover motion mapping is reversed independently; primary inner and reflected inner glass keep their alpha.5 mapping. Reverse motion direction now defaults OFF, with a one-time direction-only reset on upgrade. Sensitivity/smoothing are preserved. Tilt remains linear beyond 30 degrees and clamps at 60 degrees instead; sensitivity near neutral is unchanged. At default response the maximum cover scale becomes 2x/0.5x; at 200% it is 4x/0.25x. Anchors remain unchanged.
