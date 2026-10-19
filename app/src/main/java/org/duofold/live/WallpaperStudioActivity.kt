@@ -102,11 +102,7 @@ class WallpaperStudioActivity:ComponentActivity() {
   Surface(Modifier.fillMaxSize()){
    Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal=maxOf(20,(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp-680)/2).dp,vertical=12.dp),verticalArrangement=Arrangement.spacedBy(20.dp)){
     TextButton(onClick={leave()},enabled=!busy){Text("‹  Back to Duo")}
-    Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xff253a59),Color(0xff25213d))),RoundedCornerShape(32.dp)).padding(24.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
-     Text("MAKE IT YOURS",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.secondary)
-     Text("Two screens.\nYour perspective.",style=MaterialTheme.typography.headlineLarge)
-     Text("A favorite moment, beautifully framed for every fold.",style=MaterialTheme.typography.bodyLarge,color=MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+    Text("Custom Wallpaper",style=MaterialTheme.typography.titleLarge)
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)){
      FilterChip(selected==0,{selected=0},label={Text("Cover screen")},enabled=!busy,modifier=Modifier.weight(1f))
      FilterChip(selected==1,{selected=1},label={Text("Inner screen")},enabled=!busy,modifier=Modifier.weight(1f))

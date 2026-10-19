@@ -11,7 +11,7 @@ Created by a Duo Fold Live user—not by me. Huge thanks for putting this togeth
 
 An iPhone Duo-inspired folding animation for the **Samsung Galaxy Z Fold 8**, with windowed glass, live cover previews, and smooth black fades around Samsung’s display handoff. Free and open source. Runs over One UI and ordinary apps without replacing your launcher.
 
-**[Download 3.5.5](https://github.com/joeconsorti/duo-fold-live/releases/latest)** · [3.5.5 release notes](https://github.com/joeconsorti/duo-fold-live/releases/tag/v3.5.5) · [Report an issue](https://github.com/joeconsorti/duo-fold-live/issues)
+**[Download 3.5.7](https://github.com/joeconsorti/duo-fold-live/releases/latest)** · [3.5.7 release notes](https://github.com/joeconsorti/duo-fold-live/releases/tag/v3.5.7) · [Report an issue](https://github.com/joeconsorti/duo-fold-live/issues)
 
 **Only tested on the Z Fold 8 (SM-F971U).** Fold 8 Ultra, Fold 7, and other devices are unverified. Do not expect compatibility. Model recognition includes regional SM-F971, SM-F976, and SM-F966 families. Unknown models display a warning and may proceed. Android 17 and the existing Samsung wallpaper/API checks are still required. Recognition is not verified compatibility.
 

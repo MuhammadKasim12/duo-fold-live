@@ -56,8 +56,8 @@ jobs:
           import os, re
           from pathlib import Path
           p = Path('app/build.gradle.kts')
-          if not re.search(r'versionName\s*=\s*"(?:[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+|3\.5\.[0123456])"', p.read_text()):
-              raise SystemExit('Release policy: only alpha versions and owner-approved 3.5.0/3.5.1/3.5.2/3.5.3/3.5.4/3.5.5/3.5.6 are allowed')
+          if not re.search(r'versionName\s*=\s*"(?:[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+|3\.5\.[01234567])"', p.read_text()):
+              raise SystemExit('Release policy: only alpha versions and owner-approved 3.5.0/3.5.1/3.5.2/3.5.3/3.5.4/3.5.5/3.5.6/3.5.7 are allowed')
           current = int(re.search(r'\bversionCode\s*=\s*(\d+)', p.read_text()).group(1))
           code = max(current, 1000 + int(os.environ['GITHUB_RUN_NUMBER']))
           text, count = re.subn(r'\bversionCode\s*=\s*\d+', f'versionCode = {code}', p.read_text())
@@ -141,6 +141,11 @@ jobs:
           # Owner approved the section-order-only update as stable 3.5.6.
           if [ "$GITHUB_REF_NAME" = main ] && [ "$version" = 3.5.6 ]; then
             tag="v3.5.6"
+            release_flags=(--latest)
+          fi
+          # Owner approved the tested motion glass build and compact wallpaper header as stable 3.5.7.
+          if [ "$GITHUB_REF_NAME" = main ] && [ "$version" = 3.5.7 ]; then
+            tag="v3.5.7"
             release_flags=(--latest)
           fi
           gh release create "$tag" dist/Duo-Fold-Live-github-*.apk dist/SHA256SUMS.txt \
