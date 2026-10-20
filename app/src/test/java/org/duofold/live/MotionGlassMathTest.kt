@@ -3,6 +3,34 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MotionGlassMathTest {
+ @Test fun startupWaitsForSettlingButIsBounded(){
+  val g=MotionBaselineGate();val start=1000000000L
+  g.reset(start)
+  assertFalse(g.ready(start+119000000L))
+  assertTrue(g.ready(start+120000000L))
+  g.moved(start+100000000L)
+  assertFalse(g.ready(start+179000000L))
+  assertTrue(g.ready(start+180000000L))
+  g.moved(start+340000000L)
+  assertFalse(g.ready(start+349000000L))
+  assertTrue(g.ready(start+350000000L))
+  g.reset(start+1000000000L)
+  assertFalse(g.ready(start+1001000000L))
+ }
+ @Test fun tinyTiltsAreNeutralAndLargerTiltsRemainContinuousAndSymmetric(){
+  val d=.02617994f
+  assertEquals(0f,MotionGlassMath.deadZone(d),0f)
+  assertEquals(0f,MotionGlassMath.deadZone(-d),0f)
+  assertEquals(0f,MotionGlassMath.deadZone(Float.NaN),0f)
+  assertTrue(MotionGlassMath.deadZone(d+.000001f)<.000001f)
+  var last=0f
+  for(i in 0..600){
+   val a=i*.001f;val v=MotionGlassMath.deadZone(a)
+   assertTrue(v>=last);assertEquals(-v,MotionGlassMath.deadZone(-a),.000001f);last=v
+  }
+  assertEquals(.5235988f-d,MotionGlassMath.deadZone(.5235988f),.000001f)
+ }
+
  @Test fun neutralAndInvalidSamplesDoNotShiftContent(){
   assertEquals(0f,MotionGlassMath.offset(0f,.035f),0f)
   assertEquals(0f,MotionGlassMath.offset(Float.NaN,.035f),0f)
