@@ -477,7 +477,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      shader.setFloatUniform("texSize",f.bitmap.width.toFloat(),f.bitmap.height.toFloat())
      shader.setFloatUniform("origin",if(fallback)width-ew else 0f,if(fallback)(height-eh)/2f else 0f)
      shader.setFloatUniform("sampleScale",if(projectedCover)width/ew else 1f,if(projectedCover)height/eh else 1f)
-     if(!preview && !frozen)MotionGlass.offset(rotation,motionOffset) else {motionOffset[0]=0f;motionOffset[1]=0f}
+     if(!preview && !frozen)MotionGlass.offset(rotation,motionOffset,inner || reflectedCover) else {motionOffset[0]=0f;motionOffset[1]=0f}
      shader.setFloatUniform("motionOffset",motionOffset[0],motionOffset[1])
      shader.setFloatUniform("sampleOffset",if(fit!=null)-fit[1]/ew else 0f,if(fit!=null)-fit[2]/eh else 0f)
      shader.setFloatUniform("extent",if(projectedCover)width.toFloat() else ew,if(projectedCover)height.toFloat() else eh);shader.setFloatUniform("progress",amount.coerceIn(0f,1f));shader.setFloatUniform("intensity",if(classicPreset)maxOf(1.8f,intensity)*.7f else intensity)
