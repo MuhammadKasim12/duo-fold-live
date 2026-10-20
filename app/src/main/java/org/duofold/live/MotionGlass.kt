@@ -7,6 +7,8 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.SystemClock
 import kotlin.math.exp
+import kotlin.math.abs
+import kotlin.math.sign
 
 /** Relative tilt only: never writes hinge angles, display policy, or rotation settings.
  * All calls and sensor callbacks run on the main looper. No captures are requested. */
@@ -17,6 +19,10 @@ internal object MotionGlass : SensorEventListener {
  private var baseline=false
  private var startNs=0L
  private var lastNs=0L
+ private val startup=MotionBaselineGate()
+ private val history=java.util.ArrayDeque<String>()
+ private var lastTraceNs=0L
+ private fun trace(message:String){if(history.size>=200)history.removeFirst();history.addLast("${SystemClock.elapsedRealtime()}: $message")}
  private var angle=Float.NaN
  private var strength=1f
  private var smoothing=90f
@@ -54,7 +60,8 @@ internal object MotionGlass : SensorEventListener {
   if(manager==null){manager=context.applicationContext.getSystemService(SensorManager::class.java);sensor=manager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR,false) ?: manager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR,false)}
   val s=sensor
   if(s==null){state="No supported rotation-vector sensor";return}
-  startNs=SystemClock.elapsedRealtimeNanos();baseline=false;lastNs=0L
+  startNs=SystemClock.elapsedRealtimeNanos();baseline=false;lastNs=0L;x=0f;y=0f
+  trace("START hinge=$angle; settling baseline; dead zone=1.5 deg")
   running=runCatching{manager!!.registerListener(this,s,16_667,0)}.getOrDefault(false)
   state=if(running)"Active: ${s.name}" else "Sensor registration failed"
  }
@@ -68,33 +75,66 @@ internal object MotionGlass : SensorEventListener {
   if(record)innerReturn.observe(normal)
   return normal
  }
- fun recenter(){innerReturn.clear();baseline=false;lastNs=0L;x=0f;y=0f;listeners.forEach{it()}}
- fun stop(){innerReturn.clear();if(running)manager?.unregisterListener(this);running=false;state="Stopped";baseline=false;lastNs=0L;if(x!=0f||y!=0f){x=0f;y=0f;listeners.forEach{it()}}}
+ fun recenter(){trace("RECENTER");innerReturn.clear();baseline=false;lastNs=0L;x=0f;y=0f;listeners.forEach{it()}}
+ fun stop(){innerReturn.clear();if(running){trace("STOP hinge=$angle; x=$x y=$y");manager?.unregisterListener(this)};running=false;state="Stopped";baseline=false;lastNs=0L;if(x!=0f||y!=0f){x=0f;y=0f;listeners.forEach{it()}}}
  override fun onAccuracyChanged(sensor:Sensor?,accuracy:Int)=Unit
  override fun onSensorChanged(event:SensorEvent){
   if(innerReturn.pending)return
   if(!running || event.timestamp<startNs || event.timestamp<=lastNs)return
   if(event.values.any{!it.isFinite()})return
   SensorManager.getRotationMatrixFromVector(matrix,event.values)
-  if(!baseline || (lastNs>0L && event.timestamp-lastNs>500_000_000L)){
-   matrix.copyInto(reference);baseline=true;lastNs=event.timestamp;x=0f;y=0f;listeners.forEach{it()};return
+  if(lastNs==0L || event.timestamp-lastNs>500_000_000L){
+   trace("BASELINE settling; reason=${if(lastNs==0L)"start" else "sensor gap"}")
+   matrix.copyInto(reference);startup.reset(event.timestamp);baseline=false;lastNs=event.timestamp;x=0f;y=0f;listeners.forEach{it()};return
+  }
+  if(!baseline){
+   SensorManager.getAngleChange(delta,matrix,reference)
+   if(delta.any{!it.isFinite()})return
+   if(delta.any{abs(it)>.006108652f}){matrix.copyInto(reference);startup.moved(event.timestamp)}
+   lastNs=event.timestamp
+   if(startup.ready(event.timestamp)){
+    matrix.copyInto(reference);baseline=true
+    trace("BASELINE locked; hinge=$angle; settleMs=${startup.ageMs(event.timestamp)}; bounded=${startup.ageMs(event.timestamp)>=350}")
+   }
+   listeners.forEach{it()};return
   }
   SensorManager.getAngleChange(delta,matrix,reference)
   if(!delta[1].isFinite() || !delta[2].isFinite())return
   val dt=((event.timestamp-lastNs)/1_000_000f).coerceIn(1f,100f);lastNs=event.timestamp
   val sign=if(invert)-1f else 1f
-  x=MotionGlassMath.smooth(x,MotionGlassMath.offset(delta[2],strength*.5f)*sign,dt,smoothing)
-  y=MotionGlassMath.smooth(y,-MotionGlassMath.offset(delta[1],strength*.5f)*sign,dt,smoothing)
+  x=MotionGlassMath.smooth(x,MotionGlassMath.offset(MotionGlassMath.deadZone(delta[2]),strength*.5f)*sign,dt,smoothing)
+  y=MotionGlassMath.smooth(y,-MotionGlassMath.offset(MotionGlassMath.deadZone(delta[1]),strength*.5f)*sign,dt,smoothing)
+  if(event.timestamp-lastTraceNs>=200_000_000L){lastTraceNs=event.timestamp;trace("SAMPLE hinge=$angle; tiltDeg=${delta[2]*57.29578f},${delta[1]*57.29578f}; x=$x y=$y; deliveryMs=${(SystemClock.elapsedRealtimeNanos()-event.timestamp)/1_000_000}")}
   listeners.forEach{it()}
  }
  fun offset(rotation:Int,out:FloatArray){
   if(!running || lastNs==0L || (!innerReturn.pending && SystemClock.elapsedRealtimeNanos()-lastNs>500_000_000L)){out[0]=0f;out[1]=0f;return}
   MotionGlassMath.rotate(x,y,rotation,out)
  }
- fun report()="Motion glass: anchored projection; $state; response=${(strength*100).toInt()}%; smoothing=${smoothing.toInt()} ms; inverted=$invert; baseline=$baseline; inner return=$lastReturn; returning=${returning()}; sensor age=${if(lastNs==0L)-1 else (SystemClock.elapsedRealtimeNanos()-lastNs)/1_000_000} ms"
+ fun report()="Motion glass: anchored projection; $state; response=${(strength*100).toInt()}%; smoothing=${smoothing.toInt()} ms; inverted=$invert; baseline=$baseline; inner return=$lastReturn; returning=${returning()}; sensor age=${if(lastNs==0L)-1 else (SystemClock.elapsedRealtimeNanos()-lastNs)/1_000_000} ms; startup settling=120–350 ms; dead zone=1.5 deg"+"\nMotion history (software samples; 200 ms target):\n"+history.joinToString("\n")
+}
+
+/** Bounded startup window: ignore the opening tug, then freeze the reference.
+ * Never follows the user after locking; intentional subsequent tilt remains relative. */
+internal class MotionBaselineGate {
+ private var start=0L
+ private var stableSince=0L
+ fun reset(ns:Long){start=ns;stableSince=ns}
+ fun moved(ns:Long){stableSince=ns}
+ fun ageMs(ns:Long)=(ns-start)/1_000_000
+ fun ready(ns:Long)=ns-start>=350_000_000L || (ns-start>=120_000_000L && ns-stableSince>=80_000_000L)
 }
 
 internal object MotionGlassMath {
+ // Continuous soft dead zone: zero for tiny movements, normal slope beyond 3 degrees.
+ fun deadZone(radians:Float):Float {
+  if(!radians.isFinite())return 0f
+  val d=.02617994f
+  val a=abs(radians)
+  if(a<=d)return 0f
+  val t=((a-d)/d).coerceIn(0f,1f)
+  return sign(radians)*(a-d)*t*t*(3f-2f*t)
+ }
  fun safe(value:Float,fallback:Float,low:Float,high:Float)=if(value.isFinite())value.coerceIn(low,high) else fallback
  fun offset(radians:Float,strength:Float)=if(radians.isFinite())(radians/.5235988f).coerceIn(-2f,2f)*strength else 0f
  fun smooth(current:Float,target:Float,dt:Float,ms:Float)=if(ms<=0f)target else current+(target-current)*(1f-exp(-dt/ms))
