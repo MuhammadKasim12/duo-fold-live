@@ -67,7 +67,9 @@ class MainActivity:ComponentActivity(){
     var behavior by remember{mutableStateOf(AnimationModePolicy.behavior(prefs.getString("animation_behavior",AnimationModePolicy.BOTH)))}
     var motionGlass by remember{mutableStateOf(prefs.getBoolean("motion_glass",false))}
     var motionInvert by remember{mutableStateOf(prefs.getBoolean("motion_glass_invert",false))}
-    var motionStrength by remember{mutableStateOf(prefs.getFloat("motion_glass_projection_strength",1f))}
+    val legacyMotionStrength=remember{MotionGlassMath.safe(prefs.getFloat("motion_glass_projection_strength",1f),1f,0f,2f)}
+    var motionCoverStrength by remember{mutableStateOf(MotionGlassMath.safe(prefs.getFloat("motion_glass_cover_strength",legacyMotionStrength),legacyMotionStrength,0f,2f))}
+    var motionInnerStrength by remember{mutableStateOf(MotionGlassMath.safe(prefs.getFloat("motion_glass_inner_strength",legacyMotionStrength),legacyMotionStrength,0f,2f))}
     var motionSmoothing by remember{mutableStateOf(prefs.getFloat("motion_glass_smoothing",90f))}
     var legacy by remember{mutableStateOf(false)}
     var supportBanner by remember{mutableStateOf(false)}
@@ -254,12 +256,14 @@ class MainActivity:ComponentActivity(){
        Toggle("Motion-Tracked Glass",motionGlass,help="Tilt your phone to move the glass. Live Screen only."){motionGlass=it;prefs.edit().putBoolean("motion_glass",it).apply();if(!it)MotionGlass.stop()}
        if(motionGlass){
         Toggle("Reverse direction",motionInvert){motionInvert=it;prefs.edit().putBoolean("motion_glass_invert",it).apply();MotionGlass.recenter()}
-        Text("Sensitivity · ${(motionStrength*100).roundToInt()}%")
-        Slider(value=motionStrength,onValueChange={motionStrength=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_projection_strength",motionStrength).apply()})
+        Text("Cover screen sensitivity · ${(motionCoverStrength*100).roundToInt()}%")
+        Slider(value=motionCoverStrength,onValueChange={motionCoverStrength=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_cover_strength",motionCoverStrength).apply()})
+        Text("Inner screen sensitivity · ${(motionInnerStrength*100).roundToInt()}%")
+        Slider(value=motionInnerStrength,onValueChange={motionInnerStrength=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_inner_strength",motionInnerStrength).apply()})
         Text("Smoothing · ${motionSmoothing.roundToInt()} ms")
         Slider(value=motionSmoothing,onValueChange={motionSmoothing=it},valueRange=0f..300f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_smoothing",motionSmoothing).apply()})
         OutlinedButton(onClick={MotionGlass.recenter()}){Text("Recenter")}
-        TextButton(onClick={motionStrength=1f;motionSmoothing=90f;motionInvert=false;prefs.edit().putFloat("motion_glass_projection_strength",1f).putFloat("motion_glass_smoothing",90f).putBoolean("motion_glass_invert",false).apply();MotionGlass.recenter()}){Text("Reset motion settings")}
+        TextButton(onClick={motionCoverStrength=1f;motionInnerStrength=1f;motionSmoothing=90f;motionInvert=false;prefs.edit().putFloat("motion_glass_cover_strength",1f).putFloat("motion_glass_inner_strength",1f).putFloat("motion_glass_smoothing",90f).putBoolean("motion_glass_invert",false).apply();MotionGlass.recenter()}){Text("Reset motion settings")}
        }
 
        Text("Fully open at ${threshold.roundToInt()}°. Adjust this in Advanced.",style=MaterialTheme.typography.bodySmall)
