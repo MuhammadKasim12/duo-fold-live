@@ -24,7 +24,8 @@ internal object MotionGlass : SensorEventListener {
  private var lastTraceNs=0L
  private fun trace(message:String){if(history.size>=200)history.removeFirst();history.addLast("${SystemClock.elapsedRealtime()}: $message")}
  private var angle=Float.NaN
- private var strength=1f
+ private var coverStrength=1f
+ private var innerStrength=1f
  private var smoothing=90f
  private var invert=false
  private var x=0f
@@ -46,7 +47,9 @@ internal object MotionGlass : SensorEventListener {
   val allowed=enabled && usable && p.getBoolean("enabled",false) && !p.getBoolean("dual",false) && LiveAngles.fresh() && LiveAngles.effectAllowed && angle.isFinite()
   val open=FoldThreshold.sanitize(p.getFloat("open_threshold",172f));returnOpen=open
   val wanted=allowed && angle>p.getFloat("closed_threshold",2f) && angle<open
-  strength=MotionGlassMath.safe(p.getFloat("motion_glass_projection_strength",1f),1f,0f,2f)
+  val legacyStrength=MotionGlassMath.safe(p.getFloat("motion_glass_projection_strength",1f),1f,0f,2f)
+  coverStrength=MotionGlassMath.safe(p.getFloat("motion_glass_cover_strength",legacyStrength),legacyStrength,0f,2f)
+  innerStrength=MotionGlassMath.safe(p.getFloat("motion_glass_inner_strength",legacyStrength),legacyStrength,0f,2f)
   smoothing=MotionGlassMath.safe(p.getFloat("motion_glass_smoothing",90f),90f,0f,300f)
   invert=p.getBoolean("motion_glass_invert",false)
   if(allowed && angle>=open && running && baseline){
@@ -102,16 +105,18 @@ internal object MotionGlass : SensorEventListener {
   if(!delta[1].isFinite() || !delta[2].isFinite())return
   val dt=((event.timestamp-lastNs)/1_000_000f).coerceIn(1f,100f);lastNs=event.timestamp
   val sign=if(invert)-1f else 1f
-  x=MotionGlassMath.smooth(x,MotionGlassMath.offset(MotionGlassMath.deadZone(delta[2]),strength*.5f)*sign,dt,smoothing)
-  y=MotionGlassMath.smooth(y,-MotionGlassMath.offset(MotionGlassMath.deadZone(delta[1]),strength*.5f)*sign,dt,smoothing)
+  x=MotionGlassMath.smooth(x,MotionGlassMath.offset(MotionGlassMath.deadZone(delta[2]),.5f)*sign,dt,smoothing)
+  y=MotionGlassMath.smooth(y,-MotionGlassMath.offset(MotionGlassMath.deadZone(delta[1]),.5f)*sign,dt,smoothing)
   if(event.timestamp-lastTraceNs>=200_000_000L){lastTraceNs=event.timestamp;trace("SAMPLE hinge=$angle; tiltDeg=${delta[2]*57.29578f},${delta[1]*57.29578f}; x=$x y=$y; deliveryMs=${(SystemClock.elapsedRealtimeNanos()-event.timestamp)/1_000_000}")}
   listeners.forEach{it()}
  }
- fun offset(rotation:Int,out:FloatArray){
+ fun offset(rotation:Int,out:FloatArray,inner:Boolean){
   if(!running || lastNs==0L || (!innerReturn.pending && SystemClock.elapsedRealtimeNanos()-lastNs>500_000_000L)){out[0]=0f;out[1]=0f;return}
-  MotionGlassMath.rotate(x,y,rotation,out)
+  // Smooth neutral sensor motion once; scale independently for each physical panel.
+  val strength=if(inner)innerStrength else coverStrength
+  MotionGlassMath.rotate(x*strength,y*strength,rotation,out)
  }
- fun report()="Motion glass: anchored projection; $state; response=${(strength*100).toInt()}%; smoothing=${smoothing.toInt()} ms; inverted=$invert; baseline=$baseline; inner return=$lastReturn; returning=${returning()}; sensor age=${if(lastNs==0L)-1 else (SystemClock.elapsedRealtimeNanos()-lastNs)/1_000_000} ms; startup settling=120–350 ms; dead zone=1.5 deg"+"\nMotion history (software samples; 200 ms target):\n"+history.joinToString("\n")
+ fun report()="Motion glass: anchored projection; $state; cover response=${(coverStrength*100).toInt()}%; inner response=${(innerStrength*100).toInt()}%; smoothing=${smoothing.toInt()} ms; inverted=$invert; baseline=$baseline; inner return=$lastReturn; returning=${returning()}; sensor age=${if(lastNs==0L)-1 else (SystemClock.elapsedRealtimeNanos()-lastNs)/1_000_000} ms; startup settling=120–350 ms; dead zone=1.5 deg"+"\nMotion history (software samples; 200 ms target):\n"+history.joinToString("\n")
 }
 
 /** Bounded startup window: ignore the opening tug, then freeze the reference.
