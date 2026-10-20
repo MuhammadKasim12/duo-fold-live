@@ -24,6 +24,8 @@ internal object MotionGlass : SensorEventListener {
  private var lastTraceNs=0L
  private fun trace(message:String){if(history.size>=200)history.removeFirst();history.addLast("${SystemClock.elapsedRealtime()}: $message")}
  private var angle=Float.NaN
+ private var innerEnabled=false
+ private var coverEnabled=false
  private var coverStrength=1f
  private var innerStrength=1f
  private var smoothing=90f
@@ -43,7 +45,9 @@ internal object MotionGlass : SensorEventListener {
  fun angle(value:Float){angle=value}
  fun refresh(context:Context,usable:Boolean){
   val p=RuntimeSettings.get(context)
-  val enabled=p.getBoolean("motion_glass",false)
+  innerEnabled=p.getBoolean("motion_glass",false)
+  coverEnabled=p.getBoolean("motion_glass_cover_enabled",false)
+  val enabled=innerEnabled || coverEnabled
   val allowed=enabled && usable && p.getBoolean("enabled",false) && !p.getBoolean("dual",false) && LiveAngles.fresh() && LiveAngles.effectAllowed && angle.isFinite()
   val open=FoldThreshold.sanitize(p.getFloat("open_threshold",172f));returnOpen=open
   val wanted=allowed && angle>p.getFloat("closed_threshold",2f) && angle<open
@@ -52,7 +56,7 @@ internal object MotionGlass : SensorEventListener {
   innerStrength=MotionGlassMath.safe(p.getFloat("motion_glass_inner_strength",legacyStrength),legacyStrength,0f,2f)
   smoothing=MotionGlassMath.safe(p.getFloat("motion_glass_smoothing",90f),90f,0f,300f)
   invert=p.getBoolean("motion_glass_invert",false)
-  if(allowed && angle>=open && running && baseline){
+  if(allowed && innerEnabled && angle>=open && running && baseline){
    beginReturn()
    if(innerReturn.pending && !innerReturn.finished(SystemClock.elapsedRealtime())){state="Returning inner glass to neutral";return}
    if(innerReturn.pending){lastReturn="completed 300 ms";RecoveryLog.add("Motion inner return complete; 300 ms")}
@@ -69,9 +73,9 @@ internal object MotionGlass : SensorEventListener {
   state=if(running)"Active: ${s.name}" else "Sensor registration failed"
  }
  private fun beginReturn(){if(innerReturn.begin(SystemClock.elapsedRealtime())){lastReturn="started";RecoveryLog.add("Motion inner return start; amount=${innerReturn.lastAmount}; duration=300 ms")}}
- fun returning()=innerReturn.pending && !innerReturn.finished(SystemClock.elapsedRealtime())
+ fun returning()=innerEnabled && innerReturn.pending && !innerReturn.finished(SystemClock.elapsedRealtime())
  fun innerAmount(normal:Float,atOpen:Boolean,record:Boolean=false):Float {
-  if(!running || !baseline)return if(atOpen)0f else normal
+  if(!innerEnabled || !running || !baseline)return if(atOpen)0f else normal
   val endpoint=if(angle.isFinite())angle>=returnOpen else atOpen
   if(endpoint){beginReturn();return if(innerReturn.pending)innerReturn.amount(SystemClock.elapsedRealtime()) else 0f}
   if(innerReturn.pending)innerReturn.cancel(SystemClock.elapsedRealtime())
@@ -111,12 +115,12 @@ internal object MotionGlass : SensorEventListener {
   listeners.forEach{it()}
  }
  fun offset(rotation:Int,out:FloatArray,inner:Boolean){
-  if(!running || lastNs==0L || (!innerReturn.pending && SystemClock.elapsedRealtimeNanos()-lastNs>500_000_000L)){out[0]=0f;out[1]=0f;return}
+  if(!(if(inner)innerEnabled else coverEnabled) || !running || lastNs==0L || (!innerReturn.pending && SystemClock.elapsedRealtimeNanos()-lastNs>500_000_000L)){out[0]=0f;out[1]=0f;return}
   // Smooth neutral sensor motion once; scale independently for each physical panel.
   val strength=if(inner)innerStrength else coverStrength
   MotionGlassMath.rotate(x*strength,y*strength,rotation,out)
  }
- fun report()="Motion glass: anchored projection; $state; cover response=${(coverStrength*100).toInt()}%; inner response=${(innerStrength*100).toInt()}%; smoothing=${smoothing.toInt()} ms; inverted=$invert; baseline=$baseline; inner return=$lastReturn; returning=${returning()}; sensor age=${if(lastNs==0L)-1 else (SystemClock.elapsedRealtimeNanos()-lastNs)/1_000_000} ms; startup settling=120–350 ms; dead zone=1.5 deg"+"\nMotion history (software samples; 200 ms target):\n"+history.joinToString("\n")
+ fun report()="Motion glass: anchored projection; $state; inner enabled=$innerEnabled; cover experiment enabled=$coverEnabled; cover response=${(coverStrength*100).toInt()}%; inner response=${(innerStrength*100).toInt()}%; smoothing=${smoothing.toInt()} ms; inverted=$invert; baseline=$baseline; inner return=$lastReturn; returning=${returning()}; sensor age=${if(lastNs==0L)-1 else (SystemClock.elapsedRealtimeNanos()-lastNs)/1_000_000} ms; startup settling=120–350 ms; dead zone=1.5 deg"+"\nMotion history (software samples; 200 ms target):\n"+history.joinToString("\n")
 }
 
 /** Bounded startup window: ignore the opening tug, then freeze the reference.
