@@ -66,6 +66,7 @@ class MainActivity:ComponentActivity(){
     var mode by remember{mutableStateOf(AnimationModePolicy.sanitize(prefs.getString("animation_mode",AnimationModePolicy.DEFAULT)))}
     var behavior by remember{mutableStateOf(AnimationModePolicy.behavior(prefs.getString("animation_behavior",AnimationModePolicy.BOTH)))}
     var motionGlass by remember{mutableStateOf(prefs.getBoolean("motion_glass",false))}
+    var motionCoverGlass by remember{mutableStateOf(prefs.getBoolean("motion_glass_cover_enabled",false))}
     var motionInvert by remember{mutableStateOf(prefs.getBoolean("motion_glass_invert",false))}
     val legacyMotionStrength=remember{MotionGlassMath.safe(prefs.getFloat("motion_glass_projection_strength",1f),1f,0f,2f)}
     var motionCoverStrength by remember{mutableStateOf(MotionGlassMath.safe(prefs.getFloat("motion_glass_cover_strength",legacyMotionStrength),legacyMotionStrength,0f,2f))}
@@ -253,17 +254,15 @@ class MainActivity:ComponentActivity(){
        Slider(value=intensity,onValueChange={intensity=it},valueRange=.3f..1.5f,onValueChangeFinished={prefs.edit().putFloat("intensity",intensity).apply();restart()})
        TextButton(onClick={intensity=.4f;prefs.edit().putFloat("intensity",.4f).apply();restart()}){Text("Reset glass strength")}
        Toggle("Full-resolution glass · higher GPU cost",fullResolution,help="Off uses half-resolution rendering to reduce GPU work. Content and handoff angles are unchanged."){fullResolution=it;booleanSetting("full_resolution_glass",it)}
-       Toggle("Motion-Tracked Glass",motionGlass,help="Tilt your phone to move the glass. Live Screen only."){motionGlass=it;prefs.edit().putBoolean("motion_glass",it).apply();if(!it)MotionGlass.stop()}
+       Toggle("Inner screen motion glass",motionGlass,help="Tilt your phone to change the glass perspective on the inner display. Live Screen only."){motionGlass=it;prefs.edit().putBoolean("motion_glass",it).apply();if(!it && !motionCoverGlass)MotionGlass.stop()}
        if(motionGlass){
         Toggle("Reverse direction",motionInvert){motionInvert=it;prefs.edit().putBoolean("motion_glass_invert",it).apply();MotionGlass.recenter()}
-        Text("Cover screen sensitivity · ${(motionCoverStrength*100).roundToInt()}%")
-        Slider(value=motionCoverStrength,onValueChange={motionCoverStrength=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_cover_strength",motionCoverStrength).apply()})
         Text("Inner screen sensitivity · ${(motionInnerStrength*100).roundToInt()}%")
         Slider(value=motionInnerStrength,onValueChange={motionInnerStrength=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_inner_strength",motionInnerStrength).apply()})
         Text("Smoothing · ${motionSmoothing.roundToInt()} ms")
         Slider(value=motionSmoothing,onValueChange={motionSmoothing=it},valueRange=0f..300f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_smoothing",motionSmoothing).apply()})
         OutlinedButton(onClick={MotionGlass.recenter()}){Text("Recenter")}
-        TextButton(onClick={motionCoverStrength=1f;motionInnerStrength=1f;motionSmoothing=90f;motionInvert=false;prefs.edit().putFloat("motion_glass_cover_strength",1f).putFloat("motion_glass_inner_strength",1f).putFloat("motion_glass_smoothing",90f).putBoolean("motion_glass_invert",false).apply();MotionGlass.recenter()}){Text("Reset motion settings")}
+        TextButton(onClick={motionInnerStrength=1f;motionSmoothing=90f;motionInvert=false;prefs.edit().putFloat("motion_glass_inner_strength",1f).putFloat("motion_glass_smoothing",90f).putBoolean("motion_glass_invert",false).apply();MotionGlass.recenter()}){Text("Reset motion settings")}
        }
 
        Text("Fully open at ${threshold.roundToInt()}°. Adjust this in Advanced.",style=MaterialTheme.typography.bodySmall)
@@ -402,6 +401,15 @@ class MainActivity:ComponentActivity(){
         Text("Shortcut: tap with four fingers anywhere in the app.",style=MaterialTheme.typography.bodySmall)
         if(developer){
          SettingsCard("Developer settings","Diagnostics and experimental controls. Normal use does not require these."){
+        Toggle("Cover screen motion glass (experimental)",motionCoverGlass,help="Off by default. Adds tilt response to the cover display independently of inner motion glass. Live Screen only."){motionCoverGlass=it;prefs.edit().putBoolean("motion_glass_cover_enabled",it).apply();if(!it && !motionGlass)MotionGlass.stop()}
+        if(motionCoverGlass){
+        Text("Cover screen sensitivity · ${(motionCoverStrength*100).roundToInt()}%")
+        Slider(value=motionCoverStrength,onValueChange={motionCoverStrength=it},valueRange=0f..2f,onValueChangeFinished={prefs.edit().putFloat("motion_glass_cover_strength",motionCoverStrength).apply()})
+         Text("Direction and smoothing are shared with inner motion glass.",style=MaterialTheme.typography.bodySmall)
+         OutlinedButton(onClick={MotionGlass.recenter()}){Text("Recenter motion glass")}
+         TextButton(onClick={motionCoverStrength=1f;prefs.edit().putFloat("motion_glass_cover_strength",1f).apply()}){Text("Reset cover sensitivity")}
+        }
+        HorizontalDivider()
         Toggle("Closed-hinge jitter protection",jitterProtection){jitterProtection=it;booleanSetting("closed_hinge_jitter_protection",it)}
         Text("On by default. Starts at ${(ClosedHingeGate.startAngle(closedThreshold)).roundToInt()}°; once started, follows the hinge until it returns to ${closedThreshold.roundToInt()}° or less. Filters tiny closed-phone readings before the animation and cover preview start. Turn off to restore the original threshold behavior.",style=MaterialTheme.typography.bodySmall)
         HorizontalDivider()
