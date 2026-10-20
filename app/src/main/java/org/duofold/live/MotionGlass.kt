@@ -19,6 +19,7 @@ internal object MotionGlass : SensorEventListener {
  private var baseline=false
  private var startNs=0L
  private var lastNs=0L
+ private var immediateBaseline=false
  private val startup=MotionBaselineGate()
  private val history=java.util.ArrayDeque<String>()
  private var lastTraceNs=0L
@@ -59,7 +60,7 @@ internal object MotionGlass : SensorEventListener {
   if(allowed && innerEnabled && angle>=open && running && baseline){
    beginReturn()
    if(innerReturn.pending && !innerReturn.finished(SystemClock.elapsedRealtime())){state="Returning inner glass to neutral";return}
-   if(innerReturn.pending){lastReturn="completed 300 ms";RecoveryLog.add("Motion inner return complete; 300 ms")}
+   if(innerReturn.pending){lastReturn="completed ${InnerMotionReturn.DURATION_MS} ms";RecoveryLog.add("Motion inner return complete; ${InnerMotionReturn.DURATION_MS} ms")}
   }
   if(!wanted){stop();state=if(enabled)"Waiting for live fold (Live Screen only)" else "Off";return}
   if(innerReturn.pending){innerReturn.cancel(SystemClock.elapsedRealtime());lastReturn="interrupted by refold";RecoveryLog.add("Motion inner return interrupted by refold")}
@@ -68,11 +69,12 @@ internal object MotionGlass : SensorEventListener {
   val s=sensor
   if(s==null){state="No supported rotation-vector sensor";return}
   startNs=SystemClock.elapsedRealtimeNanos();baseline=false;lastNs=0L;x=0f;y=0f
-  trace("START hinge=$angle; settling baseline; dead zone=1.5 deg")
+  immediateBaseline=angle>open/2f
+  trace("START hinge=$angle; baseline=${if(immediateBaseline)"first fresh sample (inner close)" else "settling (cover open)"}; dead zone=1.5 deg")
   running=runCatching{manager!!.registerListener(this,s,16_667,0)}.getOrDefault(false)
   state=if(running)"Active: ${s.name}" else "Sensor registration failed"
  }
- private fun beginReturn(){if(innerReturn.begin(SystemClock.elapsedRealtime())){lastReturn="started";RecoveryLog.add("Motion inner return start; amount=${innerReturn.lastAmount}; duration=300 ms")}}
+ private fun beginReturn(){if(innerReturn.begin(SystemClock.elapsedRealtime())){lastReturn="started";RecoveryLog.add("Motion inner return start; amount=${innerReturn.lastAmount}; duration=${InnerMotionReturn.DURATION_MS} ms")}}
  fun returning()=innerEnabled && innerReturn.pending && !innerReturn.finished(SystemClock.elapsedRealtime())
  fun innerAmount(normal:Float,atOpen:Boolean,record:Boolean=false):Float {
   if(!innerEnabled || !running || !baseline)return if(atOpen)0f else normal
@@ -91,8 +93,9 @@ internal object MotionGlass : SensorEventListener {
   if(event.values.any{!it.isFinite()})return
   SensorManager.getRotationMatrixFromVector(matrix,event.values)
   if(lastNs==0L || event.timestamp-lastNs>500_000_000L){
-   trace("BASELINE settling; reason=${if(lastNs==0L)"start" else "sensor gap"}")
-   matrix.copyInto(reference);startup.reset(event.timestamp);baseline=false;lastNs=event.timestamp;x=0f;y=0f;listeners.forEach{it()};return
+   val lockImmediately=immediateBaseline && lastNs==0L
+   trace("BASELINE ${if(lockImmediately)"locked immediately for inner close" else "settling"}; hinge=$angle; reason=${if(lastNs==0L)"start" else "sensor gap"}")
+   matrix.copyInto(reference);startup.reset(event.timestamp);baseline=lockImmediately;lastNs=event.timestamp;x=0f;y=0f;listeners.forEach{it()};return
   }
   if(!baseline){
    SensorManager.getAngleChange(delta,matrix,reference)
@@ -120,7 +123,7 @@ internal object MotionGlass : SensorEventListener {
   val strength=if(inner)innerStrength else coverStrength
   MotionGlassMath.rotate(x*strength,y*strength,rotation,out)
  }
- fun report()="Motion glass: anchored projection; $state; inner enabled=$innerEnabled; cover experiment enabled=$coverEnabled; cover response=${(coverStrength*100).toInt()}%; inner response=${(innerStrength*100).toInt()}%; smoothing=${smoothing.toInt()} ms; inverted=$invert; baseline=$baseline; inner return=$lastReturn; returning=${returning()}; sensor age=${if(lastNs==0L)-1 else (SystemClock.elapsedRealtimeNanos()-lastNs)/1_000_000} ms; startup settling=120–350 ms; dead zone=1.5 deg"+"\nMotion history (software samples; 200 ms target):\n"+history.joinToString("\n")
+ fun report()="Motion glass: anchored projection; $state; inner enabled=$innerEnabled; cover experiment enabled=$coverEnabled; cover response=${(coverStrength*100).toInt()}%; inner response=${(innerStrength*100).toInt()}%; smoothing=${smoothing.toInt()} ms; inverted=$invert; baseline=$baseline; inner return=$lastReturn; returning=${returning()}; sensor age=${if(lastNs==0L)-1 else (SystemClock.elapsedRealtimeNanos()-lastNs)/1_000_000} ms; startup baseline=immediate inner close / 120–350 ms cover open; dead zone=1.5 deg"+"\nMotion history (software samples; 200 ms target):\n"+history.joinToString("\n")
 }
 
 /** Bounded startup window: ignore the opening tug, then freeze the reference.
