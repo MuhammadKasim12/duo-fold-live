@@ -1,8 +1,8 @@
 package org.duofold.live
 import android.content.Context
 internal object GlassRenderOptions {
- val ids=listOf("normal","light","projection","system")
- val labels=listOf("Normal glass (default)","Lightweight glass","Projection only (no blur)","System compositor blur (experimental)")
+ val ids=listOf("normal","light","projection","system","system_projected")
+ val labels=listOf("Normal glass (default)","Lightweight glass","Projection only (no blur)","System compositor blur (experimental)","System compositor blur + stretch (experimental)")
  fun mode(context:Context):String {
   val p=context.getSharedPreferences("standalone",0)
   if(p.getBoolean("dual",false))return "normal"

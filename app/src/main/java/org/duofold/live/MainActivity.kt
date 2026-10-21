@@ -418,7 +418,7 @@ class MainActivity:ComponentActivity(){
         GlassRenderOptions.ids.forEachIndexed { index,id ->
          OutlinedButton(onClick={renderOption=id;prefs.edit().putString("glass_render_mode",id).apply();restart()}){Text((if(renderOption==id)"✓ " else "")+GlassRenderOptions.labels[index])}
         }
-        Text("Live Screen only. Normal is the default. Lightweight uses a quarter-size output and one mip-filtered blur sample. Projection removes blur. System blur tests the compositor mechanism observed in Recents: it blurs underlying content without our projection, and may be unavailable or disabled by Android. Capture is retained for handoff readiness.",style=MaterialTheme.typography.bodySmall)
+        Text("Live Screen only. Normal is the default. Lightweight uses a quarter-size output and one mip-filtered blur sample. Projection removes blur. System blur tests the compositor mechanism observed in Recents: it blurs underlying content without our projection, and may be unavailable or disabled by Android. System blur + stretch adds the existing screen projection underneath a separate compositor blur layer. Both system options are experimental. Capture is retained for handoff readiness.",style=MaterialTheme.typography.bodySmall)
         HorizontalDivider()
         TextButton(onClick={legacy=!legacy}){Text(if(legacy)"Hide legacy & experimental visuals" else "Legacy & experimental visuals")}
         if(legacy){
