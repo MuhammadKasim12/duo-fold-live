@@ -28,6 +28,23 @@ internal object GlassFrames {
   }
   return out
  }
+ private val listeners=LinkedHashSet<()->Unit>()
+ fun listen(listener:()->Unit){listeners.add(listener)}
+ fun unlisten(listener:()->Unit){listeners.remove(listener)}
+ private val primarySource=CaptureSourceState()
+ fun primaryChanged(display:android.view.Display){
+  if(screenshotMode)return
+  val identity=CoverBridge.identity(display)
+  if(!primarySource.change(identity,display.rotation))return
+  val key=identity+":"+display.rotation
+  HandoffStartupTrace.event("CAPTURE_SOURCE_CHANGE","source=$key")
+  requestFreshCapture()
+ }
+ // Output resizing does not change captured content. Wake the producer without
+ // invalidating a valid frame or the source capture already in flight.
+ fun outputReady(){
+  if(clients>0 && !suspended && !pending){main.removeCallbacks(tick);main.post(tick)}
+ }
  private var suspended=false
  private var recoveryStarted=0L
  private var recoveryFailure=""
@@ -73,12 +90,12 @@ internal object GlassFrames {
    }catch(e:Exception){error=e.message?:error}finally{p.recycle();r.recycle()}
    val response=result;val message=error
    val capturedBitmap=response?.getParcelable("bitmap",Bitmap::class.java)
-   val mipStarted=SystemClock.elapsedRealtime()
+   val captureDone=SystemClock.elapsedRealtime();val mipStarted=captureDone
    val pyramid=if(gen==epoch.current()&&response?.getBoolean("ok")==true&&capturedBitmap!=null)runCatching{levels(capturedBitmap,gen)}.getOrDefault(emptyList()) else emptyList()
    val mipMs=SystemClock.elapsedRealtime()-mipStarted;val deliveredAt=SystemClock.elapsedRealtime()
    main.post{lastMipMs=mipMs;lastDeliveryMs=SystemClock.elapsedRealtime()-deliveredAt;pending=false;main.removeCallbacks(this);if(gen==epoch.current() && clients>0 && !suspended && captureDisplay==targetCaptureDisplay()){
     val bitmap=capturedBitmap
-    if(response?.getBoolean("ok")==true && bitmap!=null){if(recoveryStarted>0L){RecoveryLog.add("Glass wake recovery first capture: D$captureDisplay ${response.getInt("width")}x${response.getInt("height")}; +${SystemClock.elapsedRealtime()-recoveryStarted} ms");recoveryStarted=0L;recoveryFailure=""};frame=GlassFrame(bitmap,response.getInt("width"),response.getInt("height"),response.getLong("stamp"),pyramid,physicalId=response.getString("physicalId")?:"unknown",displayId=captureDisplay,rotation=response.getInt("rotation"),exclusions=valid.joinToString(" | "));CoverBridge.remember(frame!!);CoverStartupTrace.capture(frame!!);HandoffStartupTrace.capture(frame!!);val now=SystemClock.elapsedRealtime();if(measuredStart==0L)measuredStart=now;measuredFrames++;if(now-measuredStart>=1000){measuredFps=measuredFrames*1000f/(now-measuredStart);measuredFrames=0;measuredStart=now};if(now>=statusAt || statusDisplay!=captureDisplay){statusAt=now+1000;statusDisplay=captureDisplay;status="Content target $targetFps FPS · measured ${"%.1f".format(measuredFps)} captures/s · D$captureDisplay · ${response.getString("backend") ?: "layer capture"}"}}
+    if(response?.getBoolean("ok")==true && bitmap!=null){if(recoveryStarted>0L){RecoveryLog.add("Glass wake recovery first capture: D$captureDisplay ${response.getInt("width")}x${response.getInt("height")}; +${SystemClock.elapsedRealtime()-recoveryStarted} ms");recoveryStarted=0L;recoveryFailure=""};frame=GlassFrame(bitmap,response.getInt("width"),response.getInt("height"),response.getLong("stamp"),pyramid,physicalId=response.getString("physicalId")?:"unknown",displayId=captureDisplay,rotation=response.getInt("rotation"),exclusions=valid.joinToString(" | "));CoverBridge.remember(frame!!);CoverStartupTrace.capture(frame!!);HandoffStartupTrace.capture(frame!!);HandoffStartupTrace.event("CAPTURE_PIPELINE","captureAndQueueMs=${captureDone-started/1_000_000}; mipMs=$mipMs; deliveryMs=$lastDeliveryMs");listeners.toList().forEach{it()};val now=SystemClock.elapsedRealtime();if(measuredStart==0L)measuredStart=now;measuredFrames++;if(now-measuredStart>=1000){measuredFps=measuredFrames*1000f/(now-measuredStart);measuredFrames=0;measuredStart=now};if(now>=statusAt || statusDisplay!=captureDisplay){statusAt=now+1000;statusDisplay=captureDisplay;status="Content target $targetFps FPS · measured ${"%.1f".format(measuredFps)} captures/s · D$captureDisplay · ${response.getString("backend") ?: "layer capture"}"}}
     else{frame=null;statusAt=0;status="Glass unavailable; debug-style fallback: $message";if(recoveryStarted>0L && recoveryFailure!=message){recoveryFailure=message;RecoveryLog.add("Glass wake recovery capture failed: $message")}}
     main.postDelayed(this,if(frame==null)retryDelay(600L) else RenderQuality.delay(targetFps,SystemClock.elapsedRealtimeNanos()-started))
    }else{

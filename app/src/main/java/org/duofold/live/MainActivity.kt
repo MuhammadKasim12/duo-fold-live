@@ -413,6 +413,13 @@ class MainActivity:ComponentActivity(){
         Toggle("Closed-hinge jitter protection",jitterProtection){jitterProtection=it;booleanSetting("closed_hinge_jitter_protection",it)}
         Text("On by default. Starts at ${(ClosedHingeGate.startAngle(closedThreshold)).roundToInt()}°; once started, follows the hinge until it returns to ${closedThreshold.roundToInt()}° or less. Filters tiny closed-phone readings before the animation and cover preview start. Turn off to restore the original threshold behavior.",style=MaterialTheme.typography.bodySmall)
         HorizontalDivider()
+        Text("Glass rendering experiments",style=MaterialTheme.typography.titleMedium)
+        var renderOption by remember { mutableStateOf(GlassRenderOptions.mode(this@MainActivity)) }
+        GlassRenderOptions.ids.forEachIndexed { index,id ->
+         OutlinedButton(onClick={renderOption=id;prefs.edit().putString("glass_render_mode",id).apply();restart()}){Text((if(renderOption==id)"✓ " else "")+GlassRenderOptions.labels[index])}
+        }
+        Text("Live Screen only. Normal is the default. Lightweight uses a quarter-size output and one mip-filtered blur sample. Projection removes blur. System blur tests the compositor mechanism observed in Recents: it blurs underlying content without our projection, and may be unavailable or disabled by Android. Capture is retained for handoff readiness.",style=MaterialTheme.typography.bodySmall)
+        HorizontalDivider()
         TextButton(onClick={legacy=!legacy}){Text(if(legacy)"Hide legacy & experimental visuals" else "Legacy & experimental visuals")}
         if(legacy){
          Text("Older visuals · optional",style=MaterialTheme.typography.titleSmall)

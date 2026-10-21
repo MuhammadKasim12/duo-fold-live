@@ -5,7 +5,7 @@ package org.duofold.live;
  * Screenshot routing is unaffected. Remove this switch after the comparison.
  */
 final class HandoffBaseline {
- static final boolean ENABLED=true;
- static final String REPORT="Handoff baseline: ON; preparation gates bypassed; black fade and expansion holds disabled; renderer catches up after switch";
+ static final boolean ENABLED=false;
+ static final String REPORT="Handoff baseline: OFF; normal presentation restored; alpha.8 direct renderer delivery";
  private HandoffBaseline(){}
 }
