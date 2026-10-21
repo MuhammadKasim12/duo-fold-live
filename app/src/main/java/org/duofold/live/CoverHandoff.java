@@ -66,7 +66,7 @@ final class CoverHandoff {
  private float observedAngle=Float.NaN;
  private final ArrayDeque<String> events=new ArrayDeque<>();
  private void event(String message){events.addLast(SystemClock.elapsedRealtime()+": angle="+observedAngle+" "+message);while(events.size()>48)events.removeFirst();}
- synchronized String trace(){return "Closing prewarm state request: "+(CLOSING_PREWARM_ENABLED?"enabled":"bypassed (alpha experiment)")+"\nCover-close continuity: Android release with 1000 ms fallback; active="+delay.active()+"; deadline="+delay.deadline()+"\nNormal handoff request events (explicit cancel vs Android callback):\n"+String.join("\n",events);}
+ synchronized String trace(){return HandoffBaseline.REPORT+"\nClosing prewarm state request: "+(CLOSING_PREWARM_ENABLED?"enabled":"bypassed (alpha experiment)")+"\nCover-close continuity: Android release with 1000 ms fallback; active="+delay.active()+"; deadline="+delay.deadline()+"\nNormal handoff request events (explicit cancel vs Android callback):\n"+String.join("\n",events);}
  String status="Normal display control";
  private void init()throws Exception{
   if(manager!=null)return;

@@ -68,13 +68,13 @@ public class AngleReader extends Binder {
    rotation.update(appEnabled&&unlocked,last>0&&heartbeat-last<750,effectiveAngle,openThreshold);
    if(fade==null)fade=new HandoffFade();
    fade.settings(fadeSmoothing,fadeGradualness,mirrorMode&&!debug,openThreshold,handoffAngle);
-   fade.update(live&&!dual&&appEnabled&&!handoff.probeHolding(),effectiveAngle,last>0&&heartbeat-last<750);
-   if(expansion!=null){expansion.motion(effectiveAngle,openThreshold);expansion.enabled(mirrorMode&&live&&!dual&&appEnabled&&!handoff.probeHolding());}
+   fade.update(!HandoffBaseline.ENABLED&&live&&!dual&&appEnabled&&!handoff.probeHolding(),effectiveAngle,last>0&&heartbeat-last<750);
+   if(expansion!=null){expansion.motion(effectiveAngle,openThreshold);expansion.enabled(!HandoffBaseline.ENABLED&&mirrorMode&&live&&!dual&&appEnabled&&!handoff.probeHolding());}
    boolean bridgeReady=true;
-   boolean needsBridge=mirrorMode && live && !dual && unlocked && appEnabled && handoff.active() && !handoff.probeHolding() && angle>=handoffAngle && angle<FoldThreshold.sanitize(openThreshold) && last>0 && heartbeat-last<750 && expansion!=null;
+   boolean needsBridge=!HandoffBaseline.ENABLED && mirrorMode && live && !dual && unlocked && appEnabled && handoff.active() && !handoff.probeHolding() && angle>=handoffAngle && angle<FoldThreshold.sanitize(openThreshold) && last>0 && heartbeat-last<750 && expansion!=null;
    if(needsBridge)bridgeReady=expansion.holdBeforeRelease();else if(expansion!=null)expansion.cancelReleaseWait();
    if(expansion!=null){
-    boolean coverEnabled=mirrorMode&&live&&!dual&&unlocked&&appEnabled&&!handoff.probeHolding()&&last>0&&heartbeat-last<750;
+    boolean coverEnabled=!HandoffBaseline.ENABLED&&mirrorMode&&live&&!dual&&unlocked&&appEnabled&&!handoff.probeHolding()&&last>0&&heartbeat-last<750;
     expansion.coverControl(coverEnabled,effectiveAngle,handoffAngle);
     if(coverEnabled && handoff.innerActive() && DirectHandoffPolicy.next(true,effectiveAngle,true,true,true,openThreshold,handoffAngle)==DirectHandoffPolicy.COVER)bridgeReady=expansion.coverBeforeSwitch() && bridgeReady;
    }
