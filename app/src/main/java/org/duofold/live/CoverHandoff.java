@@ -12,6 +12,8 @@ final class CoverHandoff {
  private final ContinuityProbePolicy probe=new ContinuityProbePolicy();
  synchronized boolean probeHolding(){return probe.holding();}
  synchronized String probeStatus(){return probe.status+"\n"+nativeProbe.report();}
+ // Alpha.5 isolates the extra closing state request; preserve the old path for comparison.
+ private static final boolean CLOSING_PREWARM_ENABLED=false;
  private final ClosingPrewarmPolicy prewarm=new ClosingPrewarmPolicy();
  private Runnable prewarmTimer;
  private void clearPrewarm(){if(delayHandler!=null && prewarmTimer!=null)delayHandler.removeCallbacks(prewarmTimer);prewarmTimer=null;}
@@ -64,7 +66,7 @@ final class CoverHandoff {
  private float observedAngle=Float.NaN;
  private final ArrayDeque<String> events=new ArrayDeque<>();
  private void event(String message){events.addLast(SystemClock.elapsedRealtime()+": angle="+observedAngle+" "+message);while(events.size()>48)events.removeFirst();}
- synchronized String trace(){return "Cover-close continuity: Android release with 1000 ms fallback; active="+delay.active()+"; deadline="+delay.deadline()+"\nNormal handoff request events (explicit cancel vs Android callback):\n"+String.join("\n",events);}
+ synchronized String trace(){return "Closing prewarm state request: "+(CLOSING_PREWARM_ENABLED?"enabled":"bypassed (alpha experiment)")+"\nCover-close continuity: Android release with 1000 ms fallback; active="+delay.active()+"; deadline="+delay.deadline()+"\nNormal handoff request events (explicit cancel vs Android callback):\n"+String.join("\n",events);}
  String status="Normal display control";
  private void init()throws Exception{
   if(manager!=null)return;
@@ -86,7 +88,7 @@ final class CoverHandoff {
    event("CLOSE_DELAY ABORT: fresh="+fresh+" interactive="+interactive+" direct="+direct);releaseOwned();return;
   }
   if(delay.active() && angle>0)clearDelay("reopening; normal handoff resumed");
-  boolean prepare=prewarm.update(angle,fresh,interactive,direct&&probeRequest==0,openThreshold,this.handoffAngle);
+  boolean prepare=prewarm.update(angle,fresh,interactive,CLOSING_PREWARM_ENABLED&&direct&&probeRequest==0,openThreshold,this.handoffAngle);
   int test=probe.update(SystemClock.elapsedRealtime(),probeRequest,angle,fresh,interactive&&direct,owned!=null&&!innerHeld);
   nativeProbe.update(test==ContinuityProbePolicy.HOLD,angle,interactive);
   if(test==ContinuityProbePolicy.HOLD)return;
