@@ -35,7 +35,7 @@ internal class ProjectedSystemGlassBlur {
     submit(t)
    }
    regions=requested;width=w;height=h
-   GlassRenderOptions.systemStatus="System blur: ${requested.size} moving regions; peak=${requested.maxOfOrNull{it[0].toInt()} ?: 0}px; no tint; submitted, not optical proof"
+   GlassRenderOptions.systemStatus="System blur: ${requested.size} feather regions; radii=${requested.map { it[0].toInt() }.distinct().size}; peak=${requested.maxOfOrNull{it[0].toInt()} ?: 0}px; no tint; submitted, not optical proof"
    true
   } catch(e:Exception){
    removeLayer();failed=true

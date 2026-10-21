@@ -7,7 +7,7 @@ public class CompositorBlurRegionsTest {
   for(int rotation=0;rotation<4;rotation++)for(int step=1;step<=100;step++){
    float[][] regions=CompositorBlurRegions.build(1200,1800,true,rotation,step/100f,120,.4f);
    for(float[] r:regions){
-    assertEquals(1,r[1],0);assertTrue(r[0]>=1&&r[0]<=240);
+    assertTrue(r[1]>0&&r[1]<=1);assertTrue(r[0]>=1&&r[0]<=240);
     if(rotation==0)assertTrue(r[4]<=600);
     if(rotation==1)assertTrue(r[3]>=900);
     if(rotation==2)assertTrue(r[2]>=600);
@@ -44,6 +44,22 @@ public class CompositorBlurRegionsTest {
     for(int j=0;j<i;j++){float[] q=regions[j];assertTrue(Math.min(r[4],q[4])<=Math.max(r[2],q[2])+.001f || Math.min(r[5],q[5])<=Math.max(r[3],q[3])+.001f);}
    }
   }
+ }
+ @Test public void featherReusesOneRadiusWithSmallAlphaSteps(){
+  float[][] regions=CompositorBlurRegions.build(1200,1800,false,0,.5f,120,.4f);
+  assertEquals(65,regions.length);assertEquals(1,regions[0][1],0);
+  for(int i=1;i<regions.length;i++){
+   assertEquals(regions[0][0],regions[i][0],0);
+   assertTrue(regions[i-1][1]>=regions[i][1]);
+   assertTrue(regions[i-1][1]-regions[i][1]<.024f);
+  }
+  assertTrue(regions[regions.length-1][1]<.001f);
+ }
+ @Test public void widerSweepReachesFartherWithoutRaisingRadius(){
+  // At half progress alpha.10 covered 50%; the new sweep covers ~68%.
+  float[][] regions=CompositorBlurRegions.build(1000,1000,false,0,.5f,120,.4f);
+  assertTrue(leftmost(regions)<320);assertEquals(60,regions[0][0],0);
+  assertEquals(0,leftmost(CompositorBlurRegions.build(1000,1000,false,0,.8f,120,.4f)),.001f);
  }
  private static float leftmost(float[][] regions){float min=1000;for(float[] r:regions)min=Math.min(min,r[2]);return min;}
 }

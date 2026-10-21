@@ -422,7 +422,7 @@ class MainActivity:ComponentActivity(){
         InfoLabel("System blur radius · ${systemRadius.roundToInt()} px","For both compositor options. Increases blur without adding tint. Glass strength scales this radius; Normal glass uses its existing blur amount.")
         Slider(value=systemRadius,onValueChange={systemRadius=it;prefs.edit().putFloat("system_blur_radius",it).apply()},valueRange=0f..240f)
         TextButton(onClick={systemRadius=120f;prefs.edit().putFloat("system_blur_radius",120f).apply()}){Text("Reset system blur radius")}
-        Text("Live Screen only. Normal remains the default. Both system options use moving blur regions: cover right edge across the screen; inner left edge toward the midpoint, keeping the right half clear. System blur + stretch retains projection with no animated darkening. Android may suppress blur. These are visual experiments, not a proven speed improvement.",style=MaterialTheme.typography.bodySmall)
+        Text("Live Screen only. Normal remains the default. Both system options use a wider moving sweep with a soft feathered edge: cover right edge across the screen; inner left edge toward the midpoint, keeping the right half clear. System blur + stretch retains projection with no animated darkening. Android may suppress blur. These are visual experiments, not a proven speed improvement.",style=MaterialTheme.typography.bodySmall)
         HorizontalDivider()
         TextButton(onClick={legacy=!legacy}){Text(if(legacy)"Hide legacy & experimental visuals" else "Legacy & experimental visuals")}
         if(legacy){

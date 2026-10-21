@@ -11,21 +11,30 @@ final class CompositorBlurRegions {
   float p=Math.max(0,Math.min(1,progress));
   if(p<=.003f || strength<=0)return new float[0][];
   float motion=p*p*(3-2*p);
-  float reach=(inner?.5f:1f)*motion;
+  // Reach leads strength: spread farther at the same hinge angle, without crossing the seam.
+  float sweep=Math.min(1,p*1.25f);
+  float reach=(inner?.5f:1f)*sweep*sweep*(3-2*sweep);
   float peak=Math.min(240,radius(requested)*Math.min(3,strength/.4f))*motion;
   boolean horizontal=rotation==1 || rotation==3,reverse=rotation==1 || rotation==2;
   ArrayList<float[]> regions=new ArrayList<>();
-  // Non-overlapping bands approximate a spatial radius gradient without tint or
-  // alpha modulation. Every frame moves the leading boundary in panel space.
-  for(int i=0;i<24;i++){
-   float low=reach*i/24,high=reach*(i+1)/24;
-   float depth=1-(i+.5f)/24;
-   int blur=Math.round(peak*depth*depth*(3-2*depth));
-   if(blur<1)continue;
+  int blur=Math.round(peak);
+  if(blur<1)return new float[0][];
+  // One full-strength core, then 64 non-overlapping alpha strips. All share a
+  // radius: AOSP SkiaRenderEngine caches the blurred image by radius per layer.
+  // Alpha mixes original and blurred content, never a white/black tint. Keeping
+  // the core solid avoids washing out the entire blur while softening its edge.
+  // This remains a fine stepped approximation, not a continuous pixel mask.
+  final int featherSteps=64;
+  final float core=.35f;
+  for(int i=0;i<=featherSteps;i++){
+   float low=i==0?0:reach*(core+(1-core)*(i-1)/featherSteps);
+   float high=i==0?reach*core:reach*(core+(1-core)*i/featherSteps);
+   float depth=i==0?1:1-(i-.5f)/featherSteps;
+   float alpha=depth*depth*(3-2*depth);
    float from=inner?low:1-high,to=inner?high:1-low;
    if(reverse){float old=from;from=1-to;to=1-old;}
    // Radius, alpha, left, top, right, bottom, four corner radii (AOSP JNI layout).
-   regions.add(new float[]{blur,1,horizontal?0:from*width,horizontal?from*height:0,
+   regions.add(new float[]{blur,alpha,horizontal?0:from*width,horizontal?from*height:0,
      horizontal?width:to*width,horizontal?to*height:height,0,0,0,0});
   }
   return regions.toArray(new float[0][]);
