@@ -418,7 +418,11 @@ class MainActivity:ComponentActivity(){
         GlassRenderOptions.ids.forEachIndexed { index,id ->
          OutlinedButton(onClick={renderOption=id;prefs.edit().putString("glass_render_mode",id).apply();restart()}){Text((if(renderOption==id)"✓ " else "")+GlassRenderOptions.labels[index])}
         }
-        Text("Live Screen only. Normal is the default. Lightweight uses a quarter-size output and one mip-filtered blur sample. Projection removes blur. System blur tests the compositor mechanism observed in Recents: it blurs underlying content without our projection, and may be unavailable or disabled by Android. System blur + stretch adds the existing screen projection underneath a separate compositor blur layer. Both system options are experimental. Capture is retained for handoff readiness.",style=MaterialTheme.typography.bodySmall)
+        var systemRadius by remember { mutableFloatStateOf(CompositorBlurRegions.radius(prefs.getFloat("system_blur_radius",120f))) }
+        InfoLabel("System blur radius · ${systemRadius.roundToInt()} px","For both compositor options. Increases blur without adding tint. Glass strength scales this radius; Normal glass uses its existing blur amount.")
+        Slider(value=systemRadius,onValueChange={systemRadius=it;prefs.edit().putFloat("system_blur_radius",it).apply()},valueRange=0f..240f)
+        TextButton(onClick={systemRadius=120f;prefs.edit().putFloat("system_blur_radius",120f).apply()}){Text("Reset system blur radius")}
+        Text("Live Screen only. Normal remains the default. Both system options use moving blur regions: cover right edge across the screen; inner left edge toward the midpoint, keeping the right half clear. System blur + stretch retains projection with no animated darkening. Android may suppress blur. These are visual experiments, not a proven speed improvement.",style=MaterialTheme.typography.bodySmall)
         HorizontalDivider()
         TextButton(onClick={legacy=!legacy}){Text(if(legacy)"Hide legacy & experimental visuals" else "Legacy & experimental visuals")}
         if(legacy){

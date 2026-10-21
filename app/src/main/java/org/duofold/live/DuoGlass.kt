@@ -226,13 +226,12 @@ internal object DuoGlassShader {
  AndroidView(factory={FrostSurface(it,reflectedCover=reflectedCover)},modifier=Modifier.fillMaxSize(),update={it.configure(frame,amount,intensity,inner,rotation,frozenFrame!=null,angle,opaqueContent,if(liveFrame!=null)IncomingGhostDiagnostic.mode else 0)})
 }
 internal class FrostSurface(context:Context,private val preview:Boolean=false,private val reflectedCover:Boolean=false):SurfaceView(context),SurfaceHolder.Callback {
- private val systemBlur=SystemGlassBlur()
  private val projectedBlur=ProjectedSystemGlassBlur()
  private var projectedDraw=false
  private var systemDraw=false
  private var revealPreparedDraw=false
  var preparedStandby=false
-  set(value){if(field!=value){field=value;if(value){systemBlur.clear();projectedBlur.clear()};alpha=0f;revealPreparedDraw=!value;readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1}}
+  set(value){if(field!=value){field=value;if(value){projectedBlur.clear()};alpha=0f;revealPreparedDraw=!value;readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1}}
  private var hingeAngle=Float.NaN
  private var targetAngle=Float.NaN
  private var renderedAngle=Float.NaN
@@ -420,7 +419,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
   }
   preferFastRefresh();requestDraw()
  }
- override fun surfaceDestroyed(h:SurfaceHolder){systemBlur.clear();projectedBlur.clear();outputWidth=0;outputHeight=0;outputFormat=0;MotionGlass.remove(motionListener);if(!preparedStandby && !preview && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event("SURFACE_DESTROYED","inner=$inner",false);removeCallbacks(clearGuard);paintedEffect=false;fallback("");readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
+ override fun surfaceDestroyed(h:SurfaceHolder){projectedBlur.clear();outputWidth=0;outputHeight=0;outputFormat=0;MotionGlass.remove(motionListener);if(!preparedStandby && !preview && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event("SURFACE_DESTROYED","inner=$inner",false);removeCallbacks(clearGuard);paintedEffect=false;fallback("");readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
  /** Reuse the exact shader painter in a normal window View, without attaching this SurfaceView. */
  fun drawEmbedded(canvas:Canvas){drawFrame(canvas)}
  private fun drawFrame(windowCanvas:Canvas?=null){
@@ -434,16 +433,15 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
    var rendered:GlassFrame?=null
    var endpoint=false
    var bridgeDraw=false
-   var projectedRadius=0
+   var applyRegionalBlur=false
    projectedDraw=false
    val rendering=GlassRenderOptions.mode(context)
-   val projectedCompositor=rendering=="system_projected" && windowCanvas==null && !preview && !frozen && !reflectedCover && !preparedStandby
-   if(!projectedCompositor)projectedBlur.clear()
+   val regionalCompositor=(rendering=="system" || rendering=="system_projected") && windowCanvas==null && !preview && !frozen && !reflectedCover && !preparedStandby
+   val projectedCompositor=regionalCompositor && rendering=="system_projected"
+   if(!regionalCompositor)projectedBlur.clear()
    try{
     systemDraw=false
-    val compositor=rendering=="system" && !preview && !frozen && !reflectedCover && !preparedStandby
-    val visible=compositor && amount>.003f && LiveAngles.fresh() && LiveAngles.effectAllowed && (inner || targetAngle>0f)
-    val compositorReady=if(compositor)systemBlur.apply(surfaceControl,if(visible)(40f*amount.coerceIn(0f,1f)).toInt().coerceAtLeast(1) else 0) else {systemBlur.clear();false}
+    val compositor=regionalCompositor && rendering=="system"
     canvas.drawColor(Color.TRANSPARENT,PorterDuff.Mode.CLEAR)
     if(windowCanvas==null)canvas.scale(canvas.width.toFloat()/width,canvas.height.toFloat()/height)
     if(diagnosticMode!=0 && windowCanvas==null && !preview && !frozen && display?.displayId==IncomingAnimationFrame.captureDisplay){
@@ -475,7 +473,8 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     if(!preview && !frozen)CoverBridge.size(display,size)
     val live=frame
     val liveValid=live!=null && (preview || frozen || ((live.displayId<0||live.displayId==display?.displayId)&&live.physicalId==CoverBridge.identity(display)&&live.rotation==rotation&&GlassFramePolicy.usable(live.stamp,SystemClock.elapsedRealtime(),live.width,live.height,size.x,size.y)))
-    if(compositor && compositorReady){
+    if(compositor && !projectedBlur.unavailable){
+     applyRegionalBlur=true
      systemDraw=true;fallback("")
      if(liveValid)rendered=live
      // Transparent buffer lets the compositor blur underlying app content.
@@ -528,7 +527,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      if(!preview && !frozen)MotionGlass.offset(rotation,motionOffset,inner || reflectedCover) else {motionOffset[0]=0f;motionOffset[1]=0f}
      shader.setFloatUniform("motionOffset",motionOffset[0],motionOffset[1])
      shader.setFloatUniform("sampleOffset",if(fit!=null)-fit[1]/ew else 0f,if(fit!=null)-fit[2]/eh else 0f)
-     shader.setFloatUniform("extent",if(projectedCover)width.toFloat() else ew,if(projectedCover)height.toFloat() else eh);shader.setFloatUniform("progress",amount.coerceIn(0f,1f));shader.setFloatUniform("intensity",if(classicPreset)maxOf(1.8f,intensity)*.7f else intensity)
+     shader.setFloatUniform("extent",if(projectedCover)width.toFloat() else ew,if(projectedCover)height.toFloat() else eh);shader.setFloatUniform("progress",amount.coerceIn(0f,1f));shader.setFloatUniform("intensity",if(regionalCompositor)0f else if(classicPreset)maxOf(1.8f,intensity)*.7f else intensity)
      // Inner progress already includes the user's fully-open threshold (default 172°).
      val radians=if(inner) amount.coerceIn(0f,1f)*(Math.PI.toFloat()/2f) else
       Math.PI.toFloat()-(if(hingeAngle.isFinite())hingeAngle.coerceIn(0f,180f) else amount*110f)*(Math.PI.toFloat()/180f)
@@ -537,7 +536,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      shader.setFloatUniform("horizontal",if(rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_270)1f else 0f)
      shader.setFloatUniform("reverse",if(rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_180)1f else 0f)
      paint.shader=shader;drawGlass(canvas,aaMode,RenderQuality.antialias(quality.getFloat("antialias_strength",.35f)))
-     if(projectedCompositor)projectedRadius=(40f*amount.coerceIn(0f,1f)).toInt().coerceAtLeast(1)
+     if(regionalCompositor)applyRegionalBlur=true
      if(bridge!=null){
       bridgeDraw=true
       HandoffStartupTrace.event("BRIDGE_DRAW","outgoing=${bridge.physicalId}; cover view=${width}x${height}; temporary projected glass")
@@ -554,7 +553,14 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     }
    }finally{
     // Synchronize the owned blur child with the projected buffer, including clear/fallback frames.
-    if(projectedCompositor)projectedDraw=projectedBlur.apply(surfaceControl,canvas.width,canvas.height,projectedRadius){applyTransactionToFrame(it)} && projectedRadius>0
+    if(regionalCompositor){
+     val quality=context.getSharedPreferences("standalone",0)
+     val progress=if(inner)amount else if(hingeAngle.isFinite())hingeAngle/90f else amount*110f/90f
+     val regions=if(applyRegionalBlur)CompositorBlurRegions.build(canvas.width,canvas.height,inner,rotation,progress,quality.getFloat("system_blur_radius",120f),intensity) else emptyArray<FloatArray>()
+     val accepted=projectedBlur.apply(surfaceControl,canvas.width,canvas.height,regions){applyTransactionToFrame(it)}
+     projectedDraw=projectedCompositor && accepted && applyRegionalBlur
+     if(systemDraw && !accepted){systemDraw=false;rendered=null}
+    }
     // Successful rendering (including system blur with validated capture) or endpoint clear qualifies.
     // Attach before posting this buffer. A fallback draw never sends readiness.
     if(windowCanvas==null){
