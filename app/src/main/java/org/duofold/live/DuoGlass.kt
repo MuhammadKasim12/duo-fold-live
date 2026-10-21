@@ -215,9 +215,16 @@ internal object DuoGlassShader {
   AndroidView(factory={ScreenshotGlassView(it)},modifier=Modifier.fillMaxSize(),update={it.configure(frozenFrame,amount,intensity,inner,rotation,angle)})
   return
  }
+ if(!reflectedCover && frozenFrame==null && liveFrame==null && !context.getSharedPreferences("standalone",0).getBoolean("dual",false)){
+  AndroidView(factory={PreparedGlassHost(it)},modifier=Modifier.fillMaxSize(),update={it.configure(frame,amount,intensity,inner,rotation,angle)})
+  return
+ }
  AndroidView(factory={FrostSurface(it,reflectedCover=reflectedCover)},modifier=Modifier.fillMaxSize(),update={it.configure(frame,amount,intensity,inner,rotation,frozenFrame!=null,angle,opaqueContent,if(liveFrame!=null)IncomingGhostDiagnostic.mode else 0)})
 }
 internal class FrostSurface(context:Context,private val preview:Boolean=false,private val reflectedCover:Boolean=false):SurfaceView(context),SurfaceHolder.Callback {
+ private var revealPreparedDraw=false
+ var preparedStandby=false
+  set(value){if(field!=value){field=value;alpha=0f;revealPreparedDraw=!value;readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1}}
  private var hingeAngle=Float.NaN
  private var targetAngle=Float.NaN
  private var renderedAngle=Float.NaN
@@ -246,7 +253,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  }
  override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){super.onSizeChanged(w,h,oldw,oldh);updateBufferSize()}
  private val angleListener=LiveAngles.Listener { value,_ ->
-  if(value.isFinite() && value!=targetAngle){targetAngle=value;requestDraw()}
+  if(!preparedStandby && value.isFinite() && value!=targetAngle){targetAngle=value;requestDraw()}
  }
  private var diagnosticMode=0
  private var opaqueContent=false
@@ -254,7 +261,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private val basePaint=Paint(Paint.FILTER_BITMAP_FLAG)
  private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
  private val motionOffset=FloatArray(2)
- private val motionListener:()->Unit={if(!preview && !frozen)requestDraw()}
+ private val motionListener:()->Unit={if(!preparedStandby && !preview && !frozen)requestDraw()}
  private var program:RuntimeShader?=null
  private val aaNode=RenderNode("Duo edge AA layer")
  private var edgeShader:RuntimeShader?=null
@@ -280,7 +287,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private var lastReadyEndpoint=-1L
  /** Tie readiness to this SurfaceView's next buffer, not its parent UI draw. */
  private fun trackReadyFrame(rendered:GlassFrame?,endpoint:Boolean){
-  if(preview || frozen || readinessPending)return
+  if(preparedStandby || preview || frozen || readinessPending)return
   if(!inner){
    if((!CoverStartupTrace.needsCommit() && !PreviewTransition.needsCoverCommit()) || reflectedCover || display?.displayId!=0 || rendered==null || rendered.stamp==lastReadyCapture || rendered.physicalId!=CoverBridge.identity(display) || rendered.width!=width || rendered.height!=height)return
    val gen=readinessGeneration;val episode=CoverStartupTrace.episode
@@ -316,7 +323,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
  private var bridgeDiagnosticEpisode=0
  private var diagnosticEpisode=0
  private fun startupFrame(rendered:GlassFrame?,endpoint:Boolean,id:Int){
-  if(preview || frozen || reflectedCover || display?.displayId!=0)return
+  if(preparedStandby || preview || frozen || reflectedCover || display?.displayId!=0)return
   if(rendered!=null && !HandoffStartupTrace.matches(id,rendered)){HandoffStartupTrace.event("OUTGOING_DRAW","physical=${rendered.physicalId}; not destination readiness",id=id);return}
   HandoffStartupTrace.event(if(rendered!=null)"GLASS_DRAW" else if(endpoint)"ENDPOINT_CLEAR" else if(paintedEffect)"FALLBACK_DRAW" else "CLEAR_DRAW",
    "rendererInner=$inner; view=${width}x${height}; amount=$amount; intensity=$intensity; angle=$targetAngle; visual=$renderedAngle; alpha=$alpha; shown=$isShown; reason=$fallbackReason",id=id)
@@ -342,7 +349,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
   frameQueued=false
   if(holder.surface.isValid && dirty){
    dirty=false
-   if(!preview && targetAngle.isFinite() && LiveAngles.fresh()){
+   if(!preparedStandby && !preview && targetAngle.isFinite() && LiveAngles.fresh()){
     val dt=if(lastFrameNanos==0L)8.33f else ((now-lastFrameNanos)/1_000_000f).coerceIn(1f,50f)
     if(!renderedAngle.isFinite() && !inner && targetAngle<=12f && context.getSharedPreferences("standalone",0).getBoolean("window_reveal_v2",true) && context.getSharedPreferences("standalone",0).getBoolean("startup_easing",true))renderedAngle=0f
     renderedAngle=FrameSmoothing.step(renderedAngle,targetAngle,dt,smoothingMs)
@@ -353,7 +360,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
    }
    lastFrameNanos=now
    drawFrame()
-   if(!preview && LiveAngles.fresh() && targetAngle.isFinite() && (kotlin.math.abs(renderedAngle-targetAngle)>=.01f || inner && MotionGlass.returning()))requestDraw()
+   if(!preparedStandby && !preview && LiveAngles.fresh() && targetAngle.isFinite() && (kotlin.math.abs(renderedAngle-targetAngle)>=.01f || inner && MotionGlass.returning()))requestDraw()
   }
  }
  private fun requestDraw(){dirty=true;if(!frameQueued && holder.surface.isValid){frameQueued=true;choreographer.postFrameCallback(vsync)}}
@@ -368,6 +375,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
    readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1
    bitmap=null
   }
+  if(angle.isFinite() && (preparedStandby || revealPreparedDraw))targetAngle=angle
   this.diagnosticMode=diagnosticMode;this.opaqueContent=opaqueContent;this.hingeAngle=angle;this.frozen=frozen;frame=next;this.amount=amount;this.intensity=intensity;this.inner=inner;this.rotation=rotation
   smoothingMs=FrameSmoothing.sanitize(context.getSharedPreferences("standalone",0).getFloat("smoothing_ms",FrameSmoothing.DEFAULT_MS))
   openThreshold=context.getSharedPreferences("standalone",0).getFloat("open_threshold",172f)
@@ -376,10 +384,10 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
   requestDraw()}
  override fun surfaceCreated(h:SurfaceHolder){
   if(!preview)MotionGlass.add(motionListener)
-  if(!preview && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event("SURFACE_CREATED","view=${width}x${height}; inner=$inner")
+  if(!preparedStandby && !preview && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event("SURFACE_CREATED","view=${width}x${height}; inner=$inner")
   if(!preview){
    GlassFrames.surface(this,surfaceControl)
-   if(!reflectedCover)GlassFrames.requestFreshCapture()
+   if(!preparedStandby && !reflectedCover)GlassFrames.requestFreshCapture()
    if(!reflectedCover && context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true) && !context.getSharedPreferences("standalone",0).getBoolean("dual",false))PreviewTransition.markAnimation(surfaceControl)
    smoothingMs=FrameSmoothing.sanitize(context.getSharedPreferences("standalone",0).getFloat("smoothing_ms",FrameSmoothing.DEFAULT_MS))
   openThreshold=context.getSharedPreferences("standalone",0).getFloat("open_threshold",172f)
@@ -388,8 +396,8 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
   updateBufferSize();preferFastRefresh();requestDraw()
   if(!preview){removeCallbacks(clearGuard);postDelayed(clearGuard,100)}
  }
- override fun surfaceChanged(h:SurfaceHolder,format:Int,w:Int,height:Int){if(!preview && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event("SURFACE_CHANGED","buffer=${w}x${height}; inner=$inner",false);readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(!preview){GlassFrames.surface(this,surfaceControl);if(!reflectedCover)GlassFrames.requestFreshCapture();if(!reflectedCover && context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true) && !context.getSharedPreferences("standalone",0).getBoolean("dual",false))PreviewTransition.markAnimation(surfaceControl)};preferFastRefresh();requestDraw()}
- override fun surfaceDestroyed(h:SurfaceHolder){MotionGlass.remove(motionListener);if(!preview && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event("SURFACE_DESTROYED","inner=$inner",false);removeCallbacks(clearGuard);paintedEffect=false;fallback("");readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
+ override fun surfaceChanged(h:SurfaceHolder,format:Int,w:Int,height:Int){if(!preparedStandby && !preview && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event("SURFACE_CHANGED","buffer=${w}x${height}; inner=$inner",false);readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(!preview){GlassFrames.surface(this,surfaceControl);if(!preparedStandby && !reflectedCover)GlassFrames.requestFreshCapture();if(!reflectedCover && context.getSharedPreferences("standalone",0).getBoolean("cover_preview",true) && !context.getSharedPreferences("standalone",0).getBoolean("dual",false))PreviewTransition.markAnimation(surfaceControl)};preferFastRefresh();requestDraw()}
+ override fun surfaceDestroyed(h:SurfaceHolder){MotionGlass.remove(motionListener);if(!preparedStandby && !preview && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event("SURFACE_DESTROYED","inner=$inner",false);removeCallbacks(clearGuard);paintedEffect=false;fallback("");readinessGeneration++;readinessPending=false;lastReadyCapture=-1;lastReadyEndpoint=-1;if(angleListening){LiveAngles.remove(angleListener);angleListening=false};targetAngle=Float.NaN;renderedAngle=Float.NaN;lastFrameNanos=0L;choreographer.removeFrameCallback(vsync);frameQueued=false;appliedRate=0f;if(!preview){PreviewTransition.forgetAnimation(surfaceControl);GlassFrames.surface(this,null)};bitmap=null;frame=null;paint.shader=null;aaNode.discardDisplayList();aaNode.setRenderEffect(null);edgeEffectKey=""}
  /** Reuse the exact shader painter in a normal window View, without attaching this SurfaceView. */
  fun drawEmbedded(canvas:Canvas){drawFrame(canvas)}
  private fun drawFrame(windowCanvas:Canvas?=null){
@@ -523,10 +531,11 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
       if(!bridgeDraw)startupFrame(rendered,endpoint,traceId);if(rendered!=null || endpoint)trackReadyFrame(rendered,endpoint)}finally{
       val posting=SystemClock.elapsedRealtimeNanos()
       holder.unlockCanvasAndPost(canvas)
-      if(!preview && !frozen && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event(if(bridgeDraw)"BRIDGE_POST" else if(rendered!=null && HandoffStartupTrace.matches(traceId,rendered))"GLASS_POST" else "NON_GLASS_POST","lockMs=${(lockedAt-started)/1000000}; drawAndReadinessMs=${(posting-lockedAt)/1000000}; postMs=${(SystemClock.elapsedRealtimeNanos()-posting)/1000000}",id=traceId)
+      if(revealPreparedDraw && !preparedStandby){revealPreparedDraw=false;alpha=1f;HandoffStartupTrace.event("PREPARED_RENDERER_POST","inner=$inner; view=${width}x${height}; first active buffer posted; not commit proof",false)}
+      if(!preparedStandby && !preview && !frozen && !reflectedCover && display?.displayId==0)HandoffStartupTrace.event(if(bridgeDraw)"BRIDGE_POST" else if(rendered!=null && HandoffStartupTrace.matches(traceId,rendered))"GLASS_POST" else "NON_GLASS_POST","lockMs=${(lockedAt-started)/1000000}; drawAndReadinessMs=${(posting-lockedAt)/1000000}; postMs=${(SystemClock.elapsedRealtimeNanos()-posting)/1000000}",id=traceId)
      }
     }else canvas.restoreToCount(windowSave)
-    if(!preview)FrameTelemetry.record(inner,SystemClock.elapsedRealtimeNanos(),SystemClock.elapsedRealtimeNanos()-started,appliedRate)
+    if(!preparedStandby && !preview)FrameTelemetry.record(inner,SystemClock.elapsedRealtimeNanos(),SystemClock.elapsedRealtimeNanos()-started,appliedRate)
    }
   }.onFailure{readinessGeneration++;readinessPending=false;RecoveryLog.add("Glass draw error: ${it.javaClass.simpleName}: ${it.message}")}
  }

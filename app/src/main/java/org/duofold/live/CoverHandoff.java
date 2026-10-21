@@ -12,8 +12,8 @@ final class CoverHandoff {
  private final ContinuityProbePolicy probe=new ContinuityProbePolicy();
  synchronized boolean probeHolding(){return probe.holding();}
  synchronized String probeStatus(){return probe.status+"\n"+nativeProbe.report();}
- // Alpha.5 isolates the extra closing state request; preserve the old path for comparison.
- private static final boolean CLOSING_PREWARM_ENABLED=false;
+ // Restore prewarm after alpha.5 showed no benefit from bypassing it.
+ private static final boolean CLOSING_PREWARM_ENABLED=true;
  private final ClosingPrewarmPolicy prewarm=new ClosingPrewarmPolicy();
  private Runnable prewarmTimer;
  private void clearPrewarm(){if(delayHandler!=null && prewarmTimer!=null)delayHandler.removeCallbacks(prewarmTimer);prewarmTimer=null;}
