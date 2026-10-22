@@ -60,7 +60,12 @@ internal class ProjectedSystemGlassBlur(private val context:Context) {
      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
      PixelFormat.TRANSLUCENT)
     SurfaceControlViewHost::class.java.getMethod("setView",View::class.java,WindowManager.LayoutParams::class.java).invoke(host,content,lp)
-   }else if(width!=w || height!=h)host!!.relayout(w,h)
+   }else if(width!=w || height!=h){
+    // The width/height overload replaces flags; preserve the non-interactive contract.
+    val lp=WindowManager.LayoutParams(w,h,WindowManager.LayoutParams.TYPE_APPLICATION,
+     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,PixelFormat.TRANSLUCENT)
+    SurfaceControlViewHost::class.java.getMethod("relayout",WindowManager.LayoutParams::class.java).invoke(host,lp)
+   }
    val content=root!!
    if(!content.isAttachedToWindow){
     GlassRenderOptions.systemStatus="Notification background blur: preparing Samsung view host"
