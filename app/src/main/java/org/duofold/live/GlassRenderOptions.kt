@@ -9,5 +9,9 @@ internal object GlassRenderOptions {
   return p.getString("glass_render_mode","normal")?.takeIf{it in ids} ?: "normal"
  }
  var systemStatus="System blur: not requested"
- fun report(context:Context)="Rendering: "+labels[ids.indexOf(mode(context))]+"; "+systemStatus
+ private var lastWide="No wide-buffer sample"
+ private var lastTall="No tall-buffer sample"
+ @Synchronized fun recordBlur(wide:Boolean,sample:String){if(wide)lastWide=sample else lastTall=sample}
+ @Synchronized fun blurMeters()="Retained blur samples (may precede current settings; buffer shape is not panel identity):\n$lastWide\n$lastTall"
+ fun report(context:Context)="Rendering: "+labels[ids.indexOf(mode(context))]+"; "+systemStatus+"\n"+blurMeters()
 }

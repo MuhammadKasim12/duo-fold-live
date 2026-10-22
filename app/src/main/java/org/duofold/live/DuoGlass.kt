@@ -557,6 +557,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      val quality=context.getSharedPreferences("standalone",0)
      val progress=if(inner)amount else if(hingeAngle.isFinite())hingeAngle/90f else amount*110f/90f
      val regions=if(applyRegionalBlur)CompositorBlurRegions.build(canvas.width,canvas.height,inner,rotation,progress,quality.getFloat("notification_blur_radius",250f)*canvas.width/width.toFloat(),intensity) else emptyArray<FloatArray>()
+     if(quality.getBoolean("notification_blur_solid_mask",false))regions.forEach{it[1]=1f}
      val accepted=projectedBlur.apply(surfaceControl,canvas.width,canvas.height,display,regions){applyTransactionToFrame(it)}
      projectedDraw=projectedCompositor && accepted && applyRegionalBlur
      if(systemDraw && !accepted){systemDraw=false;rendered=null}

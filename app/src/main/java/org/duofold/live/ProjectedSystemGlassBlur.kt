@@ -27,6 +27,8 @@ internal class ProjectedSystemGlassBlur(private val context:Context) {
  private var failed=false
  private var api:SamsungNotificationBlurApi?=null
  private var lastRadius=-1
+ private var lastAdjusted:Boolean?=null
+ private var lastMeterMs=0L
  val unavailable get()=failed
  fun apply(sc:SurfaceControl,w:Int,h:Int,display:Display?,requested:Array<FloatArray>,submit:(SurfaceControl.Transaction)->Unit):Boolean {
   if(!sc.isValid || w<=0 || h<=0 || display==null){clear();return false}
@@ -38,7 +40,9 @@ internal class ProjectedSystemGlassBlur(private val context:Context) {
    GlassRenderOptions.systemStatus="Notification background blur: cleared"
    return true
   }
-  if(regions.contentDeepEquals(requested) && width==w && height==h)return true
+  val adjusted=context.getSharedPreferences("standalone",0).getBoolean("notification_blur_adjusted",true)
+  if(regions.contentDeepEquals(requested) && width==w && height==h && lastAdjusted==adjusted)return true
+  val started=android.os.SystemClock.elapsedRealtimeNanos()
   return try {
    val vendor=api ?: SamsungNotificationBlurApi().also{api=it}
    if(host==null){
@@ -89,7 +93,7 @@ internal class ProjectedSystemGlassBlur(private val context:Context) {
     val view=View(context);content.addView(view,FrameLayout.LayoutParams(1,1));bands.add(view)
    }
    val radius=requested[0][0].roundToInt()
-   val info=vendor.build(radius)
+   val info=vendor.build(radius,adjusted)
    if(lastRadius<0)RecoveryLog.add("Notification blur Samsung info: $info")
    bands.forEachIndexed { i,view ->
     if(i>=requested.size){view.visibility=View.GONE;return@forEachIndexed}
@@ -102,19 +106,26 @@ internal class ProjectedSystemGlassBlur(private val context:Context) {
     if(lp.width!=right-left || lp.height!=bottom-top || lp.leftMargin!=left || lp.topMargin!=top){
      lp.width=right-left;lp.height=bottom-top;lp.leftMargin=left;lp.topMargin=top;view.layoutParams=lp
     }
-    if(lastRadius!=radius || view.background==null)vendor.apply(view,info)
+    if(lastRadius!=radius || lastAdjusted!=adjusted || view.background==null)vendor.apply(view,info)
     val drawable=view.background ?: error("Samsung blur drawable was not created")
     check(drawable.javaClass.name.contains("BackgroundBlurDrawable")){"Samsung window blur was not accepted"}
     // Drawable alpha is the blur-region mix, not an overlay tint or View opacity.
     drawable.alpha=(r[1]*255).roundToInt().coerceIn(0,255)
    }
    lastRadius=radius
+   lastAdjusted=adjusted
    SurfaceControl.Transaction().use { t ->
     t.setLayer(layer!!,1).setCrop(layer!!,Rect(0,0,w,h)).setAlpha(layer!!,1f).setVisibility(layer!!,true)
     submit(t)
    }
    regions=requested;width=w;height=h
-   GlassRenderOptions.systemStatus="Notification background blur: ${requested.size} feather regions; radius=${radius}px (buffer); identity curve; BG adjustment=0.10 [0.18,0.75]; Samsung API accepted, not optical proof"
+   val now=android.os.SystemClock.elapsedRealtime()
+   if(now-lastMeterMs>=1000){
+    lastMeterMs=now
+    val meter="t=$now D${display.displayId} buffer=${w}x${h}; radius=${radius}px buffer; regions=${requested.size}; alpha=${requested.minOf{it[1]}}..${requested.maxOf{it[1]}}; BG=${if(adjusted)"Samsung 0.10 [0.18,0.75]" else "neutral (adjustment omitted)"}; updateCPU=${(android.os.SystemClock.elapsedRealtimeNanos()-started)/1000000f}ms; Samsung drawable accepted (not pixel/GPU proof)"
+    GlassRenderOptions.recordBlur(w>h,meter)
+   }
+   GlassRenderOptions.systemStatus="Notification background blur: ${requested.size} feather regions; radius=${radius}px (buffer); identity curve; BG=${if(adjusted)"Samsung adjustment" else "neutral"}; Samsung API accepted, not optical proof"
    true
   } catch(e:Exception){
    removeLayer();failed=true
@@ -128,7 +139,7 @@ internal class ProjectedSystemGlassBlur(private val context:Context) {
   // Hide synchronously before releasing asynchronous windowless rendering resources.
   layer?.let{runCatching{SurfaceControl.Transaction().use{t->t.setVisibility(it,false).reparent(it,null).apply()}}}
   runCatching{host?.release()};host=null;root=null;bands.clear()
-  layer?.release();layer=null;regions=emptyArray();width=0;height=0;lastRadius=-1
+  layer?.release();layer=null;regions=emptyArray();width=0;height=0;lastRadius=-1;lastAdjusted=null
  }
  fun clear(){removeLayer();parent=null;failed=false}
 }
@@ -143,10 +154,10 @@ private class SamsungNotificationBlurApi {
  private val adjustment=builderClass.getMethod("setBGColorAdjustment",Float::class.javaPrimitiveType,Float::class.javaPrimitiveType,Float::class.javaPrimitiveType)
  private val build=builderClass.getMethod("build")
  private val apply=View::class.java.getMethod("semSetBlurInfo",infoClass)
- fun build(value:Int):Any {
+ fun build(value:Int,adjusted:Boolean):Any {
   val builder=constructor.newInstance(mode)
   radius.invoke(builder,value)
-  adjustment.invoke(builder,.10f,.18f,.75f)
+  if(adjusted)adjustment.invoke(builder,.10f,.18f,.75f)
   return build.invoke(builder)
  }
  fun apply(view:View,info:Any){apply.invoke(view,info)}

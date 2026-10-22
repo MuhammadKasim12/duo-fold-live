@@ -422,6 +422,16 @@ class MainActivity:ComponentActivity(){
         InfoLabel("Notification blur radius · ${systemRadius.roundToInt()} px","For both Samsung experiments. Default 250 screen pixels, matching the captured notification background. Includes its subtle background adjustment; excludes notification-card color curves. Glass strength scales the radius.")
         Slider(value=systemRadius,onValueChange={systemRadius=it;prefs.edit().putFloat("notification_blur_radius",it).apply()},valueRange=0f..500f)
         TextButton(onClick={systemRadius=250f;prefs.edit().putFloat("notification_blur_radius",250f).apply()}){Text("Reset notification blur radius")}
+        var blurAdjusted by remember { mutableStateOf(prefs.getBoolean("notification_blur_adjusted",true)) }
+        var blurSolid by remember { mutableStateOf(prefs.getBoolean("notification_blur_solid_mask",false)) }
+        Toggle("Samsung background adjustment · A/B test",blurAdjusted){blurAdjusted=it;prefs.edit().putBoolean("notification_blur_adjusted",it).apply()}
+        Text("Turn off to test neutral blacks. On reproduces alpha.13. This changes only the Samsung blur experiment.",style=MaterialTheme.typography.bodySmall)
+        Toggle("Solid blur mask · diagnostic",blurSolid){blurSolid=it;prefs.edit().putBoolean("notification_blur_solid_mask",it).apply()}
+        Text("Off: alpha.13 feather strips. On: same coverage and radius with full opacity, isolating edge mixing from the blur itself. A hard edge is expected in this test.",style=MaterialTheme.typography.bodySmall)
+        var blurMeter by remember { mutableStateOf(GlassRenderOptions.blurMeters()) }
+        OutlinedButton(onClick={blurMeter=GlassRenderOptions.blurMeters()}){Text("Refresh retained blur meters")}
+        Text(blurMeter,style=MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick={val report=GlassRenderOptions.report(this@MainActivity)+"\nSelected BG adjustment=$blurAdjusted; solid mask=$blurSolid; radius=$systemRadius screen px";getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Blur diagnostics",report))}){Text("Copy blur diagnostics")}
         Text("Live Screen only. Normal remains the default. Both Samsung options use a wider moving sweep with a soft feathered edge: cover right edge across the screen; inner left edge toward the midpoint, keeping the right half clear. Notification blur + stretch retains projection. Android may suppress blur. These are visual experiments, not a proven speed improvement.",style=MaterialTheme.typography.bodySmall)
         HorizontalDivider()
         TextButton(onClick={legacy=!legacy}){Text(if(legacy)"Hide legacy & experimental visuals" else "Legacy & experimental visuals")}
