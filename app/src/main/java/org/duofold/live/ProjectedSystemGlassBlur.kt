@@ -34,7 +34,7 @@ internal class ProjectedSystemGlassBlur(private val context:Context) {
   if(parent!==sc){clear();parent=sc}
   if(failed)return false
   if(requested.isEmpty()){
-   layer?.let{SurfaceControl.Transaction().use{t->t.hide(it);submit(t)}}
+   layer?.let{SurfaceControl.Transaction().use{t->t.setVisibility(it,false);submit(t)}}
    regions=emptyArray()
    GlassRenderOptions.systemStatus="Notification background blur: cleared"
    return true
@@ -59,7 +59,7 @@ internal class ProjectedSystemGlassBlur(private val context:Context) {
     val lp=WindowManager.LayoutParams(w,h,WindowManager.LayoutParams.TYPE_APPLICATION,
      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
      PixelFormat.TRANSLUCENT)
-    host!!.setView(content,lp)
+    SurfaceControlViewHost::class.java.getMethod("setView",View::class.java,WindowManager.LayoutParams::class.java).invoke(host,content,lp)
    }else if(width!=w || height!=h)host!!.relayout(w,h)
    val content=root!!
    if(!content.isAttachedToWindow){
@@ -91,7 +91,7 @@ internal class ProjectedSystemGlassBlur(private val context:Context) {
    }
    lastRadius=radius
    SurfaceControl.Transaction().use { t ->
-    t.setLayer(layer!!,1).setCrop(layer!!,Rect(0,0,w,h)).setAlpha(layer!!,1f).show(layer!!)
+    t.setLayer(layer!!,1).setCrop(layer!!,Rect(0,0,w,h)).setAlpha(layer!!,1f).setVisibility(layer!!,true)
     submit(t)
    }
    regions=requested;width=w;height=h
@@ -107,7 +107,7 @@ internal class ProjectedSystemGlassBlur(private val context:Context) {
  }
  private fun removeLayer(){
   // Hide synchronously before releasing asynchronous windowless rendering resources.
-  layer?.let{runCatching{SurfaceControl.Transaction().use{t->t.hide(it).reparent(it,null).apply()}}}
+  layer?.let{runCatching{SurfaceControl.Transaction().use{t->t.setVisibility(it,false).reparent(it,null).apply()}}}
   runCatching{host?.release()};host=null;root=null;bands.clear()
   layer?.release();layer=null;regions=emptyArray();width=0;height=0;lastRadius=-1
  }
