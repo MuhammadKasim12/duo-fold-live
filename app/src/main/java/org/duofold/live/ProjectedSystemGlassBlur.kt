@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.graphics.Rect
-import android.os.IBinder
 import android.view.Display
 import android.view.SurfaceControl
 import android.view.SurfaceControlViewHost
@@ -47,13 +46,28 @@ internal class ProjectedSystemGlassBlur(private val context:Context) {
     SurfaceControl.Builder::class.java.getMethod("setContainerLayer").invoke(builder)
     val child=builder.build().also{layer=it}
     val wmClass=Class.forName("android.view.WindowlessWindowManager")
-    val wm=wmClass.getConstructor(Configuration::class.java,SurfaceControl::class.java,IBinder::class.java)
-     .newInstance(context.resources.configuration,child,null)
+    // Android's modern constructor uses InputTransferToken, not IBinder.
+    // Match only known signatures; never fill unknown vendor arguments with guesses.
+    val wmConstructors=wmClass.constructors
+    val wmCtor=listOf("android.window.InputTransferToken","android.os.IBinder")
+     .firstNotNullOfOrNull { tokenName -> wmConstructors.firstOrNull { candidate ->
+      val types=candidate.parameterTypes
+      types.size==3 && types[0]==Configuration::class.java &&
+       types[1]==SurfaceControl::class.java && types[2].name==tokenName
+     } } ?: error("Unsupported WindowlessWindowManager constructors: "+wmConstructors.joinToString { it.toGenericString() })
+    RecoveryLog.add("Notification blur window manager constructor: ${wmCtor.toGenericString()}")
+    // No host input token: this child cannot receive focus or touches.
+    val wm=wmCtor.newInstance(context.resources.configuration,child,null)
     val constructors=SurfaceControlViewHost::class.java.constructors
     val ctor=constructors.firstOrNull{it.parameterTypes.contentEquals(arrayOf(Context::class.java,Display::class.java,wmClass,String::class.java))}
     val created=if(ctor!=null)ctor.newInstance(context,display,wm,"Duo notification blur")
-     else SurfaceControlViewHost::class.java.getConstructor(Context::class.java,Display::class.java,wmClass).newInstance(context,display,wm)
+     else {
+      val legacy=constructors.firstOrNull{it.parameterTypes.contentEquals(arrayOf(Context::class.java,Display::class.java,wmClass))}
+       ?: error("Unsupported SurfaceControlViewHost constructors: "+constructors.joinToString { it.toGenericString() })
+      legacy.newInstance(context,display,wm)
+     }
     host=created as SurfaceControlViewHost
+    RecoveryLog.add("Notification blur windowless host created")
     val content=FrameLayout(context).also{root=it;it.importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS}
     // No focus, touch, input method, or opaque window background.
     val lp=WindowManager.LayoutParams(w,h,WindowManager.LayoutParams.TYPE_APPLICATION,
