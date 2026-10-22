@@ -12,25 +12,23 @@ final class CompositorBlurRegions {
   if(p<=.003f || strength<=0)return new float[0][];
   float motion=p*p*(3-2*p);
   // Reach leads strength: spread farther at the same hinge angle, without crossing the seam.
-  float sweep=Math.min(1,p*1.25f);
+  float sweep=Math.min(1,p*1.5f);
   float reach=(inner?.5f:1f)*sweep*sweep*(3-2*sweep);
   float peak=Math.min(500,radius(requested)*Math.min(3,strength/.4f))*motion;
   boolean horizontal=rotation==1 || rotation==3,reverse=rotation==1 || rotation==2;
   ArrayList<float[]> regions=new ArrayList<>();
   int blur=Math.round(peak);
   if(blur<1)return new float[0][];
-  // One full-strength core, then 64 non-overlapping alpha strips. All share a
-  // radius: AOSP SkiaRenderEngine caches the blurred image by radius per layer.
-  // Alpha mixes original and blurred content, never a white/black tint. Keeping
-  // the core solid avoids washing out the entire blur while softening its edge.
-  // This remains a fine stepped approximation, not a continuous pixel mask.
-  final int featherSteps=64;
-  final float core=.35f;
-  for(int i=0;i<=featherSteps;i++){
-   float low=i==0?0:reach*(core+(1-core)*(i-1)/featherSteps);
-   float high=i==0?reach*core:reach*(core+(1-core)*i/featherSteps);
-   float depth=i==0?1:1-(i-.5f)/featherSteps;
-   float alpha=depth*depth*(3-2*depth);
+  // Spread across the entire reach without a rectangular constant-opacity core.
+  // Quintic falloff of squared distance holds visible blur farther out, then
+  // eases smoothly to zero. One radius and 65 disjoint strips retain bounded cost.
+  final int strips=65;
+  for(int i=0;i<strips;i++){
+   float low=reach*i/strips;
+   float high=reach*(i+1)/strips;
+   double t=i==0?0:(i+.5)/strips;
+   double x=t*t;
+   float alpha=(float)(1-x*x*x*(x*(x*6-15)+10));
    float from=inner?low:1-high,to=inner?high:1-low;
    if(reverse){float old=from;from=1-to;to=1-old;}
    // Radius, alpha, left, top, right, bottom, four corner radii (AOSP JNI layout).

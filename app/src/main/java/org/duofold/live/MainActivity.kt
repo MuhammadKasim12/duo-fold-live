@@ -419,15 +419,15 @@ class MainActivity:ComponentActivity(){
          OutlinedButton(onClick={renderOption=id;prefs.edit().putString("glass_render_mode",id).apply();restart()}){Text((if(renderOption==id)"✓ " else "")+GlassRenderOptions.labels[index])}
         }
         var systemRadius by remember { mutableFloatStateOf(CompositorBlurRegions.radius(prefs.getFloat("notification_blur_radius",250f))) }
-        InfoLabel("Notification blur radius · ${systemRadius.roundToInt()} px","For both Samsung experiments. Default 250 screen pixels, matching the captured notification background. Includes its subtle background adjustment; excludes notification-card color curves. Glass strength scales the radius.")
+        InfoLabel("Notification blur radius · ${systemRadius.roundToInt()} px","For both Samsung experiments. Default 250 screen pixels, matching the captured notification background. Neutral background by default; optional Samsung adjustment is available below. Excludes notification-card color curves. Glass strength scales the radius.")
         Slider(value=systemRadius,onValueChange={systemRadius=it;prefs.edit().putFloat("notification_blur_radius",it).apply()},valueRange=0f..500f)
         TextButton(onClick={systemRadius=250f;prefs.edit().putFloat("notification_blur_radius",250f).apply()}){Text("Reset notification blur radius")}
-        var blurAdjusted by remember { mutableStateOf(prefs.getBoolean("notification_blur_adjusted",true)) }
+        var blurAdjusted by remember { mutableStateOf(prefs.getBoolean("notification_blur_adjusted",false)) }
         var blurSolid by remember { mutableStateOf(prefs.getBoolean("notification_blur_solid_mask",false)) }
         Toggle("Samsung background adjustment · A/B test",blurAdjusted){blurAdjusted=it;prefs.edit().putBoolean("notification_blur_adjusted",it).apply()}
         Text("Turn off to test neutral blacks. On reproduces alpha.13. This changes only the Samsung blur experiment.",style=MaterialTheme.typography.bodySmall)
         Toggle("Solid blur mask · diagnostic",blurSolid){blurSolid=it;prefs.edit().putBoolean("notification_blur_solid_mask",it).apply()}
-        Text("Off: alpha.13 feather strips. On: same coverage and radius with full opacity, isolating edge mixing from the blur itself. A hard edge is expected in this test.",style=MaterialTheme.typography.bodySmall)
+        Text("Off: broad, smooth feathering. On: same coverage and radius with full opacity, isolating edge mixing from the blur itself. A hard edge is expected in this test.",style=MaterialTheme.typography.bodySmall)
         var blurMeter by remember { mutableStateOf(GlassRenderOptions.blurMeters()) }
         OutlinedButton(onClick={blurMeter=GlassRenderOptions.blurMeters()}){Text("Refresh retained blur meters")}
         Text(blurMeter,style=MaterialTheme.typography.bodySmall)

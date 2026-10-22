@@ -40,7 +40,7 @@ internal class ProjectedSystemGlassBlur(private val context:Context) {
    GlassRenderOptions.systemStatus="Notification background blur: cleared"
    return true
   }
-  val adjusted=context.getSharedPreferences("standalone",0).getBoolean("notification_blur_adjusted",true)
+  val adjusted=context.getSharedPreferences("standalone",0).getBoolean("notification_blur_adjusted",false)
   if(regions.contentDeepEquals(requested) && width==w && height==h && lastAdjusted==adjusted)return true
   val started=android.os.SystemClock.elapsedRealtimeNanos()
   return try {

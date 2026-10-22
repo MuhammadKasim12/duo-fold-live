@@ -10,6 +10,10 @@ public final class DuoApplication extends Application {
   FoldAwakeDefault.persist(this);
   if(BuildConfig.IS_PLAY)getSystemService(android.app.NotificationManager.class).cancel(220);
   SharedPreferences prefs=getSharedPreferences("standalone",MODE_PRIVATE);
+  // Adopt the owner-confirmed neutral background and leave the solid-mask test once.
+  if(!prefs.getBoolean("neutral_blur_358_alpha15",false))prefs.edit()
+   .putBoolean("notification_blur_adjusted",false).putBoolean("notification_blur_solid_mask",false)
+   .putBoolean("neutral_blur_358_alpha15",true).commit();
   // Retune motion once on upgrade; preserve later user adjustments.
   if(!prefs.getBoolean("motion_defaults_357_alpha4",false))prefs.edit()
    .putBoolean("motion_glass_invert",true).putFloat("motion_glass_projection_strength",1f)

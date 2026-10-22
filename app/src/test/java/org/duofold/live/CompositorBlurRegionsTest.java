@@ -51,15 +51,21 @@ public class CompositorBlurRegionsTest {
   for(int i=1;i<regions.length;i++){
    assertEquals(regions[0][0],regions[i][0],0);
    assertTrue(regions[i-1][1]>=regions[i][1]);
-   assertTrue(regions[i-1][1]-regions[i][1]<.024f);
+   assertTrue(regions[i-1][1]-regions[i][1]<.04f);
   }
   assertTrue(regions[regions.length-1][1]<.001f);
  }
  @Test public void widerSweepReachesFartherWithoutRaisingRadius(){
-  // At half progress alpha.10 covered 50%; the new sweep covers ~68%.
+  // Half progress now covers ~84%, while retaining the same radius.
   float[][] regions=CompositorBlurRegions.build(1000,1000,false,0,.5f,120,.4f);
-  assertTrue(leftmost(regions)<320);assertEquals(60,regions[0][0],0);
+  assertTrue(leftmost(regions)<160);assertEquals(60,regions[0][0],0);
   assertEquals(0,leftmost(CompositorBlurRegions.build(1000,1000,false,0,.8f,120,.4f)),.001f);
+ }
+ @Test public void broadFalloffHasNoFlatCoreAndKeepsVisibleBlurPastMidpoint(){
+  float[][] regions=CompositorBlurRegions.build(1200,1800,false,0,.5f,120,.4f);
+  assertTrue(regions[20][1]<regions[10][1]);
+  assertTrue(regions[32][1]>.85f);
+  assertTrue(regions[48][1]>.35f);
  }
  private static float leftmost(float[][] regions){float min=1000;for(float[] r:regions)min=Math.min(min,r[2]);return min;}
 }
