@@ -51,7 +51,7 @@ public class CompositorBlurRegionsTest {
   for(int i=1;i<regions.length;i++){
    assertEquals(regions[0][0],regions[i][0],0);
    assertTrue(regions[i-1][1]>=regions[i][1]);
-   assertTrue(regions[i-1][1]-regions[i][1]<.04f);
+   assertTrue(regions[i-1][1]-regions[i][1]<.043f);
   }
   assertTrue(regions[regions.length-1][1]<.001f);
  }
