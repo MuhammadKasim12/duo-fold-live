@@ -122,10 +122,10 @@ internal class ProjectedSystemGlassBlur(private val context:Context) {
    val now=android.os.SystemClock.elapsedRealtime()
    if(now-lastMeterMs>=1000){
     lastMeterMs=now
-    val meter="t=$now D${display.displayId} buffer=${w}x${h}; radius=${radius}px buffer; regions=${requested.size}; alpha=${requested.minOf{it[1]}}..${requested.maxOf{it[1]}}; BG=${if(adjusted)"Samsung 0.10 [0.18,0.75]" else "neutral (adjustment omitted)"}; updateCPU=${(android.os.SystemClock.elapsedRealtimeNanos()-started)/1000000f}ms; Samsung drawable accepted (not pixel/GPU proof)"
+    val meter="t=$now D${display.displayId} buffer=${w}x${h}; radius=${radius}px buffer; regions=${requested.size}; alpha=${requested.minOf{it[1]}}..${requested.maxOf{it[1]}}; BG=${if(adjusted)"Samsung 0.10 [0.18,0.75]" else "neutral (adjustment omitted)"}; updateElapsed=${(android.os.SystemClock.elapsedRealtimeNanos()-started)/1000000f}ms; Samsung drawable accepted (not pixel/GPU proof)"
     GlassRenderOptions.recordBlur(w>h,meter)
    }
-   GlassRenderOptions.systemStatus="Notification background blur: ${requested.size} feather regions; radius=${radius}px (buffer); identity curve; BG=${if(adjusted)"Samsung adjustment" else "neutral"}; Samsung API accepted, not optical proof"
+   GlassRenderOptions.systemStatus="Notification background blur: ${requested.size} blur regions; radius=${radius}px (buffer); identity curve; BG=${if(adjusted)"Samsung adjustment" else "neutral"}; Samsung API accepted, not optical proof"
    true
   } catch(e:Exception){
    removeLayer();failed=true
