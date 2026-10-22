@@ -7,7 +7,7 @@ public class CompositorBlurRegionsTest {
   for(int rotation=0;rotation<4;rotation++)for(int step=1;step<=100;step++){
    float[][] regions=CompositorBlurRegions.build(1200,1800,true,rotation,step/100f,120,.4f);
    for(float[] r:regions){
-    assertTrue(r[1]>0&&r[1]<=1);assertTrue(r[0]>=1&&r[0]<=240);
+    assertTrue(r[1]>0&&r[1]<=1);assertTrue(r[0]>=1&&r[0]<=500);
     if(rotation==0)assertTrue(r[4]<=600);
     if(rotation==1)assertTrue(r[3]>=900);
     if(rotation==2)assertTrue(r[2]>=600);
@@ -32,8 +32,8 @@ public class CompositorBlurRegionsTest {
   assertEquals(0,CompositorBlurRegions.build(1000,1000,false,0,Float.NaN,120,.4f).length);
   assertEquals(0,CompositorBlurRegions.build(1000,1000,false,0,1,120,0).length);
   assertEquals(0,CompositorBlurRegions.build(1000,1000,false,0,1,0,1).length);
-  assertEquals(120,CompositorBlurRegions.radius(Float.NaN),0);
-  assertEquals(240,CompositorBlurRegions.radius(10000),0);
+  assertEquals(250,CompositorBlurRegions.radius(Float.NaN),0);
+  assertEquals(500,CompositorBlurRegions.radius(10000),0);
  }
  @Test public void bandsHaveNoOverlapAndStayWithinSurface(){
   for(boolean inner:new boolean[]{false,true})for(int rot=0;rot<4;rot++){

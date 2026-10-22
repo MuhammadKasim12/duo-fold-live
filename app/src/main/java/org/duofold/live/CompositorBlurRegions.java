@@ -5,7 +5,7 @@ import java.util.ArrayList;
 /** Physical-panel mask, independent of texture stretch and color. Rotation follows
  * the existing renderer's canonical hinge axis. Regions never cross the inner seam. */
 final class CompositorBlurRegions {
- static float radius(float value){return Float.isFinite(value)?Math.max(0,Math.min(240,value)):120;}
+ static float radius(float value){return Float.isFinite(value)?Math.max(0,Math.min(500,value)):250;}
  static float[][] build(int width,int height,boolean inner,int rotation,float progress,float requested,float strength){
   if(width<=0 || height<=0 || !Float.isFinite(progress) || !Float.isFinite(strength))return new float[0][];
   float p=Math.max(0,Math.min(1,progress));
@@ -14,7 +14,7 @@ final class CompositorBlurRegions {
   // Reach leads strength: spread farther at the same hinge angle, without crossing the seam.
   float sweep=Math.min(1,p*1.25f);
   float reach=(inner?.5f:1f)*sweep*sweep*(3-2*sweep);
-  float peak=Math.min(240,radius(requested)*Math.min(3,strength/.4f))*motion;
+  float peak=Math.min(500,radius(requested)*Math.min(3,strength/.4f))*motion;
   boolean horizontal=rotation==1 || rotation==3,reverse=rotation==1 || rotation==2;
   ArrayList<float[]> regions=new ArrayList<>();
   int blur=Math.round(peak);

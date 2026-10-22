@@ -17,3 +17,9 @@ After the main priorities:
 
 ## 3.5.5-alpha.14 — wallpaper studio preview
 Independent cover/inner photos and crop controls, shared rendering selection, and an app visual refresh. Existing advanced wallpaper controls retained. Validate on-device before promotion; remap flash remains tabled. See `3.5.5-alpha.14-CHANGELOG.md`.
+
+## Auto-rotate recovery visibility
+
+Move the existing verified Repair auto-rotate action directly below Folding Mode and above Trouble with Shizuku on the main screen, outside advanced settings. Explain that animation must be off and that repair enables auto-rotate on both panels. Preserve automatic journal-based recovery and the one-time legacy repair; do not force auto-rotate on every launch because a user may deliberately lock rotation.
+
+History: 3.0.4-alpha.6 corrected restoration across physical-panel remaps and incomplete cleanup; 3.5.2-alpha.2 added independent reader-exit recovery. These explain known failure paths, not an unverified new report. A new occurrence needs the affected version and rotation-release diagnostics.

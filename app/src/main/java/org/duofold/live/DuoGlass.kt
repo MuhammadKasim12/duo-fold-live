@@ -226,7 +226,7 @@ internal object DuoGlassShader {
  AndroidView(factory={FrostSurface(it,reflectedCover=reflectedCover)},modifier=Modifier.fillMaxSize(),update={it.configure(frame,amount,intensity,inner,rotation,frozenFrame!=null,angle,opaqueContent,if(liveFrame!=null)IncomingGhostDiagnostic.mode else 0)})
 }
 internal class FrostSurface(context:Context,private val preview:Boolean=false,private val reflectedCover:Boolean=false):SurfaceView(context),SurfaceHolder.Callback {
- private val projectedBlur=ProjectedSystemGlassBlur()
+ private val projectedBlur=ProjectedSystemGlassBlur(context)
  private var projectedDraw=false
  private var systemDraw=false
  private var revealPreparedDraw=false
@@ -556,8 +556,8 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     if(regionalCompositor){
      val quality=context.getSharedPreferences("standalone",0)
      val progress=if(inner)amount else if(hingeAngle.isFinite())hingeAngle/90f else amount*110f/90f
-     val regions=if(applyRegionalBlur)CompositorBlurRegions.build(canvas.width,canvas.height,inner,rotation,progress,quality.getFloat("system_blur_radius",120f),intensity) else emptyArray<FloatArray>()
-     val accepted=projectedBlur.apply(surfaceControl,canvas.width,canvas.height,regions){applyTransactionToFrame(it)}
+     val regions=if(applyRegionalBlur)CompositorBlurRegions.build(canvas.width,canvas.height,inner,rotation,progress,quality.getFloat("notification_blur_radius",250f)*canvas.width/width.toFloat(),intensity) else emptyArray<FloatArray>()
+     val accepted=projectedBlur.apply(surfaceControl,canvas.width,canvas.height,display,regions){applyTransactionToFrame(it)}
      projectedDraw=projectedCompositor && accepted && applyRegionalBlur
      if(systemDraw && !accepted){systemDraw=false;rendered=null}
     }

@@ -227,6 +227,18 @@ class MainActivity:ComponentActivity(){
        }
       }
       }
+      SettingsCard("Auto-rotate recovery","Screen stuck in portrait or landscape?"){
+        Text("Turn off Enable animation above, then tap Repair auto-rotate. This enables auto-rotate on both screens. Requires authorized Shizuku or root.",style=MaterialTheme.typography.bodySmall)
+        OutlinedButton(enabled=!enabled && !repairingRotation,onClick={
+         repairingRotation=true;rotationRepair="Releasing rotation overrides…"
+         FoldSettingsClient.request(this@MainActivity,"rotation_repair",null){result->
+          repairingRotation=false
+          rotationRepair=if(result.getBoolean("ok"))result.getString("value") ?: "Auto-rotate repaired" else result.getString("error") ?: "Repair not verified; retry with animation off"
+          RecoveryLog.add(rotationRepair)
+         }
+        }){Text("Repair auto-rotate")}
+        if(rotationRepair.isNotEmpty())Text(rotationRepair,style=MaterialTheme.typography.bodySmall)
+      }
       ShizukuHelp()
       if(mode=="plain_fade")PlainFadeControls(prefs){restart()}
       SettingsCard("Fine-tune your animation","Duo Classic uses its own stronger glass and blur preset. Other styles use your saved glass settings."){
@@ -381,18 +393,6 @@ class MainActivity:ComponentActivity(){
 
         TextButton(onClick={closedThreshold=2f;prefs.edit().putFloat("closed_threshold",2f).apply();restart()}){Text("Reset to 2°")}
         HorizontalDivider()
-        Text("Auto-rotate recovery",style=MaterialTheme.typography.titleMedium)
-        Text("Turn animation off, then repair. Requires authorized Shizuku or root. Enables auto-rotate on both screens.",style=MaterialTheme.typography.bodySmall)
-        OutlinedButton(enabled=!enabled && !repairingRotation,onClick={
-         repairingRotation=true;rotationRepair="Releasing rotation overrides…"
-         FoldSettingsClient.request(this@MainActivity,"rotation_repair",null){result->
-          repairingRotation=false
-          rotationRepair=if(result.getBoolean("ok"))result.getString("value") ?: "Auto-rotate repaired" else result.getString("error") ?: "Repair not verified; retry with animation off"
-          RecoveryLog.add(rotationRepair)
-         }
-        }){Text("Repair auto-rotate")}
-        if(rotationRepair.isNotEmpty())Text(rotationRepair,style=MaterialTheme.typography.bodySmall)
-        HorizontalDivider()
         Text("Keep cover awake on close",style=MaterialTheme.typography.titleMedium)
         Text("Optional. Choose whether Duo changes the fold-lock setting in Privacy & controls. Requires authorized Shizuku or root.",style=MaterialTheme.typography.bodySmall)
         Text("Still locking? In Samsung Settings, search “Lock when folded” and turn it OFF. Return to Home and fold to test.",style=MaterialTheme.typography.bodySmall)
@@ -418,11 +418,11 @@ class MainActivity:ComponentActivity(){
         GlassRenderOptions.ids.forEachIndexed { index,id ->
          OutlinedButton(onClick={renderOption=id;prefs.edit().putString("glass_render_mode",id).apply();restart()}){Text((if(renderOption==id)"✓ " else "")+GlassRenderOptions.labels[index])}
         }
-        var systemRadius by remember { mutableFloatStateOf(CompositorBlurRegions.radius(prefs.getFloat("system_blur_radius",120f))) }
-        InfoLabel("System blur radius · ${systemRadius.roundToInt()} px","For both compositor options. Increases blur without adding tint. Glass strength scales this radius; Normal glass uses its existing blur amount.")
-        Slider(value=systemRadius,onValueChange={systemRadius=it;prefs.edit().putFloat("system_blur_radius",it).apply()},valueRange=0f..240f)
-        TextButton(onClick={systemRadius=120f;prefs.edit().putFloat("system_blur_radius",120f).apply()}){Text("Reset system blur radius")}
-        Text("Live Screen only. Normal remains the default. Both system options use a wider moving sweep with a soft feathered edge: cover right edge across the screen; inner left edge toward the midpoint, keeping the right half clear. System blur + stretch retains projection with no animated darkening. Android may suppress blur. These are visual experiments, not a proven speed improvement.",style=MaterialTheme.typography.bodySmall)
+        var systemRadius by remember { mutableFloatStateOf(CompositorBlurRegions.radius(prefs.getFloat("notification_blur_radius",250f))) }
+        InfoLabel("Notification blur radius · ${systemRadius.roundToInt()} px","For both Samsung experiments. Default 250 screen pixels, matching the captured notification background. Includes its subtle background adjustment; excludes notification-card color curves. Glass strength scales the radius.")
+        Slider(value=systemRadius,onValueChange={systemRadius=it;prefs.edit().putFloat("notification_blur_radius",it).apply()},valueRange=0f..500f)
+        TextButton(onClick={systemRadius=250f;prefs.edit().putFloat("notification_blur_radius",250f).apply()}){Text("Reset notification blur radius")}
+        Text("Live Screen only. Normal remains the default. Both Samsung options use a wider moving sweep with a soft feathered edge: cover right edge across the screen; inner left edge toward the midpoint, keeping the right half clear. Notification blur + stretch retains projection. Android may suppress blur. These are visual experiments, not a proven speed improvement.",style=MaterialTheme.typography.bodySmall)
         HorizontalDivider()
         TextButton(onClick={legacy=!legacy}){Text(if(legacy)"Hide legacy & experimental visuals" else "Legacy & experimental visuals")}
         if(legacy){
