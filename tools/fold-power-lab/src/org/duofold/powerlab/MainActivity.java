@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
   EditText settle=number(box,"Initial settling (1000–5000 ms)",c.settle),period=number(box,"Switch spacing (1000–5000 ms)",c.period),count=number(box,"Maximum switches (1–12; duration may limit)",c.switches);
   Spinner target=choice(box,"Samsung ON targets (logical IDs can swap panels)",new String[]{"None","D0","D1","Both"},c.target);
   Spinner api=choice(box,"Samsung API",new String[]{"Per-display token override","Global token override — experimental"},c.backend);
-  text(box,"Global requires target Both. Hidden Samsung calls may fail or have no effect. Final OEM integer uses remaining milliseconds; its meaning is unverified. App timers and token cleanup provide the bound, not an assumed OEM timeout.",14);
+  text(box,"Global requires target Both. Hidden Samsung calls may fail or have no effect. Final OEM integer stays at the previously accepted value 10000; its meaning is unverified. App timers and token cleanup provide the bound, not an assumed OEM timeout.",14);
   Spinner order=choice(box,"Apply ON override",new String[]{"Before initial primary request","After initial settling"},c.order);
   EditText renewal=number(box,"Renew ON every ms (0=once; 250–1000)",c.renewal);
   Spinner wake=choice(box,"Wake-lock combination",new String[]{"None","Partial (CPU)","Dim screen","Bright screen","Full screen (legacy)"},c.wake);

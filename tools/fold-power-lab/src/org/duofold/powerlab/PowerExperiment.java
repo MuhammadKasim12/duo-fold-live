@@ -113,16 +113,16 @@ final class PowerExperiment {
   try{
    if(display==null)display=service("display","android.hardware.display.IDisplayManager");
    Class<?> dc=Class.forName("android.hardware.display.IDisplayManager");
-   int remaining=(int)Math.max(1,config.duration*1000L-(SystemClock.elapsedRealtime()-start));
+   int oemArgument=10000; // Keep the value accepted in 0.2.0; do not infer its semantics.
    // Final OEM integer is logged verbatim. App cleanup/watchdog enforce our bound;
    // acceptance does not verify the OEM's interpretation of that integer.
    if(config.backend==1){
     if(globalSetter==null)globalSetter=dc.getMethod("setDisplayStateOverride",IBinder.class,int.class,int.class);
-    invokeOn(2,globalSetter,tokens[2],2,remaining);
-    log("GLOBAL_ON accepted args=(token,2,"+remaining+"); OEM final integer semantics unverified");
+    invokeOn(2,globalSetter,tokens[2],2,oemArgument);
+    log("GLOBAL_ON accepted args=(token,2,"+oemArgument+"); OEM final integer semantics unverified");
    }else{
     if(setter==null)setter=dc.getMethod("setDisplayStateOverrideWithDisplayId",IBinder.class,int.class,int.class,int.class);
-    for(int id=0;id<2;id++)if(config.target==3||id==config.target-1){invokeOn(id,setter,tokens[id],2,id,remaining);log("ON accepted args=(token,2,"+id+","+remaining+"); logical ID may remap; OEM final integer semantics unverified");}
+    for(int id=0;id<2;id++)if(config.target==3||id==config.target-1){invokeOn(id,setter,tokens[id],2,id,oemArgument);log("ON accepted args=(token,2,"+id+","+oemArgument+"); logical ID may remap; OEM final integer semantics unverified");}
    }
   }catch(Throwable e){renewDisabled=true;log("ON REJECTED/UNAVAILABLE; renewals disabled; remaining recipe continues: "+root(e));}
  }

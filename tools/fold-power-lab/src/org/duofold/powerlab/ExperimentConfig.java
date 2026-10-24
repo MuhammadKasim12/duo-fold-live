@@ -6,7 +6,7 @@ final class ExperimentConfig {
  int duration=20, initial=1, settle=2000, period=2500, switches=4;
  int target=0, backend=0, renewal=0, wake=0, sample=25, flags=0, cancellation=0, order=0;
  boolean alternate=true, snapshots=false;
- static ExperimentConfig preset(boolean on){ExperimentConfig c=new ExperimentConfig();c.target=on?3:0;return c;}
+ static ExperimentConfig preset(boolean on){ExperimentConfig c=new ExperimentConfig();c.target=on?3:0;c.order=1;return c;}
  String encode(){return "1,"+duration+","+initial+","+settle+","+period+","+switches+","+target+","+backend+","+renewal+","+wake+","+sample+","+flags+","+cancellation+","+order+","+(alternate?1:0)+","+(snapshots?1:0);}
  static ExperimentConfig parse(String text){
   if(text==null||text.length()>256)throw new IllegalArgumentException("Missing/oversized recipe");
