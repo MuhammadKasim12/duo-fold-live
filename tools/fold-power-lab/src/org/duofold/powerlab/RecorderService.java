@@ -24,11 +24,12 @@ public class RecorderService extends Service implements DisplayManager.DisplayLi
  public IBinder onBind(Intent i){return null;}
  public void onCreate(){super.onCreate();NotificationManager nm=getSystemService(NotificationManager.class);nm.createNotificationChannel(new NotificationChannel("capture","Diagnostic recording",NotificationManager.IMPORTANCE_LOW));}
  public int onStartCommand(Intent i,int flags,int id){
-  if(i!=null&&"stop".equals(i.getAction())){worker.execute(Bridge::stop);status="Stop requested; waiting for the 10-second trace to flush";return START_NOT_STICKY;}
+  if(i!=null&&"stop".equals(i.getAction())){worker.execute(Bridge::stop);status="Stop requested; waiting for the bounded trace to flush";return START_NOT_STICKY;}
   if(active)return START_NOT_STICKY;
   active=true;status="Preparing diagnostic";
   startForeground(1,notification(status));
   int mode=i==null?0:i.getIntExtra("mode",0);
+  final String recipe=i==null?null:i.getStringExtra("recipe");
   getSharedPreferences("reports",0).edit().putString("mode",Probe.modeName(mode)).apply();
   try{
    events=new BufferedWriter(new OutputStreamWriter(new FileOutputStream(new File(getFilesDir(),"events.txt")),StandardCharsets.UTF_8));
@@ -43,7 +44,7 @@ public class RecorderService extends Service implements DisplayManager.DisplayLi
    }
    event("Wake-up sensors deliberately not subscribed in baseline; missing sensor events are not evidence of no Hall activation.");
    event("Device-state details collected by shell logs and dumps; public device-state callback not available in this SDK.");
-   worker.execute(()->{try{Bridge.start(mode);poll();}catch(Exception e){fail(e);}});
+   worker.execute(()->{try{if(recipe==null)Bridge.start(mode);else Bridge.startRecipe(recipe);poll();}catch(Exception e){fail(e);}});
    main.postDelayed(()->{if(active){status="Recording watchdog stopped capture";Bridge.stop();finishCapture();}},120000);
   }catch(Exception e){fail(e);}
   return START_NOT_STICKY;

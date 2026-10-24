@@ -113,7 +113,7 @@ jobs:
           "$tools/apksigner" sign --ks "$key" --ks-key-alias "$KEY_ALIAS" --ks-pass env:STORE_PASSWORD --key-pass env:KEY_PASSWORD --out "$apk" "$RUNNER_TEMP/aligned.apk"
           "$tools/apksigner" verify --verbose --print-certs "$apk"
           "$tools/zipalign" -c -P 16 4 "$apk"
-          lab="dist/Fold-Power-Lab-0.2.0-ci-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}.apk"
+          lab="dist/Fold-Power-Lab-0.3.0-ci-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}.apk"
           "$tools/zipalign" -f -P 16 4 tools/fold-power-lab/build/unsigned.apk "$RUNNER_TEMP/lab-aligned.apk"
           "$tools/apksigner" sign --ks "$key" --ks-key-alias "$KEY_ALIAS" --ks-pass env:STORE_PASSWORD --key-pass env:KEY_PASSWORD --out "$lab" "$RUNNER_TEMP/lab-aligned.apk"
           "$tools/apksigner" verify --verbose --print-certs "$lab"
@@ -130,6 +130,9 @@ jobs:
           version=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts)
           if [ -f "docs/$version-CHANGELOG.md" ]; then
             cat "docs/$version-CHANGELOG.md" >> "$RUNNER_TEMP/release-notes.txt"
+          fi
+          if [ -f tools/fold-power-lab/CHANGELOG.md ]; then
+            cat tools/fold-power-lab/CHANGELOG.md >> "$RUNNER_TEMP/release-notes.txt"
           fi
           release_flags=(--prerelease --latest=false)
           # Owner approved alpha.7 plus the three default changes as 3.5.2.

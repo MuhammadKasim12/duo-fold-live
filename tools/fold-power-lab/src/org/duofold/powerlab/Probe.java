@@ -24,7 +24,7 @@ public class Probe extends Binder {
   if(code==INTERFACE_TRANSACTION){reply.writeString(TOKEN);return true;}
   data.enforceInterface(TOKEN);
   synchronized(this){int uid=Binder.getCallingUid();if(owner<0)owner=uid;if(owner!=uid)throw new SecurityException("Wrong caller");}
-  if(code==1){int mode=data.readInt(); if(mode<0||mode>13)throw new IllegalArgumentException("Unknown test"); synchronized(this){if(busy)throw new IllegalStateException("Recording already active");busy=true;cancel=false;if(result!=null)delete(result.getParentFile());result=null;status="Preparing";}new Thread(()->record(mode),"observer-capture").start();reply.writeNoException();return true;}
+  if(code==1||code==7){final String recipe=code==7?data.readString():null;if(code==7)ExperimentConfig.parse(recipe);int mode=code==7?14:data.readInt(); if(mode<0||mode>14)throw new IllegalArgumentException("Unknown test"); synchronized(this){if(busy)throw new IllegalStateException("Recording already active");busy=true;cancel=false;if(result!=null)delete(result.getParentFile());result=null;status="Preparing";}new Thread(()->record(mode,recipe),"observer-capture").start();reply.writeNoException();return true;}
   if(code==2){reply.writeNoException();reply.writeString(status);reply.writeLong(result==null?0:result.length());reply.writeInt(busy?1:0);return true;}
   if(code==3){long offset=data.readLong();byte[] bytes=new byte[48*1024];try{if(result==null)throw new IOException("No completed recording");try(RandomAccessFile f=new RandomAccessFile(result,"r")){if(offset<0||offset>f.length())throw new IOException("Invalid offset");f.seek(offset);int n=f.read(bytes);reply.writeNoException();reply.writeByteArray(n<0?new byte[0]:Arrays.copyOf(bytes,n));}}catch(IOException e){reply.writeException(new IllegalStateException(e));}return true;}
   if(code==4){abort();reply.writeNoException();return true;}
@@ -32,15 +32,18 @@ public class Probe extends Binder {
   return super.onTransact(code,data,reply,flags);
  }
  private void abort(){cancel=true;PowerExperiment e=experiment;if(e!=null)e.close();synchronized(processes){for(java.lang.Process p:processes)if(p!=traceProcess)p.destroy();}}
- static String modeName(int mode){switch(mode){case 10:return "concurrent-inner";case 11:return "concurrent-cover";case 12:return "inner-plus-on";case 13:return "cover-plus-on";case 5:return "power-baseline";case 6:return "on-D0";case 7:return "on-D1";case 8:return "on-both";case 9:return "bright-wakelock";case 1:return "recents";case 2:return "notification-shade";case 3:return "quick-settings";case 4:return "duo-compositor";default:return "handoff";}}
- private void record(int mode){
+ static String modeName(int mode){switch(mode){case 14:return "custom-sequence";case 10:return "concurrent-inner";case 11:return "concurrent-cover";case 12:return "inner-plus-on";case 13:return "cover-plus-on";case 5:return "power-baseline";case 6:return "on-D0";case 7:return "on-D1";case 8:return "on-both";case 9:return "bright-wakelock";case 1:return "recents";case 2:return "notification-shade";case 3:return "quick-settings";case 4:return "duo-compositor";default:return "handoff";}}
+ private void record(int mode,String recipe){
+  final ExperimentConfig cfg=recipe==null?null:ExperimentConfig.parse(recipe);
+  final int seconds=cfg==null?10:cfg.duration;
   boolean detail=mode>0&&mode<5;
   File dir=null;
   try{
    dir=new File("/data/local/tmp/fold-power-lab-"+UUID.randomUUID());if(!dir.mkdir())throw new IOException("Cannot create diagnostic folder");
    android.system.Os.chmod(dir.getPath(),0700);
-   write(dir,"README.txt","Fold Power Lab 0.2.0\nMode="+(modeName(mode)+(detail?" DETAIL (higher overhead)":" LIGHT"))+"\nShell UID="+ProcessUid()+"\nSoftware event timestamps are not photon visibility. No screen pixels recorded. Logs may contain app/window names. OEM/private shaders and binder commands are not guaranteed observable. Missing trace sources do not mean absent animation.\nAll capture is opt-in, local, bounded; no internet permission.\nCompare several identical folds with Duo disabled and enabled, same foreground app, orientation, wallpaper and motion. Do not compare detailed tracing timing to light timing.\nApp callback times are elapsedRealtimeNanos; sensor event timestamps use elapsed realtime; logcat uses monotonic (may diverge across sleep); Perfetto includes clock snapshots.\n");
+   write(dir,"README.txt","Fold Power Lab 0.3.0\nMode="+(modeName(mode)+(detail?" DETAIL (higher overhead)":" LIGHT"))+"\nShell UID="+ProcessUid()+"\nSoftware event timestamps are not photon visibility. No screen pixels recorded. Logs may contain app/window names. OEM/private shaders and binder commands are not guaranteed observable. Missing trace sources do not mean absent animation.\nAll capture is opt-in, local, bounded; no internet permission.\nCompare several identical folds with Duo disabled and enabled, same foreground app, orientation, wallpaper and motion. Do not compare detailed tracing timing to light timing.\nApp callback times are elapsedRealtimeNanos; sensor event timestamps use elapsed realtime; logcat uses monotonic (may diverge across sleep); Perfetto includes clock snapshots.\n");
    write(dir,"power-api-inventory.txt",PowerExperiment.inventory());
+   if(cfg!=null)write(dir,"recipe.txt",cfg.describe());
    command(dir,"sensorservice-before.txt",3,null,"dumpsys","sensorservice");
    command(dir,"capabilities.txt",6,null,"perfetto","--query");
    if(detail){
@@ -57,19 +60,19 @@ public class Probe extends Binder {
    File trace=new File(dir,"capture.perfetto-trace");
    String config="buffers { size_kb: 8192 fill_policy: RING_BUFFER }\n"+
     (detail?"buffers { size_kb: 32768 fill_policy: RING_BUFFER }\nwrite_into_file: true\nfile_write_period_ms: 250\nmax_file_size_bytes: 201326592\n":"")+
-    "duration_ms: 10000\n"+
+    "duration_ms: "+(seconds*1000)+"\n"+
     "data_sources { config { name: \"android.surfaceflinger.frametimeline\" } }\n"+
     "data_sources { config { name: \"com.android.wm.shell.transition\" } }\n";
    if(detail)config+="data_sources { config { name: \"android.surfaceflinger.layers\" target_buffer: 1 surfaceflinger_layers_config { mode: MODE_ACTIVE trace_flags: TRACE_FLAG_COMPOSITION } } }\n";
    write(dir,"trace-config.txt",config);
    write(dir,"capture-policy.txt",detail?"Streaming detailed layers every 250 ms; separate 32 MiB layer and 8 MiB timing buffers. Perfetto limit 192 MiB. Source coverage and buffer-loss counters must still be checked after recording.":"Light capture: 8 MiB ring buffer, no detailed layer tracing. Includes 25 ms target shell power sampling; account for this overhead.");
    final File out=dir;
-   Thread log=new Thread(()->{try{command(out,"events-logcat.txt",12,null,"logcat","-v","monotonic","-T","1","WindowManager:I","DisplayManagerService:V","DeviceStateManagerService:V",detail?"SurfaceFlinger:D":"SurfaceFlinger:I","ShellTransitions:V","NotificationShadeDepthController:D","BlurUtils:D","SecQpBlurController:D","CapturedBlurContainerController:D","SecPanelBackgroundController:D","DisplayPowerController:V","DisplayPowerState:V","LogicalDisplayMapper:V","LocalDisplayAdapter:V","PowerManagerService:V","ActivityTaskManager:I","*:S");}catch(Exception e){try{write(out,"logcat-error.txt",e.toString());}catch(Exception ignored){}}});
+   Thread log=new Thread(()->{try{command(out,"events-logcat.txt",seconds+2,null,"logcat","-v","monotonic","-T","1","WindowManager:I","DisplayManagerService:V","DeviceStateManagerService:V",detail?"SurfaceFlinger:D":"SurfaceFlinger:I","ShellTransitions:V","NotificationShadeDepthController:D","BlurUtils:D","SecQpBlurController:D","CapturedBlurContainerController:D","SecPanelBackgroundController:D","DisplayPowerController:V","DisplayPowerState:V","LogicalDisplayMapper:V","LocalDisplayAdapter:V","PowerManagerService:V","ActivityTaskManager:I","*:S");}catch(Exception e){try{write(out,"logcat-error.txt",e.toString());}catch(Exception ignored){}}});
    write(dir,"recording-start.txt","elapsedRealtimeNanos="+SystemClock.elapsedRealtimeNanos()+" wallMs="+System.currentTimeMillis());
-   status="RECORDING: "+modeName(mode)+" — 10 seconds. Perform the gestures now.";
+   status="RECORDING: "+modeName(mode)+" — "+seconds+" seconds. "+(cfg!=null&&cfg.alternate?"Hold hinge near 90 degrees; switching is automatic.":"Perform the gestures now.");
    log.start();
-   experiment=new PowerExperiment(out);
-   experiment.start(mode);
+   experiment=new PowerExperiment(out,label->{try{command(out,label+"-device-state.txt",2,null,"dumpsys","device_state");if(!cancel)command(out,label+"-display.txt",2,null,"dumpsys","display");}catch(Exception e){try{write(out,label+"-snapshot-error.txt",e.toString());}catch(Exception ignored){}}});
+   if(cfg==null)experiment.start(mode);else experiment.start(cfg);
    long start=SystemClock.elapsedRealtime();
    // Three sparse observations complement the moving-layer trace. Actual intervals
    // are recorded; dumps may add overhead and can miss intermediate animation.
@@ -78,17 +81,18 @@ public class Probe extends Binder {
      while(!cancel&&SystemClock.elapsedRealtime()-start<at*1000)Thread.sleep(50);
      if(cancel||SystemClock.elapsedRealtime()-start>=10000)break;
      command(out,"surface-during-"+at+"s.txt",2,null,"dumpsys","SurfaceFlinger");
-     if(!cancel&&SystemClock.elapsedRealtime()-start<10000)
+     if(!cancel&&SystemClock.elapsedRealtime()-start<seconds*1000L)
       command(out,"systemui-blur-"+at+"s.txt",2,null,"dumpsys","activity","service","com.android.systemui/.SystemUIService");
     }
    }catch(Exception e){try{write(out,"blur-samples-error.txt",e.toString());}catch(Exception ignored){}}});
    if(detail)samples.start();
-   command(dir,"perfetto-status.txt",15,config,"perfetto","--txt","-c","-","-o","-");
+   command(dir,"perfetto-status.txt",seconds+5,config,"perfetto","--txt","-c","-","-o","-");
    // Preserve a full observation window even when Samsung rejects the requested trace.
-   while(!cancel&&SystemClock.elapsedRealtime()-start<10000)Thread.sleep(100);
+   while(!cancel&&SystemClock.elapsedRealtime()-start<seconds*1000L)Thread.sleep(100);
    log.join(4000);
    if(detail){samples.join(6000);if(samples.isAlive())throw new IOException("Blur sampler did not finish");}
    experiment.close();
+   experiment.awaitSampler();
    status="Finishing report";
    write(dir,"recording-end.txt","elapsedRealtimeNanos="+SystemClock.elapsedRealtimeNanos()+" cancelled="+cancel+" traceBytes="+(trace.exists()?trace.length():0));
    command(dir,"power-after.txt",3,null,"dumpsys","power");
