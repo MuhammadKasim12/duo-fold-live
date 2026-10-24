@@ -82,8 +82,20 @@ final class CoverHandoff {
   callbackType=Class.forName("android.hardware.devicestate.DeviceStateRequest$Callback");
   request=type.getMethod("requestState",requestType,Executor.class,callbackType);cancel=type.getMethod("cancelStateRequest");manager=candidate;
  }
- synchronized void update(float angle,boolean fresh,boolean interactive,boolean direct,float openThreshold,long probeRequest,float handoffAngle){
+ synchronized void update(float angle,long sampleTime,boolean fresh,boolean interactive,boolean direct,float openThreshold,long probeRequest,float handoffAngle){
   observedAngle=angle;this.handoffAngle=HandoffSettings.angle(handoffAngle);policy.handoff(this.handoffAngle);
+  long now=SystemClock.elapsedRealtime();
+  if(StaleHandoffGrace.hold(owned!=null,fresh,interactive,direct,angle,openThreshold,sampleTime,now) && !delay.active() && probeRequest==0){
+   if(staleTimer==null){
+    final Object expected=owned;
+    event("STALE_HOLD START sampleAge="+(now-sampleTime)+" ms; deadline="+(sampleTime+StaleHandoffGrace.MAX_AGE_MS));
+    if(delayHandler==null){HandlerThread thread=new HandlerThread("Duo-closing-release");thread.start();delayHandler=new Handler(thread.getLooper());}
+    staleTimer=()->{synchronized(CoverHandoff.this){if(owned==expected && staleTimer!=null){event("STALE_HOLD EXPIRED; releasing owned request");releaseOwned();}}};
+    delayHandler.postDelayed(staleTimer,Math.max(1,sampleTime+StaleHandoffGrace.MAX_AGE_MS-now));
+   }
+   return; // Retain ownership only: no stale-angle transitions or new requests.
+  }
+  clearStale(fresh?"fresh sample":"hold no longer eligible");
   if(delay.active() && (!fresh || !interactive || !direct || !Float.isFinite(angle))){
    event("CLOSE_DELAY ABORT: fresh="+fresh+" interactive="+interactive+" direct="+direct);releaseOwned();return;
   }
@@ -105,6 +117,10 @@ final class CoverHandoff {
   int action=policy.update(angle,fresh,interactive);
   if(action<0){event("RELEASE reason=cover policy endpoint");releaseOwned();return;}if(action!=1)return;
   changeState(false);
+ }
+ private Runnable staleTimer;
+ private void clearStale(String reason){
+  if(staleTimer!=null){event("STALE_HOLD END "+reason);delayHandler.removeCallbacks(staleTimer);staleTimer=null;}
  }
  private void changeState(boolean toInner){
   clearPrewarm();
@@ -129,7 +145,7 @@ final class CoverHandoff {
     if(m.getName().equals("equals"))return proxy==args[0];
     if(m.getName().equals("toString"))return "DuoCoverHandoff";
     if(m.getName().equals("onRequestActivated")){synchronized(this){event("REQUEST ACTIVE callback; request="+(toInner?"inner":"cover")+"; since decision="+(SystemClock.elapsedRealtime()-decisionAt)+" ms; not panel ON proof");}}
-    if(m.getName().equals("onRequestCanceled")){synchronized(this){event("ANDROID CANCEL callback; current owned request="+(owned==next)+" request="+(toInner?"inner":"cover"));if(owned==next){clearPrewarm();clearDelay("Android canceled owned request");owned=null;innerHeld=false;status="Concurrent handoff request canceled by system";}}}return null;
+    if(m.getName().equals("onRequestCanceled")){synchronized(this){event("ANDROID CANCEL callback; current owned request="+(owned==next)+" request="+(toInner?"inner":"cover"));if(owned==next){clearStale("Android canceled owned request");clearPrewarm();clearDelay("Android canceled owned request");owned=null;innerHeld=false;status="Concurrent handoff request canceled by system";}}}return null;
    });
    owned=next;innerHeld=toInner;long submittedAt=SystemClock.elapsedRealtime();request.invoke(manager,next,(Executor)Runnable::run,callback);
    event("REQUEST returned; preparation="+(submittedAt-decisionAt)+" ms; binder="+(SystemClock.elapsedRealtime()-submittedAt)+" ms; physical remap measured separately");
@@ -141,6 +157,7 @@ final class CoverHandoff {
  synchronized boolean active(){return owned!=null && !innerHeld;}
  synchronized void release(){prewarm.reset();probe.abort();nativeProbe.update(false,0,false);releaseOwned();}
  private void releaseOwned(){
+  clearStale("explicit release");
   clearPrewarm();
   clearDelay("explicit release");policy.reset();if(owned==null)return;long identity=Binder.clearCallingIdentity();
   try{event("EXPLICIT cancelStateRequest; held="+(innerHeld?"inner":"cover"));cancel.invoke(manager);event("EXPLICIT cancelStateRequest returned");owned=null;innerHeld=false;status="Normal display control restored";}catch(Exception e){status="Display release pending";}finally{Binder.restoreCallingIdentity(identity);}

@@ -235,7 +235,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
         MotionGlass.refresh(this@StandaloneService,motionUsable())
         diagnosticState("poll")
         val fresh=LiveAngles.fresh()
-        if(!fresh && (active || sourceWasFresh)){hide();note("Effect paused — waiting for fresh angles; panel session retained")}
+        if(!fresh && (active || sourceWasFresh)){hide();note("Effect paused — waiting for fresh angles; see handoff trace for display hold")}
         sourceWasFresh=fresh
         refreshSecondary()
         handler.postDelayed(this,250)
