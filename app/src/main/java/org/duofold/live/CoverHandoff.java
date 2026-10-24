@@ -87,10 +87,10 @@ final class CoverHandoff {
   long now=SystemClock.elapsedRealtime();
   if(StaleHandoffGrace.hold(owned!=null,fresh,interactive,direct,angle,openThreshold,sampleTime,now) && !delay.active() && probeRequest==0){
    if(staleTimer==null){
-    final Object expected=owned;
+    final Object expected=owned;final int epoch=++staleGeneration;
     event("STALE_HOLD START sampleAge="+(now-sampleTime)+" ms; deadline="+(sampleTime+StaleHandoffGrace.MAX_AGE_MS));
     if(delayHandler==null){HandlerThread thread=new HandlerThread("Duo-closing-release");thread.start();delayHandler=new Handler(thread.getLooper());}
-    staleTimer=()->{synchronized(CoverHandoff.this){if(owned==expected && staleTimer!=null){event("STALE_HOLD EXPIRED; releasing owned request");releaseOwned();}}};
+    staleTimer=()->{synchronized(CoverHandoff.this){if(owned==expected && staleTimer!=null && epoch==staleGeneration){event("STALE_HOLD EXPIRED; releasing owned request");releaseOwned();}}};
     delayHandler.postDelayed(staleTimer,Math.max(1,sampleTime+StaleHandoffGrace.MAX_AGE_MS-now));
    }
    return; // Retain ownership only: no stale-angle transitions or new requests.
@@ -118,8 +118,9 @@ final class CoverHandoff {
   if(action<0){event("RELEASE reason=cover policy endpoint");releaseOwned();return;}if(action!=1)return;
   changeState(false);
  }
- private Runnable staleTimer;
+ private Runnable staleTimer;private int staleGeneration;
  private void clearStale(String reason){
+  staleGeneration++;
   if(staleTimer!=null){event("STALE_HOLD END "+reason);delayHandler.removeCallbacks(staleTimer);staleTimer=null;}
  }
  private void changeState(boolean toInner){
