@@ -46,7 +46,7 @@ internal object MotionGlass : SensorEventListener {
  fun angle(value:Float){angle=value}
  fun refresh(context:Context,usable:Boolean){
   val p=RuntimeSettings.get(context)
-  innerEnabled=p.getBoolean("motion_glass",false)
+  innerEnabled=p.getBoolean("motion_glass",true)
   coverEnabled=p.getBoolean("motion_glass_cover_enabled",false)
   val enabled=innerEnabled || coverEnabled
   val allowed=enabled && usable && p.getBoolean("enabled",false) && !p.getBoolean("dual",false) && LiveAngles.fresh() && LiveAngles.effectAllowed && angle.isFinite()

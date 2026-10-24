@@ -14,6 +14,9 @@ public final class DuoApplication extends Application {
   if(!prefs.getBoolean("neutral_blur_358_alpha15",false))prefs.edit()
    .putBoolean("notification_blur_adjusted",false).putBoolean("notification_blur_solid_mask",false)
    .putBoolean("neutral_blur_358_alpha15",true).commit();
+  // Owner-approved stable default: enable inner motion once, then preserve user choice.
+  if(!prefs.getBoolean("inner_motion_default_358",false))prefs.edit()
+   .putBoolean("motion_glass",true).putBoolean("inner_motion_default_358",true).commit();
   // Retune motion once on upgrade; preserve later user adjustments.
   if(!prefs.getBoolean("motion_defaults_357_alpha4",false))prefs.edit()
    .putBoolean("motion_glass_invert",true).putFloat("motion_glass_projection_strength",1f)

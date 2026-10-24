@@ -99,7 +99,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
         } else {updateDisplay();resumeIfUsable()}
     }}
     private fun motionUsable()=RuntimeConsent.ready(this) && getSystemService(PowerManager::class.java).isInteractive && !getSystemService(KeyguardManager::class.java).isKeyguardLocked
-    private val motionListener=LiveAngles.Listener { value,_ -> MotionGlass.angle(value);if(settings().getBoolean("motion_glass",false) || settings().getBoolean("motion_glass_cover_enabled",false))MotionGlass.refresh(this,motionUsable()) }
+    private val motionListener=LiveAngles.Listener { value,_ -> MotionGlass.angle(value);if(settings().getBoolean("motion_glass",true) || settings().getBoolean("motion_glass_cover_enabled",false))MotionGlass.refresh(this,motionUsable()) }
     private fun usable()=RuntimeConsent.ready(this) && ::displays.isInitialized && displays.getDisplay(Display.DEFAULT_DISPLAY)?.state==Display.STATE_ON && !getSystemService(KeyguardManager::class.java).isKeyguardLocked()
     private fun previewMode()=AnimationModePolicy.mirrors(settings().getString("animation_mode",AnimationModePolicy.DEFAULT)) && LiveAngles.effectAllowed && settings().getBoolean("cover_preview",true) && !settings().getBoolean("dual",false)
     private val runtimeSettings by lazy { RuntimeSettings.get(this) }

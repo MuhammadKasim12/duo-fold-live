@@ -65,7 +65,7 @@ class MainActivity:ComponentActivity(){
     var enabled by remember{mutableStateOf(prefs.getBoolean("enabled",false))}
     var mode by remember{mutableStateOf(AnimationModePolicy.sanitize(prefs.getString("animation_mode",AnimationModePolicy.DEFAULT)))}
     var behavior by remember{mutableStateOf(AnimationModePolicy.behavior(prefs.getString("animation_behavior",AnimationModePolicy.BOTH)))}
-    var motionGlass by remember{mutableStateOf(prefs.getBoolean("motion_glass",false))}
+    var motionGlass by remember{mutableStateOf(prefs.getBoolean("motion_glass",true))}
     var motionCoverGlass by remember{mutableStateOf(prefs.getBoolean("motion_glass_cover_enabled",false))}
     var motionInvert by remember{mutableStateOf(prefs.getBoolean("motion_glass_invert",false))}
     val legacyMotionStrength=remember{MotionGlassMath.safe(prefs.getFloat("motion_glass_projection_strength",1f),1f,0f,2f)}
