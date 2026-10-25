@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- These classes execute only in the Shizuku shell user-service, not the
+         target-SDK app process. They probe supported firmware APIs and report
+         rejection. The tested B8 implementation intentionally uses these APIs.
+         Keep this exception limited to the shell-side implementation. -->
+    <issue id="SoonBlockedPrivateApi">
+        <ignore path="src/main/java/org/duofold/live/experimental/b8/BrightnessRefresh.java" />
+        <ignore path="src/main/java/org/duofold/live/experimental/b8/PhysicalBrightnessHold.java" />
+        <ignore path="src/main/java/org/duofold/live/experimental/b8/PowerExperiment.java" />
+        <ignore path="src/main/java/org/duofold/live/experimental/b8/LiveWindowBridge.java" />
+        <ignore path="src/main/java/org/duofold/live/experimental/b8/ScreenshotOnlyBridge.java" />
+        <ignore path="src/main/java/org/duofold/live/experimental/b8/NavigationProbe.java" />
+        <ignore path="src/main/java/org/duofold/live/experimental/b8/DisplayCaptureApi.java" />
+        <ignore path="src/main/java/org/duofold/live/experimental/b8/TaskMover.java" />
+        <ignore path="src/main/java/org/duofold/live/experimental/b8/Probe.java" />
+    </issue>
+</lint>

@@ -84,7 +84,11 @@ jobs:
           python3 tools/check_window_shading.py
           python3 tools/check_motion_projection.py
           python3 tools/check_b8_baseline.py
-          ./gradlew --no-daemon testGithubReleaseUnitTest lintGithubRelease assembleGithubRelease
+          if ! ./gradlew --no-daemon testGithubReleaseUnitTest lintGithubRelease assembleGithubRelease; then
+            report=app/build/intermediates/lint_intermediate_text_report/githubRelease/lintReportGithubRelease/lint-results-githubRelease.txt
+            if [ -f "$report" ]; then cat "$report"; fi
+            exit 1
+          fi
 
       - name: Audit release manifests and test counts
         run: python3 tools/check_release_outputs.py --variant github
