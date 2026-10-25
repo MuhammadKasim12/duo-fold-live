@@ -112,7 +112,7 @@ internal object B8Presentation {
     if(id==0&&live!=null&&live.physicalId==identity&&live.displayId==0&&live.rotation==d.rotation&&live.width==size.x&&live.height==size.y&&SystemClock.elapsedRealtime()-live.stamp in 0..250){held=live;heldPanels[identity]=live}
     drawScreenshotBackdrop(canvas,held,width,height)
     val now=SystemClock.elapsedRealtime()
-    val angle=LiveAngles.angle
+    val angle=LiveAngles.currentAngle()
     val dt=if(drawnAt==0L)8.33f else (now-drawnAt).toFloat().coerceIn(1f,50f)
     visual=FrameSmoothing.step(visual,angle,dt,prefs.getFloat("smoothing_ms",FrameSmoothing.DEFAULT_MS));drawnAt=now
     val inner=minOf(size.x,size.y).toFloat()/maxOf(size.x,size.y)>.7f
