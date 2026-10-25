@@ -10,6 +10,7 @@ import java.util.concurrent.*;
 final class LiveB8Bridge {
  private final File dir;private final boolean freeze;
  private final List<Object> surfaces=new ArrayList<>();private final List<Object> bufferLayers=new ArrayList<>();
+ private final Map<String,Object> logicalContainers=new HashMap<>();private final Map<String,Integer> logicalStacks=new HashMap<>();
  private final Map<String,Object> physicalContainers=new HashMap<>();private final Map<String,Integer> physicalStacks=new HashMap<>();
  private final ScheduledExecutorService watchdog=Executors.newScheduledThreadPool(2);
  private Class<?> sc,tc;private volatile boolean committed,submitted,closed;
@@ -52,7 +53,7 @@ final class LiveB8Bridge {
     call(transaction,"show",new Class<?>[]{sc},mirror);
     call(transaction,"show",new Class<?>[]{sc},container);
     if(freeze){freezeFrame(transaction,mirror,container,info,id);
-     String physical=String.valueOf(info.getClass().getField("uniqueId").get(info));physicalContainers.put(physical,container);physicalStacks.put(physical,stack);
+     String physical=String.valueOf(info.getClass().getField("uniqueId").get(info));physicalContainers.put(physical,container);physicalStacks.put(physical,stack);logicalContainers.put(String.valueOf(id),container);logicalStacks.put(String.valueOf(id),stack);
     }
     log("PREPARED D"+id+" physical="+info.getClass().getField("uniqueId").get(info)+" stack="+stack+" z=2147483646; firmware ColorFade z=1073741825; no transform/crop; window subtree only; no input window");
    }
@@ -77,7 +78,7 @@ final class LiveB8Bridge {
   Object t=tc.getConstructor().newInstance();
   try{
    for(Object layer:bufferLayers)call(t,"hide",new Class<?>[]{sc},layer);
-   addCommit(t,()->{synchronized(this){if(!closed)animationCommitted=true;log("ANIMATED_MIRROR_COMMIT; frozen buffers hidden, WMS windows retained");}});
+   addCommit(t,()->{synchronized(this){if(!closed){animationCommitted=true;logicalStacks.clear();}log("ANIMATED_MIRROR_COMMIT; frozen buffers hidden, WMS windows retained");}});
    animationSubmitted=true;call(t,"apply",new Class<?>[]{});
   }finally{call(t,"close",new Class<?>[]{});}
  }
@@ -86,19 +87,24 @@ final class LiveB8Bridge {
   if(!freeze||closed||revealSubmitted||removalSubmitted)return;Object transaction=null;
   try{
    Object dm=PowerExperiment.service("display","android.hardware.display.IDisplayManager");Class<?> dc=Class.forName("android.hardware.display.IDisplayManager");
+   // A frozen image belongs to its original physical panel. An animated WMS
+   // mirror belongs to its logical DisplayContent root, whose geometry changes
+   // during remap. Do not move that root's mirror onto the opposite panel.
+   Map<String,Object> containers=animationCommitted?logicalContainers:physicalContainers;
+   Map<String,Integer> stacks=animationCommitted?logicalStacks:physicalStacks;
    Map<String,Integer> observed=new HashMap<>();
-   for(int id=0;id<2;id++){Object info=dc.getMethod("getDisplayInfo",int.class).invoke(dm,id);if(info!=null)observed.put(String.valueOf(info.getClass().getField("uniqueId").get(info)),info.getClass().getField("layerStack").getInt(info));}
+   for(int id=0;id<2;id++){Object info=dc.getMethod("getDisplayInfo",int.class).invoke(dm,id);if(info!=null)observed.put(animationCommitted?String.valueOf(id):String.valueOf(info.getClass().getField("uniqueId").get(info)),info.getClass().getField("layerStack").getInt(info));}
    // Ambiguous transient mapping must not put two shields on the same stack.
    if(new HashSet<Integer>(observed.values()).size()!=observed.size())return;
-   for(String physical:physicalContainers.keySet()){
+   for(String physical:containers.keySet()){
     Integer stack=observed.get(physical);if(stack==null)stack=-1; // Detach a vanished panel's shield.
-    if(stack.equals(physicalStacks.get(physical)))continue;
+    if(stack.equals(stacks.get(physical)))continue;
     if(transaction==null)transaction=tc.getConstructor().newInstance();
-    call(transaction,"setLayerStack",new Class<?>[]{sc,int.class},physicalContainers.get(physical),stack);
+    call(transaction,"setLayerStack",new Class<?>[]{sc,int.class},containers.get(physical),stack);
    }
    if(transaction!=null){call(transaction,"apply",new Class<?>[]{});
-    for(String physical:physicalContainers.keySet())physicalStacks.put(physical,observed.containsKey(physical)?observed.get(physical):-1);
-    log("FROZEN_RETARGET_SUBMITTED "+physicalStacks+"; sampled mapping, not atomic with Android remap");
+    for(String physical:containers.keySet())stacks.put(physical,observed.containsKey(physical)?observed.get(physical):-1);
+    log((animationCommitted?"ANIMATED_LOGICAL_RETARGET_SUBMITTED ":"FROZEN_RETARGET_SUBMITTED ")+stacks+"; sampled mapping, not atomic with Android remap");
    }
   }catch(Exception e){log("FROZEN_RETARGET_PENDING "+root(e));}
   finally{if(transaction!=null)try{call(transaction,"close",new Class<?>[]{});}catch(Exception ignored){}}
@@ -181,7 +187,7 @@ final class LiveB8Bridge {
   // Callback is compositor transaction evidence, not proof of reclaimed GPU memory.
   removalCommitted=true;
   for(Object surface:surfaces)try{call(surface,"release",new Class<?>[]{});}catch(Exception e){log("Handle release: "+e);}
-  surfaces.clear();bufferLayers.clear();physicalContainers.clear();physicalStacks.clear();closed=true;
+  surfaces.clear();bufferLayers.clear();physicalContainers.clear();physicalStacks.clear();logicalContainers.clear();logicalStacks.clear();closed=true;
   log("REMOVE_COMMIT "+resources());watchdog.shutdownNow();
  }
  synchronized void close(){
