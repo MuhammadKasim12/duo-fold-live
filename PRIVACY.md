@@ -18,6 +18,14 @@ Photos selected through Android's document picker are copied into app-private st
 
 Diagnostics can contain device/build information, hinge angles, display state, helper errors, app task/component names and timing. The health history is bounded to 288 samples; samples older than 24 hours are removed when a new sample is added. Other diagnostics use bounded histories or local report files. Reports remain local unless you explicitly copy, export or share them. Review reports before sharing; copies in your clipboard, Downloads, or another app must be deleted separately.
 
+The optional B8 Display Lab in Developer settings records expanded system logs,
+app/task identities, display traces and recovery evidence only when you start a
+test. Its mirror-backed tests use temporary in-memory screen buffers and bounded
+privileged display/brightness overrides. Reports are stored in a separate local
+folder and exported only on request. The shell helper can retain unfinished
+recordings and cleanup journals under `/data/local/tmp/fold-power-lab-*` for
+recovery; clearing Duo app storage does not delete those shell-owned files.
+
 ## Collection, sharing and external services
 
 Duo has no account system, advertising SDK, analytics service, or automatic server-upload feature. It does not sell personal data. Local processing is necessary for the features you enable. Links open external services such as GitHub, Shizuku documentation and, in the GitHub edition, optional Ko-fi support. Those services have their own privacy practices. Google handles Play purchases; Duo does not receive your payment-card details. The Play edition does not show donation prompts.
