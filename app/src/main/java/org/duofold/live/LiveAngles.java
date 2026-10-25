@@ -142,7 +142,7 @@ public final class LiveAngles {
     if(settings.getBoolean("live_b8_enabled",false)&&SystemClock.elapsedRealtime()-thermalReadAt>=1000){thermalReadAt=SystemClock.elapsedRealtime();b8Thermal=context.getSystemService(PowerManager.class).getCurrentThermalStatus();}
     p.writeInt(b8Thermal);
    }
-   if(!b.transact(code,p,r,0))throw new IllegalStateException("Unsupported reader");r.readException();return code==2?r.readBundle(getClass().getClassLoader()):null;
+   if(!b.transact(code,p,r,0))throw new IllegalStateException("Unsupported reader");r.readException();Bundle response=code==2?r.readBundle(getClass().getClassLoader()):null;if(response!=null)PanelIdentity.accept(response.getBundle("panelIdentity"));return response;
   }finally{p.recycle();r.recycle();}
  }
  private final Runnable poll=new Runnable(){public void run(){

@@ -472,7 +472,18 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
     val size=Point()
     if(!preview && !frozen)CoverBridge.size(display,size)
     val live=frame
-    val liveValid=live!=null && (preview || frozen || ((live.displayId<0||live.displayId==display?.displayId)&&live.physicalId==CoverBridge.identity(display)&&live.rotation==rotation&&GlassFramePolicy.usable(live.stamp,SystemClock.elapsedRealtime(),live.width,live.height,size.x,size.y)))
+    val panelId=CoverBridge.identity(display)
+    val rejection=when {
+     live==null -> "no capture delivered"
+     preview || frozen -> ""
+     !PanelIdentityPolicy.known(panelId) -> "display identity unavailable or stale"
+     live.displayId>=0 && live.displayId!=display?.displayId -> "logical display mismatch"
+     live.physicalId!=panelId -> "physical display mismatch: capture=${live.physicalId} target=$panelId"
+     live.rotation!=rotation -> "capture rotation mismatch"
+     !GlassFramePolicy.usable(live.stamp,SystemClock.elapsedRealtime(),live.width,live.height,size.x,size.y) -> "capture stale or wrong display size"
+     else -> ""
+    }
+    val liveValid=live!=null && rejection.isEmpty()
     if(compositor && !projectedBlur.unavailable){
      applyRegionalBlur=true
      systemDraw=true;fallback("")
@@ -543,7 +554,7 @@ internal class FrostSurface(context:Context,private val preview:Boolean=false,pr
      }
      if(bridge==null && !preview && !frozen && f.width==size.x && f.height==size.y && (inner || (width==size.x && height==size.y)))rendered=f
     }else{
-     fallback(if(shader==null)"shader unavailable" else if(f==null)"capture missing" else "capture stale or wrong display size")
+     fallback(if(shader==null)"shader unavailable" else rejection.ifEmpty{"capture stale or wrong display size"})
      // Honest, live black-fade fallback; never leave stale captured content visible.
      val horizontal=rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_270
      val reversed=rotation==Surface.ROTATION_90||rotation==Surface.ROTATION_180

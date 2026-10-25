@@ -361,7 +361,7 @@ class StandaloneService : AccessibilityService(), DisplayManager.DisplayListener
             secondary=next;secondaryKey=physicalKey(target)+":"+preview+":"+native+":"+blackHold;next.show();secondaryError="";RecoveryLog.add("Secondary Presentation shown, display ${target.displayId}")
         }catch(e:Exception){dismissSecondary();secondaryError="${e.javaClass.simpleName}: ${e.message}";secondaryRetry=SystemClock.elapsedRealtime()+1500;RecoveryLog.add("Secondary Presentation error: $secondaryError")}
     }
-    private fun displayIdentity(d:Display?):String=if(d==null)"none" else runCatching{Display::class.java.getMethod("getUniqueId").invoke(d).toString()}.getOrDefault("unavailable")
+    private fun displayIdentity(d:Display?):String=PanelIdentity.identity(d)
     private val diagnosticHistory=ArrayDeque<String>()
     private var lastDiagnosticState=""
     private var diagnosticDual=false

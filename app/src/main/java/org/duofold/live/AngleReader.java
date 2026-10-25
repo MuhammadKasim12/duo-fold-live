@@ -5,6 +5,7 @@ import java.util.*;
 public class AngleReader extends Binder {
  public static final String DESCRIPTOR="org.duofold.live.wallpaperprobe.AngleReader";
  private GlassCapture capture;
+ private final ShellPanelIdentity panelIdentity=new ShellPanelIdentity();
  private org.duofold.live.experimental.b8.LiveB8Controller b8;
  private PreviewExpansion expansion;
  private HandoffFade fade;
@@ -94,7 +95,7 @@ public class AngleReader extends Binder {
    previewAllowed=!b8Route&&mirrorMode&&effectAllowed&&!handoff.probeNative()&&CoverPreviewPolicy.allowed(live,dual,primaryInner,unlocked,handoff.active());
    if(!previewAllowed)mirror.close();
    continuity.sample(handoff.probeHolding(),handoff.probeStatus());
-   Bundle b=new Bundle();
+   Bundle b=new Bundle();b.putBundle("panelIdentity",panelIdentity.snapshot());
    b.putBundle("incomingHold",concurrent.incomingHoldInfo());b.putBoolean("effectAllowed",effectAllowed);b.putBoolean("coverPreview",previewAllowed);b.putString("state",state);b.putBoolean("continuityNative",handoff.probeNative());b.putBoolean("nativeInner",concurrent.secondaryHasNativeContent()||handoff.probeNative());b.putBoolean("dualActive",dual&&concurrent.active());b.putString("handoff",b8Route&&b8!=null?b8.status():dual?concurrent.status:handoff.status);b.putInt("uid",android.os.Process.myUid());b.putInt("count",count);b.putInt("unique",unique.size());b.putFloat("rawAngle",angle);b.putFloat("angle",effectiveAngle);b.putFloat("min",min);b.putFloat("max",max);b.putLong("last",last);
    if(diagnostics.due(SystemClock.elapsedRealtime())){
     b.putString("closedHingeGate",closedHingeGate.report());b.putString("screenshotTrace",concurrent.trace()+"\n"+handoff.trace()+"\n"+closureState.report());b.putString("rotationHold",rotation==null?"Rotation hold idle":rotation.status);b.putString("handoffFade",fade==null?"Handoff fade idle":fade.status);b.putString("continuityProbe",handoff.probeStatus());b.putString("continuityTrace",continuity.report());b.putString("bridgeTrace",b8!=null?(b8Route?"":"Retained B8 evidence; mode currently inactive.\n")+b8.report():expansion==null?"No bridge":expansion.report());b.putString("expansion",expansion==null?"Expansion idle":expansion.status);b.putString("readerDiagnostics",state+"; wallpaper log lines="+logLines+"; parsed responses="+matchingResponses+"; rejected timestamps="+staleResponses);b.putString("mirror",mirror.status);b.putString("raw",raw);
