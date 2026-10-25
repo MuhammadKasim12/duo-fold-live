@@ -25,7 +25,7 @@ public final class LiveB8Controller {
  public void presentation(long session,boolean prepared,String physical,long commitAt,boolean paused){capturePaused=paused;scenePrepared=prepared;scenePrimary=physical==null?"":physical;sceneCommitAt=commitAt;sceneAckAt=SystemClock.elapsedRealtime();sceneAckSession=session;}
  private boolean presentationReady(long now){return sceneSession>0&&sceneAckSession==sceneSession&&scenePrepared&&now-sceneAckAt<=250;}
  private boolean presentationAlive(long now){return sceneSession>0&&sceneAckSession==sceneSession&&now-sceneAckAt<=750;}
- private boolean primaryPresented(long now){return presentationAlive(now)&&expected.equals(scenePrimary)&&sceneCommitAt>=holdStarted&&now-sceneCommitAt<=250;}
+ private boolean primaryPresented(long now){return presentationAlive(now)&&expected.equals(scenePrimary)&&sceneCommitAt>=holdStarted&&sceneCommitAt<=now&&now-sceneCommitAt<=250;}
 
  private volatile String status="Live B8 idle";
  private final ArrayDeque<String> history=new ArrayDeque<>();
