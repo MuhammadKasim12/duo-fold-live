@@ -11,7 +11,7 @@ import android.graphics.*;
 public class TaskProbeActivity extends Activity {
  private long born;private int taps;private ProbeView view;
  public void onCreate(Bundle b){super.onCreate(b);born=b==null?SystemClock.elapsedRealtime():b.getLong("born");taps=b==null?0:b.getInt("taps");
-  LinearLayout box=new LinearLayout(this);box.setOrientation(1);
+  LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
   Button stop=new Button(this);stop.setText("Stop / return to Lab");stop.setOnClickListener(v->{if(RecorderService.active)startService(new Intent(this,RecorderService.class).setAction("stop"));startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));});box.addView(stop);
   view=new ProbeView();box.addView(view,new LinearLayout.LayoutParams(-1,0,1));setContentView(box);log("CREATE");
  }

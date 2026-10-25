@@ -6,13 +6,5 @@
          Keep this exception limited to the shell-side implementation. -->
     <issue id="SoonBlockedPrivateApi">
         <ignore path="src/main/java/org/duofold/live/experimental/b8/BrightnessRefresh.java" />
-        <ignore path="src/main/java/org/duofold/live/experimental/b8/PhysicalBrightnessHold.java" />
-        <ignore path="src/main/java/org/duofold/live/experimental/b8/PowerExperiment.java" />
-        <ignore path="src/main/java/org/duofold/live/experimental/b8/LiveWindowBridge.java" />
-        <ignore path="src/main/java/org/duofold/live/experimental/b8/ScreenshotOnlyBridge.java" />
-        <ignore path="src/main/java/org/duofold/live/experimental/b8/NavigationProbe.java" />
-        <ignore path="src/main/java/org/duofold/live/experimental/b8/DisplayCaptureApi.java" />
-        <ignore path="src/main/java/org/duofold/live/experimental/b8/TaskMover.java" />
-        <ignore path="src/main/java/org/duofold/live/experimental/b8/Probe.java" />
     </issue>
 </lint>

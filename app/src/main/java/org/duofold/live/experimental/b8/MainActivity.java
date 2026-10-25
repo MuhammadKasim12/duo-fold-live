@@ -13,7 +13,7 @@ public class MainActivity extends Activity {
  private final Runnable update=new Runnable(){public void run(){state.setText(Bridge.state+"\n\n"+RecorderService.status);h.postDelayed(this,1000);}};
  public void onCreate(Bundle b){super.onCreate(b);
   if(!getSharedPreferences("standalone",0).getBoolean("b8_lab_enabled",false)){finish();return;}
-  ScrollView scroll=new ScrollView(this);LinearLayout col=new LinearLayout(this);col.setOrientation(1);int p=(int)(20*getResources().getDisplayMetrics().density);col.setPadding(p,p,p,p);scroll.addView(col);setContentView(scroll);
+  ScrollView scroll=new ScrollView(this);LinearLayout col=new LinearLayout(this);col.setOrientation(LinearLayout.VERTICAL);int p=(int)(20*getResources().getDisplayMetrics().density);col.setPadding(p,p,p,p);scroll.addView(col);setContentView(scroll);
   scroll.setOnApplyWindowInsetsListener((v,insets)->{col.setPadding(p,p+insets.getSystemWindowInsetTop(),p,p+insets.getSystemWindowInsetBottom());return insets;});
   text(col,"B8 Display Lab",28);text(col,"Duo experimental lab • engine 0.5.11",15);
   text(col,"1. Turn Duo Fold Live OFF. Keep Shizuku running.\n2. Authorize and connect below.\n3. Start a test. Go Home or open your usual app. Wait until the notification says RECORDING, then perform the selected gesture. For shade tests, pull down slowly, hold fully open for 4 seconds, then dismiss.\n4. Return after 10 seconds and save the report ZIP.",17);
@@ -97,7 +97,7 @@ public class MainActivity extends Activity {
    .setPositiveButton("Start on COVER",(d,w)->taskRoute(2,4)).setNeutralButton("Start on INNER",(d,w)->taskRoute(1,4)).setNegativeButton("Cancel",null).show();
  }
  private void routeOptions(){
-  LinearLayout box=new LinearLayout(this);box.setOrientation(1);box.setPadding(24,12,24,12);
+  LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(24,12,24,12);
   Spinner primary=new Spinner(this);primary.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Fixed INNER primary","Fixed COVER primary"}));box.addView(primary);
   CheckBox nav=new CheckBox(this);nav.setText("Reassert destination focus at 7s / 17s (navigation experiment)");box.addView(nav);
   CheckBox off=new CheckBox(this);off.setText("Turn off outgoing panel after verified app move");box.addView(off);
@@ -109,7 +109,7 @@ public class MainActivity extends Activity {
   if(!canStart())return;
   if(RecorderService.active){message("A recording is already running");return;}
   if(Bridge.remote==null){message("Connect Shizuku first");return;}
-  if(checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=0){requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"},8);return;}
+  if(checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=android.content.pm.PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"},8);return;}
   java.util.ArrayList<String> names=new java.util.ArrayList<>();java.util.ArrayList<Intent> intents=new java.util.ArrayList<>();java.util.ArrayList<String> packages=new java.util.ArrayList<>();
   names.add("Built-in task — counter + touch (start here)");intents.add(new Intent(this,TaskProbeActivity.class));packages.add(getPackageName());
   java.util.List<android.content.pm.ResolveInfo> apps=getPackageManager().queryIntentActivities(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),0);
@@ -129,7 +129,7 @@ public class MainActivity extends Activity {
   if(!canStart())return;
   if(RecorderService.active){message("A recording is already running");return;}
   if(Bridge.remote==null){message("Connect Shizuku first");return;}
-  if(checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=0){requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"},8);return;}
+  if(checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=android.content.pm.PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"},8);return;}
   ExperimentConfig c=ExperimentConfig.preset(true);c.initial=primary;c.alternate=false;c.renewal=500;
   startForegroundService(new Intent(this,RecorderService.class).putExtra("mode",15).putExtra("recipe",c.encode()));
   startActivity(new Intent(this,LiveTargetsActivity.class));
@@ -140,7 +140,7 @@ public class MainActivity extends Activity {
   ExperimentConfig saved;
   try{saved=ExperimentConfig.parse(getSharedPreferences("b8_recipes",0).getString("last",ExperimentConfig.preset(false).encode()));}catch(Exception e){saved=ExperimentConfig.preset(false);}
   final ExperimentConfig c=saved;
-  ScrollView scroll=new ScrollView(this);LinearLayout box=new LinearLayout(this);box.setOrientation(1);box.setPadding(24,8,24,8);scroll.addView(box);
+  ScrollView scroll=new ScrollView(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(24,8,24,8);scroll.addView(box);
   text(box,"Recipes are saved locally and included in every ZIP. Use the baseline and both-ON presets first. Changing one option at a time makes comparisons useful.",15);
   EditText duration=number(box,"Recording seconds (10–30)",c.duration);
   Spinner initial=choice(box,"Initial primary",new String[]{"Unchanged","Inner","Cover"},c.initial);
@@ -175,7 +175,7 @@ public class MainActivity extends Activity {
   if(!p.getBoolean("b8_lab_enabled",false)||p.getBoolean("enabled",false)){message("Turn Enable animation off and enable B8 Display Lab in Developer settings first.");return false;}
   return true;
  }
- private void launch(int mode,String recipe){if(!canStart())return;if(RecorderService.active){message("A recording is already running");return;}if(Bridge.remote==null){message("Connect Shizuku first");return;}if(checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=0){requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"},8);message("Allow notifications, then tap Record again");return;}startForegroundService(new Intent(this,RecorderService.class).putExtra("mode",mode).putExtra("recipe",recipe));}
+ private void launch(int mode,String recipe){if(!canStart())return;if(RecorderService.active){message("A recording is already running");return;}if(Bridge.remote==null){message("Connect Shizuku first");return;}if(checkSelfPermission("android.permission.POST_NOTIFICATIONS")!=android.content.pm.PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"},8);message("Allow notifications, then tap Record again");return;}startForegroundService(new Intent(this,RecorderService.class).putExtra("mode",mode).putExtra("recipe",recipe));}
  public void onResume(){super.onResume();if(state!=null)h.post(update);}public void onPause(){h.removeCallbacks(update);super.onPause();}
  protected void onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);if(req==9&&result==RESULT_OK&&data!=null){File f=latest();if(f==null)return;new Thread(()->{try(InputStream in=new FileInputStream(f);OutputStream out=getContentResolver().openOutputStream(data.getData())){byte[] b=new byte[16384];int n;while((n=in.read(b))>=0)out.write(b,0,n);runOnUiThread(()->message("Saved. Attach the ZIP in our chat."));}catch(Exception e){runOnUiThread(()->message("Save failed: "+e));}}).start();}}
  private TextView text(LinearLayout l,String s,int size){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(Color.rgb(225,232,246));t.setPadding(0,12,0,16);l.addView(t);return t;}

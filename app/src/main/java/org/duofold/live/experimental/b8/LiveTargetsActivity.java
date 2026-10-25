@@ -18,7 +18,7 @@ public class LiveTargetsActivity extends Activity {
  private TextView status;
  private Target primaryTarget,secondaryTarget;
  public void onCreate(Bundle b){super.onCreate(b);opened=SystemClock.elapsedRealtime();
-  LinearLayout box=new LinearLayout(this);box.setOrientation(1);
+  LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
   status=new TextView(this);status.setTextSize(19);status.setText("Preparing fixed-mapping live targets. Keep the hinge still near 90°. Stay in this app.");box.addView(status);
   Button stop=new Button(this);stop.setText("Stop test and return");stop.setOnClickListener(v->end(true));box.addView(stop);
   primaryTarget=new Target(this,0);box.addView(primaryTarget,new LinearLayout.LayoutParams(-1,0,1));setContentView(box);
