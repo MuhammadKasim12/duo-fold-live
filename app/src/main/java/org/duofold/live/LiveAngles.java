@@ -71,11 +71,11 @@ public final class LiveAngles {
  public static volatile boolean effectAllowed=true;
  private boolean pollInFlight,urgentPoll;
  private long pollStarted;
- private static long roundTripMs;
+ private static long roundTripMs;private static int targetPollMs=4;private long thermalReadAt;private int b8Thermal;
  private static String rateSummary="Collecting polling rates";
  private long rateStarted;private int ratePolls,rateReplies,rateChanges,rateReceived;
  public static volatile String readerDiagnostics="Not connected";
- public static String latencyReport(){return "Angle poll target period: 4 ms; last round trip: "+roundTripMs+" ms; "+rateSummary;}
+ public static String latencyReport(){return "Angle poll target period: "+targetPollMs+" ms; last round trip: "+roundTripMs+" ms; "+rateSummary;}
  public static void handoffReady(){LiveAngles self=current;if(self==null)return;self.main.post(()->{
   if(!self.running)return;
   if(self.pollInFlight){self.urgentPoll=true;return;}
@@ -139,6 +139,8 @@ public final class LiveAngles {
     android.view.Display display=context.getSystemService(android.hardware.display.DisplayManager.class).getDisplay(0);
     android.view.Display.Mode mode=display.getMode();p.writeInt(Math.min(mode.getPhysicalWidth(),mode.getPhysicalHeight())/(float)Math.max(mode.getPhysicalWidth(),mode.getPhysicalHeight())>.7f?1:0);
     StandaloneService host=StandaloneService.Companion.getInstance();p.writeInt(host!=null&&host.secondaryReady()?1:0);p.writeInt(HandoffFrames.readySource());p.writeFloat(settings.getFloat("open_threshold",172f));p.writeInt(settings.getBoolean("cover_preview",true)?1:0);p.writeInt(settings.getBoolean("enabled",false)?1:0);p.writeFloat(settings.getFloat("closed_threshold",2f));p.writeLong(continuityRequest);p.writeFloat(settings.getFloat("fade_smoothing_ms",FadeSettings.DEFAULT_SMOOTHING));p.writeFloat(settings.getFloat("fade_gradualness",FadeSettings.DEFAULT_GRADUALNESS));p.writeString(settings.getString("animation_mode",AnimationModePolicy.DEFAULT));p.writeInt(AnimationModePolicy.blackFade(settings.getString("animation_mode",AnimationModePolicy.DEFAULT),settings.getBoolean("debug_mode",false))?1:0);p.writeFloat(HandoffSettings.angle(settings.getFloat("handoff_angle",HandoffSettings.DEFAULT)));p.writeInt(settings.getBoolean("screenshot_camera_startup",false)?1:0);p.writeInt(host!=null&&host.screenshotWindowReady()&&host.screenshotFrameReady()?1:0);p.writeInt(settings.getBoolean("screenshot_remap_power_hold",true)?1:0);p.writeInt(0); /* Reserved former closing-power slot; preserve parcel layout. */p.writeInt(settings.getBoolean("closing_app_return",false)?1:0);p.writeInt(settings.getBoolean("closed_hinge_jitter_protection",true)?1:0);p.writeString(AnimationModePolicy.behavior(settings.getString("animation_behavior",AnimationModePolicy.BOTH)));p.writeInt(settings.getBoolean("live_b8_enabled",false)?1:0);
+    if(settings.getBoolean("live_b8_enabled",false)&&SystemClock.elapsedRealtime()-thermalReadAt>=1000){thermalReadAt=SystemClock.elapsedRealtime();b8Thermal=context.getSystemService(PowerManager.class).getCurrentThermalStatus();}
+    p.writeInt(b8Thermal);
    }
    if(!b.transact(code,p,r,0))throw new IllegalStateException("Unsupported reader");r.readException();return code==2?r.readBundle(getClass().getClassLoader()):null;
   }finally{p.recycle();r.recycle();}
@@ -188,7 +190,10 @@ public final class LiveAngles {
    if(SystemClock.elapsedRealtime()>=statusFormatAt){statusFormatAt=SystemClock.elapsedRealtime()+250;status=(fresh()?String.format(Locale.US,"LIVE %.0f° (closed ≤%.0f°)",b.getFloat("rawAngle"),settings.getFloat("closed_threshold",2f)):"Waiting for fresh wallpaper angles")+" · "+received+" replies · "+b.getInt("unique")+" distinct · UID "+b.getInt("uid");}
    roundTripMs=SystemClock.elapsedRealtime()-pollStarted;
    pollInFlight=false;
-   long delay=PollCadence.delay(on,roundTripMs,urgentPoll);urgentPoll=false;
+   targetPollMs=settings.getBoolean("live_b8_enabled",false)&&!settings.getBoolean("dual",false)?((angle<=2||angle>=settings.getFloat("open_threshold",172f))?32:16):4;
+   long delay=PollCadence.delay(on,roundTripMs,urgentPoll);
+   if(on&&targetPollMs>4&&!urgentPoll)delay=Math.max(delay,Math.max(1,targetPollMs-roundTripMs));
+   urgentPoll=false;
    main.postDelayed(poll,delay);
   });}catch(Exception e){fail(e);}});
  }};

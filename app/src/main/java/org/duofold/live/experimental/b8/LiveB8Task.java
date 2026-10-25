@@ -101,7 +101,6 @@ final class LiveB8Task {
   if(focused==null||num(focused,"displayId")!=0)throw new IllegalStateException("Selected app must be focused on D0");
   ComponentName top=(ComponentName)field(focused,"topActivity");
   if(top==null||!pkg.equals(top.getPackageName()))throw new IllegalStateException("Focused app differs from selection: "+top);
-  if(pkg.equals("org.duofold.live")&&!top.getClassName().endsWith(".TaskProbeActivity"))throw new IllegalStateException("Built-in task not launched; refusing Lab controls");
   Object exact=null;
   for(Object t:(List<?>)call("getTasks",new Class<?>[]{int.class,boolean.class,boolean.class,int.class},64,false,false,0)){
    int candidate=num(t,"taskId");
@@ -140,9 +139,10 @@ final class LiveB8Task {
  static String focusedPackage()throws Exception{
   Class<?> a=Class.forName("android.app.IActivityTaskManager");Object m=Class.forName("android.app.ActivityTaskManager").getMethod("getService").invoke(null);
   Object r=a.getMethod("getFocusedRootTaskInfo").invoke(m);
-  if(r==null||num(r,"displayId")!=0||wc(r,"getActivityType")!=1||wc(r,"getWindowingMode")!=1)return null;
+  if(r==null)throw new IllegalStateException("No focused root task");
+  if(num(r,"displayId")!=0||wc(r,"getActivityType")!=1||wc(r,"getWindowingMode")!=1)throw new IllegalStateException("Not a primary fullscreen app: display="+num(r,"displayId")+" activityType="+wc(r,"getActivityType")+" windowingMode="+wc(r,"getWindowingMode"));
   ComponentName top=(ComponentName)field(r,"topActivity");
-  if(top==null||top.getPackageName().equals("org.duofold.live"))return null;
+  if(top==null)return null;
   return top.getPackageName();
  }
  void selectOnly()throws Exception{select();}

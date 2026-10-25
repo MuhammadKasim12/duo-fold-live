@@ -407,7 +407,7 @@ class MainActivity:ComponentActivity(){
           liveB8=it
           if(it){dual=false;prefs.edit().putBoolean("dual",false).putBoolean("live_b8_enabled",true).apply()}else prefs.edit().putBoolean("live_b8_enabled",false).apply()
          }
-         if(liveB8)Text("Uses your handoff angle with the existing 4° closing hysteresis. No app picker, countdown, or manual test. Diagnostics appear in the status report. Home and split-screen use protected native routing without moving unrelated tasks.",style=MaterialTheme.typography.bodySmall)
+         if(liveB8)Text("Uses your handoff angle with the existing 4° closing hysteresis. No app picker, countdown, or manual test. Diagnostics appear in the status report. Fullscreen apps, including Duo, are selected before shielding. Home/split-screen transfers are skipped with a reason in the report. Severe thermal status pauses the experiment.",style=MaterialTheme.typography.bodySmall)
          HorizontalDivider()
         }
         Toggle("Cover screen motion glass (experimental)",motionCoverGlass,help="Off by default. Adds tilt response to the cover display independently of inner motion glass. Live Screen only."){motionCoverGlass=it;prefs.edit().putBoolean("motion_glass_cover_enabled",it).apply();if(!it && !motionGlass)MotionGlass.stop()}

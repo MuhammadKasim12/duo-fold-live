@@ -60,11 +60,12 @@ public class AngleReader extends Binder {
    boolean jitterProtection=data.dataAvail()<4||data.readInt()!=0;
    String behavior=AnimationModePolicy.initialBehavior(data.dataAvail()>0?data.readString():null,mode);
    boolean b8Selected=data.dataAvail()>=4&&data.readInt()!=0&&!dual;
+   int b8Thermal=data.dataAvail()>=4?data.readInt():0;
    if(b8Selected&&(b8==null||b8.finished()))b8=new org.duofold.live.experimental.b8.LiveB8Controller();
    boolean b8Route=b8Selected||(b8!=null&&b8.ownsRoute());
    float effectiveAngle=closedHingeGate.filter(angle,closedThreshold,jitterProtection,last>0&&heartbeat-last<750);
    closureState.sample(angle,effectiveAngle,last>0&&heartbeat-last<750,dual,unlocked);
-   boolean effectAllowed=animationMode.update(behavior,effectiveAngle,last>0&&heartbeat-last<750);
+   boolean effectAllowed=animationMode.update(behavior,effectiveAngle,last>0&&heartbeat-last<750)&&(!b8Selected||b8Thermal<3);
    boolean mirrorMode=AnimationModePolicy.mirrors(mode);
    appEnabled=appEnabled&&effectAllowed;
    if(rotation==null)rotation=new FoldRotationHold(caller/100000,recoveryApk);
@@ -84,7 +85,7 @@ public class AngleReader extends Binder {
    }
    concurrent.observeMotion(effectiveAngle,last>0&&heartbeat-last<2000,appEnabled&&unlocked&&!b8Route,openThreshold,dual,screenshotStartup);
    boolean wasCoverHeld=handoff.active();
-   if(b8Route){handoff.release();concurrent.release();if(b8!=null)b8.update(b8Selected&&appEnabled&&unlocked,effectiveAngle,last,openThreshold,handoffAngle);}
+   if(b8Route){handoff.release();concurrent.release();if(b8!=null){b8.thermal(b8Thermal);b8.update(b8Selected&&appEnabled&&unlocked,effectiveAngle,last,openThreshold,handoffAngle);}}
    else if(!effectAllowed){handoff.release();concurrent.release();}else if(dual){handoff.release();concurrent.update(effectiveAngle,last>0&&heartbeat-last<2000,unlocked,primaryInner,secondaryReady,frozenSource,openThreshold,screenshotStartup,screenshotPrepared,handoffAngle);}else{concurrent.release();if(bridgeReady)handoff.update(effectiveAngle,last,last>0&&heartbeat-last<750,unlocked,live&&appEnabled,openThreshold,probeRequest,handoffAngle);}
    boolean timedCoverRelease=handoff.takeTimedCoverRelease();
    if(((wasCoverHeld && !handoff.active()) || timedCoverRelease) && expansion!=null)expansion.releaseReturned();

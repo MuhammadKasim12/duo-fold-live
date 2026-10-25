@@ -20,6 +20,9 @@ Diagnostics can contain device/build information, hinge angles, display state, h
 
 The optional Live B8 handoff in Developer settings records bounded transition
 history and local app/task, display and brightness diagnostics while enabled.
+Recovery evidence includes a bounded previous-session journal, boot identity,
+helper resource counts and recent system crash-log entries (which can include
+other app/component names). Review copied reports before sharing.
 It uses temporary in-memory screen buffers and privileged display/brightness
 overrides to protect automatic hinge-driven handoffs. Shell-owned diagnostics
 are retained under `/data/local/tmp/duo-live-b8-*`; older session folders are

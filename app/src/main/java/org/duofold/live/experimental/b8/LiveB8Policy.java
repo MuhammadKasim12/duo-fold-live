@@ -14,5 +14,5 @@ final class LiveB8Policy {
  }
  static boolean endpoint(float angle,float open){return angle<=0||angle>=open;}
  static boolean stable(long now,long since){return since>=0&&now-since>=300;}
- static boolean reveal(long now,long verified){return verified>=0&&now-verified>=750;}
+ static boolean reveal(long now,long verified){return verified>=0&&now-verified>=150;}
 }
