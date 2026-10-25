@@ -5,6 +5,7 @@ import java.util.*;
 public class AngleReader extends Binder {
  public static final String DESCRIPTOR="org.duofold.live.wallpaperprobe.AngleReader";
  private GlassCapture capture;
+ private org.duofold.live.experimental.b8.LiveB8Controller b8;
  private PreviewExpansion expansion;
  private HandoffFade fade;
  private FoldRotationHold rotation;
@@ -58,6 +59,9 @@ public class AngleReader extends Binder {
    concurrent.closingAppReturnEnabled(data.dataAvail()>=4&&data.readInt()!=0);
    boolean jitterProtection=data.dataAvail()<4||data.readInt()!=0;
    String behavior=AnimationModePolicy.initialBehavior(data.dataAvail()>0?data.readString():null,mode);
+   boolean b8Selected=data.dataAvail()>=4&&data.readInt()!=0&&!dual;
+   if(b8Selected&&(b8==null||b8.finished()))b8=new org.duofold.live.experimental.b8.LiveB8Controller();
+   boolean b8Route=b8Selected||(b8!=null&&b8.ownsRoute());
    float effectiveAngle=closedHingeGate.filter(angle,closedThreshold,jitterProtection,last>0&&heartbeat-last<750);
    closureState.sample(angle,effectiveAngle,last>0&&heartbeat-last<750,dual,unlocked);
    boolean effectAllowed=animationMode.update(behavior,effectiveAngle,last>0&&heartbeat-last<750);
@@ -68,36 +72,37 @@ public class AngleReader extends Binder {
    rotation.update(appEnabled&&unlocked,last>0&&heartbeat-last<750,effectiveAngle,openThreshold);
    if(fade==null)fade=new HandoffFade();
    fade.settings(fadeSmoothing,fadeGradualness,mirrorMode&&!debug,openThreshold,handoffAngle);
-   fade.update(!HandoffBaseline.ENABLED&&live&&!dual&&appEnabled&&!handoff.probeHolding(),effectiveAngle,last>0&&heartbeat-last<750);
-   if(expansion!=null){expansion.motion(effectiveAngle,openThreshold);expansion.enabled(!HandoffBaseline.ENABLED&&mirrorMode&&live&&!dual&&appEnabled&&!handoff.probeHolding());}
+   fade.update(!b8Route&&!HandoffBaseline.ENABLED&&live&&!dual&&appEnabled&&!handoff.probeHolding(),effectiveAngle,last>0&&heartbeat-last<750);
+   if(expansion!=null){expansion.motion(effectiveAngle,openThreshold);expansion.enabled(!b8Route&&!HandoffBaseline.ENABLED&&mirrorMode&&live&&!dual&&appEnabled&&!handoff.probeHolding());}
    boolean bridgeReady=true;
-   boolean needsBridge=!HandoffBaseline.ENABLED && mirrorMode && live && !dual && unlocked && appEnabled && handoff.active() && !handoff.probeHolding() && angle>=handoffAngle && angle<FoldThreshold.sanitize(openThreshold) && last>0 && heartbeat-last<750 && expansion!=null;
+   boolean needsBridge=!b8Route&&!HandoffBaseline.ENABLED && mirrorMode && live && !dual && unlocked && appEnabled && handoff.active() && !handoff.probeHolding() && angle>=handoffAngle && angle<FoldThreshold.sanitize(openThreshold) && last>0 && heartbeat-last<750 && expansion!=null;
    if(needsBridge)bridgeReady=expansion.holdBeforeRelease();else if(expansion!=null)expansion.cancelReleaseWait();
    if(expansion!=null){
-    boolean coverEnabled=!HandoffBaseline.ENABLED&&mirrorMode&&live&&!dual&&unlocked&&appEnabled&&!handoff.probeHolding()&&last>0&&heartbeat-last<750;
+    boolean coverEnabled=!b8Route&&!HandoffBaseline.ENABLED&&mirrorMode&&live&&!dual&&unlocked&&appEnabled&&!handoff.probeHolding()&&last>0&&heartbeat-last<750;
     expansion.coverControl(coverEnabled,effectiveAngle,handoffAngle);
     if(coverEnabled && handoff.innerActive() && DirectHandoffPolicy.next(true,effectiveAngle,true,true,true,openThreshold,handoffAngle)==DirectHandoffPolicy.COVER)bridgeReady=expansion.coverBeforeSwitch() && bridgeReady;
    }
-   concurrent.observeMotion(effectiveAngle,last>0&&heartbeat-last<2000,appEnabled&&unlocked,openThreshold,dual,screenshotStartup);
+   concurrent.observeMotion(effectiveAngle,last>0&&heartbeat-last<2000,appEnabled&&unlocked&&!b8Route,openThreshold,dual,screenshotStartup);
    boolean wasCoverHeld=handoff.active();
-   if(!effectAllowed){handoff.release();concurrent.release();}else if(dual){handoff.release();concurrent.update(effectiveAngle,last>0&&heartbeat-last<2000,unlocked,primaryInner,secondaryReady,frozenSource,openThreshold,screenshotStartup,screenshotPrepared,handoffAngle);}else{concurrent.release();if(bridgeReady)handoff.update(effectiveAngle,last,last>0&&heartbeat-last<750,unlocked,live&&appEnabled,openThreshold,probeRequest,handoffAngle);}
+   if(b8Route){handoff.release();concurrent.release();if(b8!=null)b8.update(b8Selected&&appEnabled&&unlocked,effectiveAngle,last,openThreshold,handoffAngle);}
+   else if(!effectAllowed){handoff.release();concurrent.release();}else if(dual){handoff.release();concurrent.update(effectiveAngle,last>0&&heartbeat-last<2000,unlocked,primaryInner,secondaryReady,frozenSource,openThreshold,screenshotStartup,screenshotPrepared,handoffAngle);}else{concurrent.release();if(bridgeReady)handoff.update(effectiveAngle,last,last>0&&heartbeat-last<750,unlocked,live&&appEnabled,openThreshold,probeRequest,handoffAngle);}
    boolean timedCoverRelease=handoff.takeTimedCoverRelease();
    if(((wasCoverHeld && !handoff.active()) || timedCoverRelease) && expansion!=null)expansion.releaseReturned();
    if(handoff.probeHolding()&&fade!=null)fade.update(false,effectiveAngle,false);
    if(expansion!=null&&handoff.probeHolding())expansion.enabled(false);
-   previewAllowed=mirrorMode&&effectAllowed&&!handoff.probeNative()&&CoverPreviewPolicy.allowed(live,dual,primaryInner,unlocked,handoff.active());
+   previewAllowed=!b8Route&&mirrorMode&&effectAllowed&&!handoff.probeNative()&&CoverPreviewPolicy.allowed(live,dual,primaryInner,unlocked,handoff.active());
    if(!previewAllowed)mirror.close();
    continuity.sample(handoff.probeHolding(),handoff.probeStatus());
    Bundle b=new Bundle();
-   b.putBundle("incomingHold",concurrent.incomingHoldInfo());b.putBoolean("effectAllowed",effectAllowed);b.putBoolean("coverPreview",previewAllowed);b.putString("state",state);b.putBoolean("continuityNative",handoff.probeNative());b.putBoolean("nativeInner",concurrent.secondaryHasNativeContent()||handoff.probeNative());b.putBoolean("dualActive",dual&&concurrent.active());b.putString("handoff",dual?concurrent.status:handoff.status);b.putInt("uid",android.os.Process.myUid());b.putInt("count",count);b.putInt("unique",unique.size());b.putFloat("rawAngle",angle);b.putFloat("angle",effectiveAngle);b.putFloat("min",min);b.putFloat("max",max);b.putLong("last",last);
+   b.putBundle("incomingHold",concurrent.incomingHoldInfo());b.putBoolean("effectAllowed",effectAllowed);b.putBoolean("coverPreview",previewAllowed);b.putString("state",state);b.putBoolean("continuityNative",handoff.probeNative());b.putBoolean("nativeInner",concurrent.secondaryHasNativeContent()||handoff.probeNative());b.putBoolean("dualActive",dual&&concurrent.active());b.putString("handoff",b8Route&&b8!=null?b8.status():dual?concurrent.status:handoff.status);b.putInt("uid",android.os.Process.myUid());b.putInt("count",count);b.putInt("unique",unique.size());b.putFloat("rawAngle",angle);b.putFloat("angle",effectiveAngle);b.putFloat("min",min);b.putFloat("max",max);b.putLong("last",last);
    if(diagnostics.due(SystemClock.elapsedRealtime())){
-    b.putString("closedHingeGate",closedHingeGate.report());b.putString("screenshotTrace",concurrent.trace()+"\n"+handoff.trace()+"\n"+closureState.report());b.putString("rotationHold",rotation==null?"Rotation hold idle":rotation.status);b.putString("handoffFade",fade==null?"Handoff fade idle":fade.status);b.putString("continuityProbe",handoff.probeStatus());b.putString("continuityTrace",continuity.report());b.putString("bridgeTrace",expansion==null?"No bridge":expansion.report());b.putString("expansion",expansion==null?"Expansion idle":expansion.status);b.putString("readerDiagnostics",state+"; wallpaper log lines="+logLines+"; parsed responses="+matchingResponses+"; rejected timestamps="+staleResponses);b.putString("mirror",mirror.status);b.putString("raw",raw);
+    b.putString("closedHingeGate",closedHingeGate.report());b.putString("screenshotTrace",concurrent.trace()+"\n"+handoff.trace()+"\n"+closureState.report());b.putString("rotationHold",rotation==null?"Rotation hold idle":rotation.status);b.putString("handoffFade",fade==null?"Handoff fade idle":fade.status);b.putString("continuityProbe",handoff.probeStatus());b.putString("continuityTrace",continuity.report());b.putString("bridgeTrace",b8Route&&b8!=null?b8.report():expansion==null?"No bridge":expansion.report());b.putString("expansion",expansion==null?"Expansion idle":expansion.status);b.putString("readerDiagnostics",state+"; wallpaper log lines="+logLines+"; parsed responses="+matchingResponses+"; rejected timestamps="+staleResponses);b.putString("mirror",mirror.status);b.putString("raw",raw);
    }
    reply.writeNoException();reply.writeBundle(b);return true;}
   if(code==3){stop();reply.writeNoException();return true;}return super.onTransact(code,data,reply,flags);
  }
  public synchronized void closeRoot(){FoldRotationHold pending=rotation;stop();if(pending!=null)pending.awaitRelease();}
- private synchronized void stop(){closedHingeGate.reset();previewAllowed=false;if(rotation!=null){rotation.close();rotation=null;}if(fade!=null){fade.close();fade=null;}if(expansion!=null){expansion.close();expansion=null;}if(capture!=null){capture.close();capture=null;}mirror.close();concurrent.release();handoff.release();generation++;if(process!=null){process.destroy();process=null;}state="Stopped";}
+ private synchronized void stop(){if(b8!=null)b8.close();closedHingeGate.reset();previewAllowed=false;if(rotation!=null){rotation.close();rotation=null;}if(fade!=null){fade.close();fade=null;}if(expansion!=null){expansion.close();expansion=null;}if(capture!=null){capture.close();capture=null;}mirror.close();concurrent.release();handoff.release();generation++;if(process!=null){process.destroy();process=null;}state="Stopped";}
  private synchronized void start(String action){
   stop();diagnostics.reset();logLines=matchingResponses=staleResponses=0;count=0;unique.clear();angle=Float.NaN;min=180;max=0;last=0;raw="";state="Starting log reader";final int gen=generation;
   Thread reader=new Thread(()->{

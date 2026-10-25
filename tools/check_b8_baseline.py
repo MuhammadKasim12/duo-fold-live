@@ -30,7 +30,7 @@ for name, expected in manifest.items():
 print(f'PASS: all {len(manifest)} engine files match Lab 0.5.11, except package relocation and built-in task package identity', flush=True)
 
 plans = ['ExperimentConfig', 'TaskGuard', 'RoutePlan', 'BridgePlan',
-         'HandoffPlan', 'AnimatorRestorePlan', 'DesktopRestorePlan']
+         'HandoffPlan', 'AnimatorRestorePlan', 'DesktopRestorePlan', 'LiveB8Policy']
 tests = sorted((ROOT / 'tools/b8-tests').glob('*.java'))
 with tempfile.TemporaryDirectory(prefix='duo-b8-check-') as output:
     subprocess.run(['javac', '-source', '8', '-target', '8', '-d', output,

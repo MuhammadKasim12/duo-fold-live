@@ -402,15 +402,14 @@ class MainActivity:ComponentActivity(){
         if(developer){
          SettingsCard("Developer settings","Diagnostics and experimental controls. Normal use does not require these."){
         if(!BuildConfig.IS_PLAY){
-         var b8Lab by remember { mutableStateOf(prefs.getBoolean("b8_lab_enabled",false)) }
-         Toggle("B8 Display Lab (experimental)",b8Lab,help="Off by default. Opens the tested manual handoff experiments; this does not replace the fold animation."){b8Lab=it;prefs.edit().putBoolean("b8_lab_enabled",it).apply()}
-         if(b8Lab){
-          Text("Turn Enable animation off before running a test. Hold near 90°, select Test B8, and save the report afterward. The lab retains its separate bounded helper and manual test timing.",style=MaterialTheme.typography.bodySmall)
-          OutlinedButton(onClick={startActivity(Intent(this@MainActivity,org.duofold.live.experimental.b8.MainActivity::class.java))}){Text("Open B8 Display Lab")}
+         var liveB8 by remember { mutableStateOf(prefs.getBoolean("live_b8_enabled",false)) }
+         Toggle("Live B8 handoff (experimental)",liveB8,help="Automatic hinge-driven app and primary-display handoff. Uses the tested B8 mirror and brightness protection. Keep Enable animation ON. Live Screen mode only."){
+          liveB8=it
+          if(it){dual=false;prefs.edit().putBoolean("dual",false).putBoolean("live_b8_enabled",true).apply()}else prefs.edit().putBoolean("live_b8_enabled",false).apply()
          }
+         if(liveB8)Text("Uses your handoff angle with the existing 4° closing hysteresis. No app picker, countdown, or manual test. Diagnostics appear in the status report. Home and split-screen use protected native routing without moving unrelated tasks.",style=MaterialTheme.typography.bodySmall)
          HorizontalDivider()
         }
-
         Toggle("Cover screen motion glass (experimental)",motionCoverGlass,help="Off by default. Adds tilt response to the cover display independently of inner motion glass. Live Screen only."){motionCoverGlass=it;prefs.edit().putBoolean("motion_glass_cover_enabled",it).apply();if(!it && !motionGlass)MotionGlass.stop()}
         if(motionCoverGlass){
         Text("Cover screen sensitivity · ${(motionCoverStrength*100).roundToInt()}%")

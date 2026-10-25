@@ -18,13 +18,14 @@ Photos selected through Android's document picker are copied into app-private st
 
 Diagnostics can contain device/build information, hinge angles, display state, helper errors, app task/component names and timing. The health history is bounded to 288 samples; samples older than 24 hours are removed when a new sample is added. Other diagnostics use bounded histories or local report files. Reports remain local unless you explicitly copy, export or share them. Review reports before sharing; copies in your clipboard, Downloads, or another app must be deleted separately.
 
-The optional B8 Display Lab in Developer settings records expanded system logs,
-app/task identities, display traces and recovery evidence only when you start a
-test. Its mirror-backed tests use temporary in-memory screen buffers and bounded
-privileged display/brightness overrides. Reports are stored in a separate local
-folder and exported only on request. The shell helper can retain unfinished
-recordings and cleanup journals under `/data/local/tmp/fold-power-lab-*` for
-recovery; clearing Duo app storage does not delete those shell-owned files.
+The optional Live B8 handoff in Developer settings records bounded transition
+history and local app/task, display and brightness diagnostics while enabled.
+It uses temporary in-memory screen buffers and privileged display/brightness
+overrides to protect automatic hinge-driven handoffs. Shell-owned diagnostics
+are retained under `/data/local/tmp/duo-live-b8-*`; older session folders are
+pruned when a new session starts. Clearing Duo app storage does not delete those
+shell-owned files. Status reports are copied or shared only on request.
+Older manual Lab recordings may remain under `/data/local/tmp/fold-power-lab-*`.
 
 ## Collection, sharing and external services
 
