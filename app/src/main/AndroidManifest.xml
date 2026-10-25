@@ -7,7 +7,7 @@
  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
  <uses-feature android:name="android.hardware.sensor.hinge_angle" android:required="false"/>
- <queries><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/></intent><package android:name="moe.shizuku.privileged.api"/><intent><action android:name="android.service.wallpaper.WallpaperService"/></intent><package android:name="com.samsung.android.wallpaper.live"/><package android:name="com.samsung.android.wallpaper.res"/></queries>
+ <queries><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent><intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/></intent><package android:name="moe.shizuku.privileged.api"/><intent><action android:name="android.service.wallpaper.WallpaperService"/></intent><package android:name="com.samsung.android.wallpaper.live"/><package android:name="com.samsung.android.wallpaper.res"/></queries>
  <uses-permission android:name="android.permission.WAKE_LOCK" />
  <application android:name=".DuoApplication" android:label="Duo Fold Live" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/Theme.Standalone" android:allowBackup="false" android:hardwareAccelerated="true">
   <provider android:name="androidx.core.content.FileProvider" android:authorities="org.duofold.live.files" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/export_paths"/></provider>
@@ -41,6 +41,11 @@
    <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility"/>
   </service>
   <activity android:name="org.duofold.live.wallpaperlayer.WallpaperActivity" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"/>
+
+  <activity android:name=".experimental.b8.MainActivity" android:exported="false" android:theme="@android:style/Theme.Material.NoActionBar" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density" android:resizeableActivity="true"/>
+  <activity android:name=".experimental.b8.LiveTargetsActivity" android:exported="false" android:theme="@android:style/Theme.Material.NoActionBar" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density" android:resizeableActivity="true"/>
+  <activity android:name=".experimental.b8.TaskProbeActivity" android:exported="false" android:theme="@android:style/Theme.Material.NoActionBar" android:taskAffinity="org.duofold.live.b8.taskprobe" android:launchMode="singleTask" android:resizeableActivity="true" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density"/>
+  <service android:name=".experimental.b8.RecorderService" android:exported="false" android:foregroundServiceType="specialUse"><property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User initiated bounded display handoff experiments and local diagnostic recording"/></service>
  </application>
  <instrumentation android:name="org.duofold.live.wallpaperlayer.PhotoInstrumentation" android:targetPackage="org.duofold.live" android:functionalTest="true" android:label="Custom wallpaper host"/>
 </manifest>
