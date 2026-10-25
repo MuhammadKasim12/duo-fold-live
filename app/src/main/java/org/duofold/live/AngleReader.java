@@ -62,7 +62,9 @@ public class AngleReader extends Binder {
    String behavior=AnimationModePolicy.initialBehavior(data.dataAvail()>0?data.readString():null,mode);
    boolean b8Selected=data.dataAvail()>=4&&data.readInt()!=0&&!dual;
    int b8Thermal=data.dataAvail()>=4?data.readInt():0;
+   Bundle b8Presentation=data.dataAvail()>0?data.readBundle(getClass().getClassLoader()):null;
    if(b8Selected&&(b8==null||b8.finished()))b8=new org.duofold.live.experimental.b8.LiveB8Controller();
+   if(b8!=null&&b8Presentation!=null)b8.presentation(b8Presentation.getLong("session"),b8Presentation.getBoolean("prepared"),b8Presentation.getString("primary"),b8Presentation.getLong("commitAt"),b8Presentation.getBoolean("capturePaused"));
    boolean b8Route=b8Selected||(b8!=null&&b8.ownsRoute());
    float effectiveAngle=closedHingeGate.filter(angle,closedThreshold,jitterProtection,last>0&&heartbeat-last<750);
    closureState.sample(angle,effectiveAngle,last>0&&heartbeat-last<750,dual,unlocked);
@@ -96,6 +98,7 @@ public class AngleReader extends Binder {
    if(!previewAllowed)mirror.close();
    continuity.sample(handoff.probeHolding(),handoff.probeStatus());
    Bundle b=new Bundle();b.putBundle("panelIdentity",panelIdentity.snapshot());
+   if(b8!=null){Bundle scene=new Bundle();scene.putLong("session",b8.sceneSession());scene.putBoolean("pauseCapture",b8.capturePauseRequested());scene.putString("source",b8.sceneSource());scene.putInt("task",b8.sceneTask());b.putBundle("b8Presentation",scene);}
    b.putBundle("incomingHold",concurrent.incomingHoldInfo());b.putBoolean("effectAllowed",effectAllowed);b.putBoolean("coverPreview",previewAllowed);b.putString("state",state);b.putBoolean("continuityNative",handoff.probeNative());b.putBoolean("nativeInner",concurrent.secondaryHasNativeContent()||handoff.probeNative());b.putBoolean("dualActive",dual&&concurrent.active());b.putString("handoff",b8Route&&b8!=null?b8.status():dual?concurrent.status:handoff.status);b.putInt("uid",android.os.Process.myUid());b.putInt("count",count);b.putInt("unique",unique.size());b.putFloat("rawAngle",angle);b.putFloat("angle",effectiveAngle);b.putFloat("min",min);b.putFloat("max",max);b.putLong("last",last);
    if(diagnostics.due(SystemClock.elapsedRealtime())){
     b.putString("closedHingeGate",closedHingeGate.report());b.putString("screenshotTrace",concurrent.trace()+"\n"+handoff.trace()+"\n"+closureState.report());b.putString("rotationHold",rotation==null?"Rotation hold idle":rotation.status);b.putString("handoffFade",fade==null?"Handoff fade idle":fade.status);b.putString("continuityProbe",handoff.probeStatus());b.putString("continuityTrace",continuity.report());b.putString("bridgeTrace",b8!=null?(b8Route?"":"Retained B8 evidence; mode currently inactive.\n")+b8.report():expansion==null?"No bridge":expansion.report());b.putString("expansion",expansion==null?"Expansion idle":expansion.status);b.putString("readerDiagnostics",state+"; wallpaper log lines="+logLines+"; parsed responses="+matchingResponses+"; rejected timestamps="+staleResponses);b.putString("mirror",mirror.status);b.putString("raw",raw);

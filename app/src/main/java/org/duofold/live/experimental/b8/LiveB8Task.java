@@ -145,6 +145,8 @@ final class LiveB8Task {
   if(top==null)return null;
   return top.getPackageName();
  }
+ int taskId(){return task;}
+ void moveSelected()throws Exception{move(1);}
  void selectOnly()throws Exception{select();}
  void selectAndMove()throws Exception{select();move(1);}
  String destinationGeometry()throws Exception{

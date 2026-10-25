@@ -13,6 +13,7 @@ final class LiveB8Bridge {
  private final Map<String,Object> physicalContainers=new HashMap<>();private final Map<String,Integer> physicalStacks=new HashMap<>();
  private final ScheduledExecutorService watchdog=Executors.newScheduledThreadPool(2);
  private Class<?> sc,tc;private volatile boolean committed,submitted,closed;
+ private boolean animationSubmitted;private volatile boolean animationCommitted;
  private int cleanupAttempts;private boolean revealSubmitted,removalSubmitted;private volatile boolean removalCommitted;private long armedAt;private int captures,handlesClosed;private long estimatedBytes;
  LiveB8Bridge(File dir){this(dir,false);}
  LiveB8Bridge(File dir,boolean freeze){this.dir=dir;this.freeze=freeze;}
@@ -67,6 +68,18 @@ final class LiveB8Bridge {
    log("ARM_SUBMITTED; waiting for commit; seven-second removal watchdog armed");
   }catch(Exception e){log("ARM_REJECTED "+root(e));close();throw e;}
   finally{if(transaction!=null)try{call(transaction,"close",new Class<?>[]{});}catch(Exception ignored){}}
+ }
+ /** Frozen buffers only cover initial attachment. The retained WMS mirrors then
+  * carry the already-committed opaque app + glass windows throughout promotion. */
+ synchronized boolean animatedReady(){return animationCommitted&&!closed;}
+ synchronized void animate()throws Exception{
+  if(animationSubmitted||closed||!ready())return;
+  Object t=tc.getConstructor().newInstance();
+  try{
+   for(Object layer:bufferLayers)call(t,"hide",new Class<?>[]{sc},layer);
+   addCommit(t,()->{synchronized(this){if(!closed)animationCommitted=true;log("ANIMATED_MIRROR_COMMIT; frozen buffers hidden, WMS windows retained");}});
+   animationSubmitted=true;call(t,"apply",new Class<?>[]{});
+  }finally{call(t,"close",new Class<?>[]{});}
  }
  /** Follow physical panels when Android exchanges logical layer stacks. */
  synchronized void followPhysicalStacks(){

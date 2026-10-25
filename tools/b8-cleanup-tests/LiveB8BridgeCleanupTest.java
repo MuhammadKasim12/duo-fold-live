@@ -8,6 +8,9 @@ public class LiveB8BridgeCleanupTest {
  public static void main(String[] args)throws Exception{
   LiveB8Bridge bridge=new LiveB8Bridge(new File(args[0]),true);set(bridge,"sc",SurfaceControl.class);set(bridge,"tc",SurfaceControl.Transaction.class);
   SurfaceControl layer=new SurfaceControl(),container=new SurfaceControl();list(bridge,"surfaces").add(layer);list(bridge,"surfaces").add(container);list(bridge,"bufferLayers").add(layer);
+  set(bridge,"submitted",true);set(bridge,"committed",true);
+  bridge.animate();check(!bridge.animatedReady(),"animated subtree waits for transaction commit");check(SurfaceControl.Transaction.removals==0&&SurfaceControl.Transaction.clears==0,"animation switch retains mirror and buffer ownership");
+  SurfaceControl.Transaction.commit.run();check(bridge.animatedReady(),"animation commit authorizes app move");
   bridge.close();check(!bridge.isClosed(),"must wait for removal commit");check(!layer.released,"keep handle until commit");check(SurfaceControl.Transaction.removals==2&&SurfaceControl.Transaction.clears==1,"remove both and detach frozen buffer");
   bridge.close();check(SurfaceControl.Transaction.removals==2,"pending removal is not submitted repeatedly");
   SurfaceControl.Transaction.commit.run();check(bridge.isClosed()&&layer.released&&container.released,"commit releases handles");check(list(bridge,"surfaces").isEmpty()&&list(bridge,"bufferLayers").isEmpty(),"clear strong references");check(bridge.resources().contains("removeCommitted=true"),"report confirmation");

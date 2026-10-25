@@ -14,6 +14,19 @@ public final class LiveB8Controller {
  private volatile Input input=new Input(false,Float.NaN,0,172,85);
  private final ScheduledExecutorService worker=Executors.newSingleThreadScheduledExecutor(r->{Thread t=new Thread(r,"duo-live-b8");t.setDaemon(true);return t;});
  private volatile boolean active,closing;
+ private volatile long sceneSession,sceneAckSession,sceneCommitAt,sceneAckAt;
+ private volatile boolean scenePrepared,capturePaused,capturePauseRequested;
+ public boolean capturePauseRequested(){return capturePauseRequested;}
+ private volatile String sceneSource="",scenePrimary="";
+ private volatile int sceneTask=-1;
+ public long sceneSession(){return sceneSession;}
+ public int sceneTask(){return sceneTask;}
+ public String sceneSource(){return sceneSource;}
+ public void presentation(long session,boolean prepared,String physical,long commitAt,boolean paused){capturePaused=paused;scenePrepared=prepared;scenePrimary=physical==null?"":physical;sceneCommitAt=commitAt;sceneAckAt=SystemClock.elapsedRealtime();sceneAckSession=session;}
+ private boolean presentationReady(long now){return sceneSession>0&&sceneAckSession==sceneSession&&scenePrepared&&now-sceneAckAt<=250;}
+ private boolean presentationAlive(long now){return sceneSession>0&&sceneAckSession==sceneSession&&now-sceneAckAt<=750;}
+ private boolean primaryPresented(long now){return presentationAlive(now)&&expected.equals(scenePrimary)&&sceneCommitAt>=holdStarted&&now-sceneCommitAt<=250;}
+
  private volatile String status="Live B8 idle";
  private final ArrayDeque<String> history=new ArrayDeque<>();
  private LiveB8Power power;private LiveB8Brightness brightness;private LiveB8Bridge shield;private LiveB8Task task;
@@ -66,13 +79,13 @@ public final class LiveB8Controller {
   target=wanted;nativeReturn=release;expected=target==1?inner:cover;task=null;resetGeometry();deadline=SystemClock.elapsedRealtime()+LiveB8Policy.TRANSITION_MS;
   if(SystemClock.elapsedRealtime()-preparedAt>30000)prepareBrightness();
   if(!release){String pkg=LiveB8Task.focusedPackage();
-   if(pkg!=null){task=new LiveB8Task(dir,pkg);task.selectAndMove();log("HINGE_MOVE target="+target+" package="+pkg+"; awaiting destination geometry");phase=3;return;}
+   if(pkg!=null){task=new LiveB8Task(dir,pkg);task.selectOnly();if(task.taskId()!=sceneTask)throw new IllegalStateException("Focused app changed during presentation");log("TRANSFER_PREPARE target="+target+" package="+pkg+"; presentation precedes task move");capturePauseRequested=true;phase=8;return;}
    throw new IllegalStateException("No routable fullscreen app; refusing to freeze destination wallpaper");
   }else{
-   String pkg=LiveB8Task.focusedPackage();if(pkg==null)throw new IllegalStateException("No fullscreen app for endpoint shield");task=new LiveB8Task(dir,pkg);task.selectOnly();
+   String pkg=LiveB8Task.focusedPackage();if(pkg==null)throw new IllegalStateException("No fullscreen app for endpoint shield");task=new LiveB8Task(dir,pkg);task.selectOnly();if(task.taskId()!=sceneTask)throw new IllegalStateException("Focused app changed before endpoint");
    log("ENDPOINT_RELEASE target="+target+"; native mapping will be verified");
   }
-  arm();
+  capturePauseRequested=true;phase=8;
  }
  private void arm()throws Exception{brightness.requirePrepared();shieldStarted=SystemClock.elapsedRealtime();shield=new LiveB8Bridge(dir,true);shield.arm();lastResources=shield.resources();phase=4;log("SHIELD_SUBMITTED target="+target+" nativeRelease="+nativeReturn);}
  private void tick(){
@@ -92,8 +105,16 @@ public final class LiveB8Controller {
    if(power.canceled){log("ANDROID_CANCELED; no automatic retry");cleanup();failed=!LiveB8Policy.endpoint(i.angle,i.open);return;}
    if(now-renewed>=500){power.on();renewed=now;}
    if(phase!=2&&now>=deadline)throw new IllegalStateException("Transition readiness timeout phase="+phase);
-   if(phase==1){if(!power.ready())return;identities();prepareBrightness();phase=2;log("PREWARM_READY current="+current);return;}
+   if(now-started>=30000)throw new IllegalStateException("Presentation session reached 30 second bound");
+   if(phase==1){if(!power.ready())return;identities();
+    String pkg=LiveB8Task.focusedPackage();if(pkg==null)throw new IllegalStateException("No fullscreen app for presentation");
+    task=new LiveB8Task(dir,pkg);task.selectOnly();sceneTask=task.taskId();sceneSource=current==1?inner:cover;sceneSession=started;
+    phase=7;deadline=now+6000;log("PRESENTATION_PREPARE task="+sceneTask+" source="+sceneSource+"; waiting for both committed app composites");return;}
+   if(phase==7){if(!presentationReady(now))return;prepareBrightness();phase=2;log("PRESENTATION_READY both panels; task has not moved");return;}
+   if(!presentationAlive(now))throw new IllegalStateException("Presentation lease lost");
+   if(phase==8){if(presentationReady(now)&&capturePaused)arm();return;}
    if(phase==2){
+    if(!presentationReady(now))return;
     int wanted=LiveB8Policy.target(i.angle,current,i.handoff,i.open);
     if(LiveB8Policy.endpoint(i.angle,i.open)){
      int base=power.state(true),nativePanel=base==3?1:base==0?2:0;
@@ -102,47 +123,55 @@ public final class LiveB8Controller {
     if(wanted!=current)startTransfer(wanted,false);
     return;
    }
-   if(phase==3){String g;try{g=task.destinationGeometry();}catch(Exception pending){resetGeometry();return;}if(settle(g,now))arm();return;}
+   if(phase==3){
+    if(shield==null||shield.isClosed())throw new IllegalStateException("Animated shield expired before promotion");
+    shield.followPhysicalStacks();
+    String g;try{g=task.destinationGeometry();}catch(Exception pending){resetGeometry();return;}
+    if(settle(g,now)){promote();}return;
+   }
    if(phase==6)return;
    if(shield==null||shield.isClosed())throw new IllegalStateException("Shield no longer active");
    shield.followPhysicalStacks();lastResources=shield.resources();
    if(phase==4){
-    if(!shield.ready())return;
-    power.on();brightness.begin(nativeReturn?"live-endpoint":"live-hinge");holdStarted=SystemClock.elapsedRealtime();
-    // Recheck cancellation/disable after the initial physical brightness Binder writes.
-    Input latest=input;long at=SystemClock.elapsedRealtime();
-    if(!LiveB8Policy.usable(latest.enabled,at,latest.heartbeat,latest.sample,latest.angle)||closing)throw new IllegalStateException("Input expired before primary request");
-    if(nativeReturn)power.nativeRelease();else power.request(target);
-    phase=5;resetGeometry();log("PRIMARY_REQUEST target="+target+" nativeRelease="+nativeReturn);return;
+    if(!shield.ready()||!presentationReady(now))return;
+    // Keep the proven WMS mirror/brightness route, but uncover its live animated
+    // window subtree once both opaque composites are committed. No frozen wall.
+    if(!shield.animatedReady()){shield.animate();return;}
+    if(!nativeReturn){task.moveSelected();phase=3;resetGeometry();log("HINGE_MOVE target="+target+"; animated shield already committed");return;}
+    promote();return;
    }
    if(phase==5){
-     // A quick unfold may reach its endpoint while the first shield still covers the switch.
-     // Reuse that shield and brightness worker instead of immediately capturing another pair.
-     int base=power.state(true);
-     if(!nativeReturn&&LiveB8Policy.endpoint(i.angle,i.open)&&((target==1&&i.angle>=i.open&&base==3)||(target==2&&i.angle<=0&&base==0))
-       && expected.equals(LiveB8Power.physical(power.info(0)))&&now-shieldStarted<3000){
-      brightness.begin("live-endpoint-reuse");power.nativeRelease();nativeReturn=true;resetGeometry();
-      log("ENDPOINT_REUSE existing shield; no new capture or log read");return;
-     }
+    int base=power.state(true);
+    if(!nativeReturn&&LiveB8Policy.endpoint(i.angle,i.open)&&((target==1&&i.angle>=i.open&&base==3)||(target==2&&i.angle<=0&&base==0))&&expected.equals(LiveB8Power.physical(power.info(0)))&&now-shieldStarted<3000){
+     brightness.begin("live-endpoint-reuse");power.nativeRelease();nativeReturn=true;resetGeometry();log("ENDPOINT_REUSE animated shield; no new captures");return;
+    }
     try{
      if(nativeReturn&&power.state(false)!=power.state(true))throw new IllegalStateException("Native state pending");
      if(settle(primaryGeometry(),now)&&verified<0){verified=now;log("PRIMARY_VERIFIED target="+target+"; geometry stable 300ms");if(task!=null)task.focus();}
-     if(LiveB8Policy.reveal(now,verified)){shield.reveal();phase=6;log("REVEAL target="+target+"; verified settle 150ms; shieldAgeMs="+(now-shieldStarted));}
+     if(verified>=0&&primaryPresented(now)){shield.reveal();phase=6;log("REVEAL target="+target+"; matching animated primary commit; outgoing presentation retained");}
     }catch(Exception pending){resetGeometry();}
     return;
    }
   }catch(Throwable e){while(e.getCause()!=null)e=e.getCause();log("ABORT "+e);failed=true;cleanup();}
   finally{
    if(phase==6&&shield!=null&&shield.isClosed()){
-    lastResources=shield.resources();log("SHIELD_REMOVED "+lastResources);current=target;shield=null;task=null;
+    lastResources=shield.resources();log("SHIELD_REMOVED "+lastResources);current=target;shield=null;task=null;capturePauseRequested=false;
     if(nativeReturn){log("NATIVE_COMPLETE primary="+current);cleanup();}
-    else{phase=2;log("HANDOFF_COMPLETE primary="+current+"; latest hinge target will be evaluated");}
+    else{phase=2;log("HANDOFF_COMPLETE primary="+current+"; outgoing presentation retained until endpoint");}
    }
   }
  }
+ private void promote()throws Exception{
+    power.on();brightness.begin(nativeReturn?"live-endpoint":"live-hinge");holdStarted=SystemClock.elapsedRealtime();
+    Input latest=input;long at=SystemClock.elapsedRealtime();
+    if(!LiveB8Policy.usable(latest.enabled,at,latest.heartbeat,latest.sample,latest.angle)||closing||!presentationReady(at))throw new IllegalStateException("Input/presentation expired before primary request");
+    if(nativeReturn)power.nativeRelease();else power.request(target);
+    phase=5;resetGeometry();log("PRIMARY_REQUEST target="+target+" nativeRelease="+nativeReturn);
+ }
  private void cleanup(){
-  cleaning=true;
+  cleaning=true;sceneSession=0;sceneTask=-1;scenePrepared=false;
   if(shield!=null){shield.close();lastResources=shield.resources();if(!shield.isClosed())return;log("SHIELD_REMOVED "+lastResources);shield=null;}
+  capturePauseRequested=false;
   if(task!=null){task.restore();task=null;}
   if(brightness!=null){brightness.close();brightness=null;}
   if(power!=null){if(!power.close()){status="Live B8 cleanup pending; legacy handoff remains suspended";return;}power=null;}

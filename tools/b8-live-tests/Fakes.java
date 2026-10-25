@@ -13,12 +13,12 @@ final class LiveB8Power {
 }
 final class LiveB8Brightness {static int begun;static boolean failPrepared;static Runnable onBegin;LiveB8Brightness(File f){}void prepare(){}void requirePrepared(){if(failPrepared)throw new IllegalStateException("test brightness unavailable");}void begin(String p){begun++;if(onBegin!=null)onBegin.run();}void close(){}}
 final class LiveB8Bridge {
- static boolean allowCommit=true,failArm,allowRemoval=true;static LiveB8Bridge last;static int arms;boolean closed;
- LiveB8Bridge(File f,boolean freeze){last=this;}void arm(){arms++;if(failArm)throw new IllegalStateException("test arm failure");}boolean ready(){return allowCommit;}boolean isClosed(){return closed;}void followPhysicalStacks(){}String resources(){return "removeCommitted="+closed;}void reveal(){closed=allowRemoval;}void close(){closed=allowRemoval;}
+ static boolean allowCommit=true,allowAnimation=true,failArm,allowRemoval=true;static LiveB8Bridge last;static int arms;boolean closed;
+ LiveB8Bridge(File f,boolean freeze){last=this;}void arm(){arms++;if(failArm)throw new IllegalStateException("test arm failure");}void animate(){}boolean animatedReady(){return allowAnimation&&allowCommit;}boolean ready(){return allowCommit;}boolean isClosed(){return closed;}void followPhysicalStacks(){}String resources(){return "removeCommitted="+closed;}void reveal(){closed=allowRemoval;}void close(){closed=allowRemoval;}
 }
 final class LiveB8Task {
  static int moves,retargets;static String selected="test.app";
- static String focusedPackage(){return selected;}LiveB8Task(File d,String p){}void selectOnly(){}void selectAndMove(){moves++;}
+ static String focusedPackage(){return selected;}LiveB8Task(File d,String p){}int taskId(){return 42;}void selectOnly(){}void moveSelected(){if(!LiveB8Bridge.last.animatedReady())throw new AssertionError("move before animated shield commit");moves++;}void selectAndMove(){moves++;}
  String destinationGeometry(){return "destination";}String verifyPrimary(String p){retargets++;return p;}void focus(){}void restore(){}
 }
 
