@@ -79,6 +79,7 @@ jobs:
 
       - name: Test and build unsigned release
         run: |
+          cmp PRIVACY.md app/src/main/assets/privacy.txt
           python3 tools/check_inner_stretch.py
           python3 tools/check_window_shading.py
           python3 tools/check_motion_projection.py
