@@ -39,6 +39,8 @@ public final class LiveB8ControllerTest {
   c=fresh();commit=false;run(c,80,1800);check(!c.report().contains("HANDOFF_COMPLETE"),"no reveal without a fresh matching primary scene commit");commit=true;run(c,80,300);check(c.report().contains("HANDOFF_COMPLETE"),"matching primary scene commit releases short shield");check(c.sceneSession()>0,"outgoing scene remains after short shield removal");stop(c);
   c=fresh();run(c,80,1500);ack=false;run(c,80,1000);check(!c.ownsRoute()&&c.sceneSession()==0,"lost app scene lease cleans owned route");stop(c);
   c=fresh();run(c,140,31000);check(!c.ownsRoute()&&c.sceneSession()==0,"outgoing hold has independent 30 second lifetime bound");stop(c);
+  c=fresh();prepared=false;run(c,80,500);run(c,172,100);check(!c.ownsRoute()&&c.sceneSession()==0&&LiveB8Task.moves==0,"unready opening releases native policy at endpoint without moving app");check(c.report().contains("PREPARATION_INCOMPLETE_AT_ENDPOINT"),"endpoint failure remains in report");stop(c);
+  c=fresh();prepared=false;run(c,140,500);run(c,0,100);check(!c.ownsRoute()&&LiveB8Bridge.arms==0,"unready closing releases at endpoint without allocating shield");stop(c);
   check(LiveB8Policy.target(81,1,85,172)==2&&LiveB8Policy.target(82,1,85,172)==1,"closing threshold");
   check(LiveB8Policy.target(85,2,85,172)==1&&LiveB8Policy.target(84,2,85,172)==2,"opening threshold");
   check(!LiveB8Policy.usable(true,10000,7000,9999,90),"missing app heartbeat expires even with a fresh sample");

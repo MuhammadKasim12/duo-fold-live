@@ -34,8 +34,10 @@ internal object B8Presentation {
  private val windows=ArrayList<PanelWindow>()
  @Volatile private var acknowledgement=Bundle()
  private var status="Coordinated B8 presentation idle"
+ private var retained=""
+ private var diagnosticAt=0L
  @JvmStatic fun acknowledgement():Bundle=Bundle(acknowledgement)
- @JvmStatic fun report()=status
+ @JvmStatic fun report()=status+"\n"+retained
  private val guard=object:Runnable{override fun run(){
   if(session==0L)return
   val host=StandaloneService.instance
@@ -49,6 +51,7 @@ internal object B8Presentation {
  }
  @JvmStatic fun clear(reason:String){
   val was=session
+  if(was!=0L){retained=windows.joinToString("\n"){it.diagnostic()};RecoveryLog.add("B8 final readiness session=$was: $retained")}
   session=0;pending=false;livePending=false;livePhysical="";liveRevision=-1;acknowledgement=Bundle();main.removeCallbacks(guard)
   windows.forEach{it.close()};windows.clear();original=null;heldPanels.clear();GlassFrames.b8CapturePause(false)
   status="Coordinated B8 presentation released: $reason"
@@ -101,6 +104,7 @@ internal object B8Presentation {
  }
  private fun publish(){
   val now=SystemClock.elapsedRealtime()
+  if(session!=0L&&now>=diagnosticAt){diagnosticAt=now+1000;retained=windows.joinToString("\n"){it.diagnostic()};RecoveryLog.add("B8 readiness session=$session: $retained")}
   val both=windows.size==2&&windows.all{it.validCommit(now)}
   val primary=windows.firstOrNull{it.id==0&&it.validCommit(now)}
   acknowledgement=Bundle().apply{putLong("session",session);putBoolean("capturePaused",GlassFrames.b8CaptureQuiescent()&&!livePending&&!pending);putBoolean("prepared",both);putString("primary",primary?.committedPhysical?:"");putLong("commitAt",primary?.committedAt?:0)}
@@ -119,12 +123,20 @@ internal object B8Presentation {
   var committedAt=0L;private set
   private var committedWidth=0;private var committedHeight=0;private var committedRotation=-1
   private var commitPending=false
+  private var commitGeneration=0
+  private var registeredAt=0L
+  private var draws=0
+  private var commits=0
+  private var hardware=false
+  private var excluded=false
+  private var rejection="not drawn"
   private var visual=Float.NaN
   private var drawnAt=0L
   private var held=outgoing
   private val view=object:View(ctx){
-   override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){painter.layout(0,0,w,h);committedAt=0}
+   override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){painter.layout(0,0,w,h);committedAt=0;commitGeneration++;commitPending=false}
    override fun onDraw(canvas:Canvas){
+    draws++;hardware=canvas.isHardwareAccelerated
     val d=dm.getDisplay(id)?:return
     val identity=PanelIdentity.identity(d)
     val size=Point();d.getRealSize(size)
@@ -144,22 +156,48 @@ internal object B8Presentation {
     val amount=DuoShadeCurve.progress(visual,inner,prefs.getFloat("open_threshold",172f))
     painter.configure(held,amount,prefs.getFloat("intensity",.4f),inner,d.rotation,true,visual,true)
     painter.drawEmbedded(canvas)
-    if(!commitPending&&PanelIdentityPolicy.known(identity)&&width==size.x&&height==size.y){
-     commitPending=true;val w=width;val h=height;val rotation=d.rotation
-     viewTreeObserver.registerFrameCommitCallback{
-      commitPending=false
-      if(session==token&&attached&&PanelIdentity.identity(dm.getDisplay(id))==identity&&width==w&&height==h){
-       committedPhysical=identity;committedWidth=w;committedHeight=h;committedRotation=rotation;committedAt=SystemClock.elapsedRealtime();publish()
-      }
-     }
-    }
     if(session==token&&attached)postInvalidateOnAnimation()
    }
+  }
+  init {
+   // Register before ViewRootImpl collects callbacks, not inside onDraw after
+   // that collection. A resized/recreated frame cannot acknowledge a new mapping.
+   view.viewTreeObserver.addOnPreDrawListener {
+    val now=SystemClock.elapsedRealtime()
+    if(commitPending&&now-registeredAt>500){commitGeneration++;commitPending=false;rejection="commit callback timeout"}
+    val d=dm.getDisplay(id)
+    val identity=PanelIdentity.identity(d)
+    val size=Point();d?.getRealSize(size)
+    if(!commitPending&&attached&&excluded&&view.isHardwareAccelerated&&PanelIdentityPolicy.known(identity)&&view.width==size.x&&view.height==size.y){
+     commitPending=true;registeredAt=now
+     val generation=++commitGeneration;val w=view.width;val h=view.height;val rotation=d!!.rotation
+     view.viewTreeObserver.registerFrameCommitCallback {
+      if(generation==commitGeneration&&session==token&&attached){
+       commitPending=false
+       if(PanelIdentity.identity(dm.getDisplay(id))==identity&&view.width==w&&view.height==h){
+        committedPhysical=identity;committedWidth=w;committedHeight=h;committedRotation=rotation
+        committedAt=SystemClock.elapsedRealtime();commits++;rejection="";publish()
+       }else rejection="mapping changed before commit"
+      }
+     }
+    }else if(!commitPending)rejection=when {
+     !excluded->"capture exclusion pending"
+     !view.isHardwareAccelerated->"window hardware renderer unavailable"
+     !PanelIdentityPolicy.known(identity)->"physical identity unavailable"
+     view.width!=size.x||view.height!=size.y->"window/display geometry mismatch"
+     else->"window detached"
+    }
+    true
+   }
+  }
+  fun diagnostic():String {
+   val d=dm.getDisplay(id);val size=Point();d?.getRealSize(size)
+   return "D$id state=${d?.state} physical=${PanelIdentity.identity(d)} view=${view.width}x${view.height} display=${size.x}x${size.y} attached=$attached shown=${view.isShown} hardware=$hardware excluded=$excluded draws=$draws commits=$commits pending=$commitPending commitAge=${if(committedAt==0L)-1 else SystemClock.elapsedRealtime()-committedAt} reason=$rejection"
   }
   fun validCommit(now:Long):Boolean {
    val d=dm.getDisplay(id)?:return false
    val size=Point();d.getRealSize(size)
-   return attached&&committedAt>0&&now-committedAt<=250&&PanelIdentity.identity(d)==committedPhysical&&committedWidth==size.x&&committedHeight==size.y&&committedRotation==d.rotation
+   return attached&&excluded&&committedAt>0&&now-committedAt<=250&&PanelIdentity.identity(d)==committedPhysical&&committedWidth==size.x&&committedHeight==size.y&&committedRotation==d.rotation
   }
   fun show(){
    val lp=WindowManager.LayoutParams(-1,-1,WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,PixelFormat.OPAQUE)
@@ -170,11 +208,11 @@ internal object B8Presentation {
     try{
      val root=View::class.java.getDeclaredMethod("getViewRootImpl").invoke(view)
      val sc=root.javaClass.getMethod("getSurfaceControl").invoke(root) as SurfaceControl
-     check(sc.isValid);GlassFrames.surface(view,sc)
+     check(sc.isValid);GlassFrames.surface(view,sc);excluded=true;view.postInvalidateOnAnimation()
      // Capture exclusion only. The B8 WMS mirror must include this animated window.
     }catch(e:Exception){blocked=token;clear("capture exclusion unavailable")}
    }
   }
-  fun close(){attached=false;committedAt=0;GlassFrames.surface(view,null);runCatching{wm.removeViewImmediate(view)}}
+  fun close(){attached=false;commitGeneration++;commitPending=false;committedAt=0;GlassFrames.surface(view,null);runCatching{wm.removeViewImmediate(view)}}
  }
 }

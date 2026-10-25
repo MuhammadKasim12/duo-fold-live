@@ -112,7 +112,7 @@ public final class LiveB8Controller {
     String pkg=LiveB8Task.focusedPackage();if(pkg==null)throw new IllegalStateException("No fullscreen app for presentation");
     task=new LiveB8Task(dir,pkg);task.selectOnly();sceneTask=task.taskId();sceneSource=current==1?inner:cover;sceneRevision=0;sceneSession=started;
     phase=7;deadline=now+6000;log("PRESENTATION_PREPARE task="+sceneTask+" source="+sceneSource+"; waiting for both committed app composites");return;}
-   if(phase==7){if(!presentationReady(now))return;prepareBrightness();phase=2;log("PRESENTATION_READY both panels; task has not moved");return;}
+   if(phase==7){if(!presentationReady(now)){if(LiveB8Policy.endpoint(i.angle,i.open)){log("PREPARATION_INCOMPLETE_AT_ENDPOINT; releasing to native display policy");cleanup();}return;}prepareBrightness();phase=2;log("PRESENTATION_READY both panels; task has not moved");return;}
    if(!presentationAlive(now))throw new IllegalStateException("Presentation lease lost");
    if(phase==8){if(presentationReady(now)&&capturePaused)arm();return;}
    if(phase==2){
