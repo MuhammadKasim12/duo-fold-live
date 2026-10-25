@@ -18,7 +18,9 @@ public final class LiveB8Controller {
  private volatile boolean scenePrepared,capturePaused,capturePauseRequested;
  public boolean capturePauseRequested(){return capturePauseRequested;}
  private volatile String sceneSource="",scenePrimary="";
- private volatile int sceneTask=-1;
+ private volatile int sceneTask=-1,sceneRevision;
+ public int sceneRevision(){return sceneRevision;}
+ public boolean livePresentation(){return phase==2&&!cleaning;}
  public long sceneSession(){return sceneSession;}
  public int sceneTask(){return sceneTask;}
  public String sceneSource(){return sceneSource;}
@@ -32,7 +34,7 @@ public final class LiveB8Controller {
  private LiveB8Power power;private LiveB8Brightness brightness;private LiveB8Bridge shield;private LiveB8Task task;
  private File dir;private final LiveB8Evidence evidence;private volatile int thermal;private long shieldStarted;private volatile String lastResources="No shield allocated";
  private final File diagnosticRoot;
- private int phase,current,target;
+ private volatile int phase;private int current,target;
  private long started,renewed,deadline,stableSince=-1,verified=-1,preparedAt,holdStarted;
  private String candidate="",expected="",inner="",cover="";
  private boolean failed,nativeReturn;private volatile boolean cleaning;
@@ -76,7 +78,7 @@ public final class LiveB8Controller {
  private boolean settle(String value,long now){if(!value.equals(candidate)){candidate=value;stableSince=now;verified=-1;}return LiveB8Policy.stable(now,stableSince);}
  private void resetGeometry(){candidate="";stableSince=-1;verified=-1;}
  private void startTransfer(int wanted,boolean release)throws Exception{
-  target=wanted;nativeReturn=release;expected=target==1?inner:cover;task=null;resetGeometry();deadline=SystemClock.elapsedRealtime()+LiveB8Policy.TRANSITION_MS;
+  sceneRevision++;target=wanted;nativeReturn=release;expected=target==1?inner:cover;task=null;resetGeometry();deadline=SystemClock.elapsedRealtime()+LiveB8Policy.TRANSITION_MS;
   if(SystemClock.elapsedRealtime()-preparedAt>30000)prepareBrightness();
   if(!release){String pkg=LiveB8Task.focusedPackage();
    if(pkg!=null){task=new LiveB8Task(dir,pkg);task.selectOnly();if(task.taskId()!=sceneTask)throw new IllegalStateException("Focused app changed during presentation");log("TRANSFER_PREPARE target="+target+" package="+pkg+"; presentation precedes task move");capturePauseRequested=true;phase=8;return;}
@@ -108,7 +110,7 @@ public final class LiveB8Controller {
    if(now-started>=30000)throw new IllegalStateException("Presentation session reached 30 second bound");
    if(phase==1){if(!power.ready())return;identities();
     String pkg=LiveB8Task.focusedPackage();if(pkg==null)throw new IllegalStateException("No fullscreen app for presentation");
-    task=new LiveB8Task(dir,pkg);task.selectOnly();sceneTask=task.taskId();sceneSource=current==1?inner:cover;sceneSession=started;
+    task=new LiveB8Task(dir,pkg);task.selectOnly();sceneTask=task.taskId();sceneSource=current==1?inner:cover;sceneRevision=0;sceneSession=started;
     phase=7;deadline=now+6000;log("PRESENTATION_PREPARE task="+sceneTask+" source="+sceneSource+"; waiting for both committed app composites");return;}
    if(phase==7){if(!presentationReady(now))return;prepareBrightness();phase=2;log("PRESENTATION_READY both panels; task has not moved");return;}
    if(!presentationAlive(now))throw new IllegalStateException("Presentation lease lost");

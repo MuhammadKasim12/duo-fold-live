@@ -22,6 +22,13 @@ internal object B8Presentation {
  private var task=-1
  private var pending=false
  private var retryAt=0L
+ private var revision=0
+ private var liveRevision=-1
+ private var liveMinStamp=0L
+ private var livePhysical=""
+ private var livePending=false
+ private var pauseCapture=false
+ private var liveRetryAt=0L
  private var original:GlassFrame?=null
  private val heldPanels=HashMap<String,GlassFrame>()
  private val windows=ArrayList<PanelWindow>()
@@ -42,7 +49,7 @@ internal object B8Presentation {
  }
  @JvmStatic fun clear(reason:String){
   val was=session
-  session=0;pending=false;acknowledgement=Bundle();main.removeCallbacks(guard)
+  session=0;pending=false;livePending=false;livePhysical="";liveRevision=-1;acknowledgement=Bundle();main.removeCallbacks(guard)
   windows.forEach{it.close()};windows.clear();original=null;heldPanels.clear();GlassFrames.b8CapturePause(false)
   status="Coordinated B8 presentation released: $reason"
   if(was!=0L)RecoveryLog.add("B8 PRESENTATION_RELEASE session=$was reason=$reason")
@@ -57,14 +64,16 @@ internal object B8Presentation {
    main.postDelayed(guard,100)
   }
   lastUpdate=SystemClock.elapsedRealtime()
-  GlassFrames.b8CapturePause(info?.getBoolean("pauseCapture")==true)
+  revision=info?.getInt("revision")?:0
+  pauseCapture=info?.getBoolean("pauseCapture")==true
+  GlassFrames.b8CapturePause(pauseCapture)
   if(original==null&&!pending&&lastUpdate>=retryAt&&task>=0){
    pending=true;val token=session
    GlassFrames.incoming(task,source,0){frame,note->
     if(token!=session)return@incoming
     pending=false
     if(frame==null||frame.physicalId!=source){status="B8 presentation waiting for exact outgoing app: $note";retryAt=SystemClock.elapsedRealtime()+100;return@incoming}
-    original=frame;heldPanels[source]=frame
+    original=frame;heldPanels[source]=frame;livePhysical=source;liveRevision=revision;liveMinStamp=frame.stamp
     try{
      val dm=host.getSystemService(DisplayManager::class.java)
      for(id in 0..1){val d=dm.getDisplay(id)?:error("Missing built-in D$id");check(BuiltInPanel.accepts(d));val w=PanelWindow(host,d,token,frame);windows.add(w);w.show()}
@@ -73,13 +82,28 @@ internal object B8Presentation {
     }catch(e:Exception){blocked=token;clear("attachment failed: ${e.message}")}
    }
   }
+  // Never replace the held app with an unverified first capture after remap.
+  // Revalidate the exact task's drawn window before accepting ordinary live frames.
+  val primary=host.getSystemService(DisplayManager::class.java).getDisplay(0)
+  val identity=PanelIdentity.identity(primary)
+  if(original!=null&&!pauseCapture&&info?.getBoolean("live")==true&&!livePending&&lastUpdate>=liveRetryAt&&PanelIdentityPolicy.known(identity)&&(liveRevision!=revision||livePhysical!=identity)){
+   livePending=true;val token=session;val rev=revision
+   GlassFrames.incoming(task,identity,0){frame,note->
+    if(token!=session)return@incoming
+    livePending=false
+    if(!pauseCapture&&rev==revision&&frame!=null&&frame.physicalId==identity){
+     heldPanels[identity]=frame;livePhysical=identity;liveRevision=rev;liveMinStamp=frame.stamp
+     RecoveryLog.add("B8 INCOMING_APP_DRAWN session=$token revision=$rev physical=$identity; exact app capture, not optical proof")
+    }else{liveRetryAt=SystemClock.elapsedRealtime()+150;RecoveryLog.add("B8 retaining app image; incoming pending: $note")}
+   }
+  }
   publish()
  }
  private fun publish(){
   val now=SystemClock.elapsedRealtime()
   val both=windows.size==2&&windows.all{it.validCommit(now)}
   val primary=windows.firstOrNull{it.id==0&&it.validCommit(now)}
-  acknowledgement=Bundle().apply{putLong("session",session);putBoolean("capturePaused",GlassFrames.b8CaptureQuiescent());putBoolean("prepared",both);putString("primary",primary?.committedPhysical?:"");putLong("commitAt",primary?.committedAt?:0)}
+  acknowledgement=Bundle().apply{putLong("session",session);putBoolean("capturePaused",GlassFrames.b8CaptureQuiescent()&&!livePending&&!pending);putBoolean("prepared",both);putString("primary",primary?.committedPhysical?:"");putLong("commitAt",primary?.committedAt?:0)}
   if(both)status="B8 coordinated app + glass committed on both panels; outgoing held to endpoint; session=$session"
  }
  private class PanelWindow(host:StandaloneService,display:Display,private val token:Long,private val outgoing:GlassFrame){
@@ -108,8 +132,9 @@ internal object B8Presentation {
     // Live updates are accepted only for the verified physical primary; the other
     // panel keeps its last app image even after Android puts Home on that stack.
     if(PanelIdentityPolicy.known(identity)&&identity!=physical){physical=identity;held=heldPanels[identity]?:outgoing}
+    if(id==0&&liveRevision==revision&&livePhysical==identity)heldPanels[identity]?.let{held=it}
     val live=GlassFrames.frame
-    if(id==0&&live!=null&&live.physicalId==identity&&live.displayId==0&&live.rotation==d.rotation&&live.width==size.x&&live.height==size.y&&SystemClock.elapsedRealtime()-live.stamp in 0..250){held=live;heldPanels[identity]=live}
+    if(id==0&&!pauseCapture&&liveRevision==revision&&livePhysical==identity&&live!=null&&live.stamp>=liveMinStamp&&live.physicalId==identity&&live.displayId==0&&live.rotation==d.rotation&&live.width==size.x&&live.height==size.y&&SystemClock.elapsedRealtime()-live.stamp in 0..250){held=live;heldPanels[identity]=live}
     drawScreenshotBackdrop(canvas,held,width,height)
     val now=SystemClock.elapsedRealtime()
     val angle=LiveAngles.currentAngle()
