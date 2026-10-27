@@ -7,17 +7,17 @@ public final class DeviceCompatibility {
   return model != null && model.matches("SM-F971[A-Z0-9]+(?:/DS)?");
  }
  public static boolean isRecognized(String model) {
-  return model != null && model.matches("SM-F(?:971|976|966)[A-Z0-9]+(?:/DS)?");
+  return model != null && model.matches("SM-F(?:971|976|966|946)[A-Z0-9]+(?:/DS)?");
  }
  public static String modelWarning(String model) {
   return isRecognized(model) ? "" : "Unrecognized device: " + String.valueOf(model)
    + ". You can continue, but compatibility is unverified and features may not work. Samsung wallpaper and API checks still apply.";
  }
  public static boolean isEligible(String model, int sdk) {
-  return sdk == 37;
+  return sdk >= 36;
  }
  public static void requireEligible(String model, int sdk) {
   if (!isEligible(model, sdk)) throw new IllegalStateException(
-   "This Samsung profile requires Android 17; received " + model + " / SDK " + sdk);
+   "This Samsung profile requires Android 16 or newer; received " + model + " / SDK " + sdk);
  }
 }

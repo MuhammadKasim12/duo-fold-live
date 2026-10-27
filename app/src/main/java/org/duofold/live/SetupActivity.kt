@@ -129,7 +129,7 @@ class SetupActivity : ComponentActivity() {
         Text("Duo uses Samsung’s interactive fold wallpaper to read the hinge angle. Setup will apply it to BOTH the inner and cover home screens, including the cover-screen option Samsung normally hides.")
         Text("This replaces your current home wallpapers and remains applied if you disable Duo. You can change them later in Samsung wallpaper settings. Your lock-screen wallpaper is not changed by this setup.")
         Text("Next, choose whether to cover it with your own photo. Then we’ll connect Shizuku (or your existing root access) and apply the required wallpaper automatically. No root is needed.")
-        Text("Regional SM-F971, SM-F976, and SM-F966 model numbers are recognized. Other models may also proceed with a warning. Android 17 is still required; Samsung wallpaper components and APIs are checked separately. Only SM-F971U has been tested.",style=MaterialTheme.typography.bodySmall)
+        Text("Regional SM-F971, SM-F976, SM-F966 and SM-F946 (Fold5) model numbers are recognized. Other models may also proceed with a warning. Android 16 or newer is required; Samsung wallpaper components and APIs are checked separately. Only SM-F971U has been tested.",style=MaterialTheme.typography.bodySmall)
         Button(onClick={go(1)}){Text("Continue")}
        }
        1->{
